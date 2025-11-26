@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.piliplus">
+    package="com.taoran.piliplus">
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -165,10 +165,10 @@
                 <data android:host="auth" android:path="/launch" />
             </intent-filter>
         </activity>
-        <service 
+        <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="true" 
+            android:exported="true"
             tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
@@ -179,14 +179,14 @@
             android:name="com.yalantis.ucrop.UCropActivity"
             android:theme="@style/Ucrop.CropTheme"/>
 
-        <receiver 
+        <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
-            android:exported="true" 
+            android:exported="true"
             tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
-        </receiver> 
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
