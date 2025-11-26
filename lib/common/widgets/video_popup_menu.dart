@@ -8,6 +8,7 @@ import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/pages/video/ai_conclusion/view.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
+import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -77,6 +78,37 @@ class VideoPopupMenu extends StatelessWidget {
                           SmartDialog.showToast(res['msg']);
                         },
                       ),
+                      if (videoItem.cid != null && Pref.showMoreDownloadButtons)
+                        _VideoCustomAction(
+                          '离线缓存',
+                          const Icon(MdiIcons.folderDownloadOutline, size: 16),
+                          () async {
+                            try {
+                              SmartDialog.showLoading(msg: '任务创建中');
+                              if (videoItem.duration <= 0) {
+                                SmartDialog.showToast('视频时长错误');
+                                return;
+                              }
+                              SmartDialog.dismiss();
+                              Get.find<DownloadService>().downloadByIdentifiers(
+                                cid: videoItem.cid!,
+                                bvid: videoItem.bvid!,
+                                totalTimeMilli: videoItem.duration * 1000,
+                                aid: videoItem is BaseVideoItemModel
+                                    ? (videoItem as BaseVideoItemModel).aid
+                                    : null,
+                                title: videoItem.title,
+                                cover: videoItem.cover,
+                                ownerId: videoItem.owner.mid,
+                                ownerName: videoItem.owner.name,
+                              );
+                              SmartDialog.showToast('已加入下载队列');
+                            } catch (e) {
+                              SmartDialog.dismiss();
+                              SmartDialog.showToast(e.toString());
+                            }
+                          },
+                        ),
                       if (videoItem.cid != null && Pref.enableAi)
                         _VideoCustomAction(
                           'AI总结',
