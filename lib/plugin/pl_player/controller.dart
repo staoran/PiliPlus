@@ -862,31 +862,35 @@ class PlPlayerController {
     player.setPlaylistMode(looping);
 
     final Map<String, String>? filters;
-    String audioNormalization = AudioNormalization.getParamFromConfig(
-      Pref.audioNormalization,
-    );
-    if (volume != null && volume.isNotEmpty) {
-      audioNormalization = audioNormalization.replaceFirstMapped(
-        loudnormRegExp,
-        (i) =>
-            'loudnorm=${volume.format(
-              Map.fromEntries(
-                i.group(1)!.split(':').map((item) {
-                  final parts = item.split('=');
-                  return MapEntry(parts[0].toLowerCase(), num.parse(parts[1]));
-                }),
-              ),
-            )}',
+    if (Platform.isAndroid) {
+      String audioNormalization = AudioNormalization.getParamFromConfig(
+        Pref.audioNormalization,
       );
+      if (volume != null && volume.isNotEmpty) {
+        audioNormalization = audioNormalization.replaceFirstMapped(
+          loudnormRegExp,
+          (i) =>
+              'loudnorm=${volume.format(
+                Map.fromEntries(
+                  i.group(1)!.split(':').map((item) {
+                    final parts = item.split('=');
+                    return MapEntry(parts[0].toLowerCase(), num.parse(parts[1]));
+                  }),
+                ),
+              )}',
+        );
+      } else {
+        audioNormalization = audioNormalization.replaceFirst(
+          loudnormRegExp,
+          AudioNormalization.getParamFromConfig(Pref.fallbackNormalization),
+        );
+      }
+      filters = audioNormalization.isEmpty
+          ? null
+          : {'lavfi-complex': '"[aid1] $audioNormalization [ao]"'};
     } else {
-      audioNormalization = audioNormalization.replaceFirst(
-        loudnormRegExp,
-        AudioNormalization.getParamFromConfig(Pref.fallbackNormalization),
-      );
+      filters = null;
     }
-    filters = audioNormalization.isEmpty
-        ? null
-        : {'lavfi-complex': '"[aid1] $audioNormalization [ao]"'};
 
     // if (kDebugMode) debugPrint(filters.toString());
 

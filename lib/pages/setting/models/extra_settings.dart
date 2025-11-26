@@ -37,6 +37,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -571,25 +572,27 @@ List<SettingsModel> get extraSettings => [
       } catch (_) {}
     },
   ),
-  SettingsModel(
-    settingsType: SettingsType.normal,
-    title: '音量均衡',
-    setKey: SettingBoxKey.audioNormalization,
-    leading: const Icon(Icons.multitrack_audio),
-    getSubtitle: () {
-      final audioNormalization = AudioNormalization.getTitleFromConfig(
-        Pref.audioNormalization,
-      );
-      String fallback = Pref.fallbackNormalization;
-      if (fallback == '0') {
-        fallback = '';
-      } else {
-        fallback = '，无参数时:「${AudioNormalization.getTitleFromConfig(fallback)}」';
-      }
-      return '当前:「$audioNormalization」$fallback';
-    },
-    onTap: audioNormalization,
-  ),
+  if (kDebugMode || Platform.isAndroid)
+    SettingsModel(
+      settingsType: SettingsType.normal,
+      title: '音量均衡',
+      setKey: SettingBoxKey.audioNormalization,
+      leading: const Icon(Icons.multitrack_audio),
+      getSubtitle: () {
+        final audioNormalization = AudioNormalization.getTitleFromConfig(
+          Pref.audioNormalization,
+        );
+        String fallback = Pref.fallbackNormalization;
+        if (fallback == '0') {
+          fallback = '';
+        } else {
+          fallback =
+              '，无参数时:「${AudioNormalization.getTitleFromConfig(fallback)}」';
+        }
+        return '当前:「$audioNormalization」$fallback';
+      },
+      onTap: audioNormalization,
+    ),
   SettingsModel(
     settingsType: SettingsType.normal,
     title: '超分辨率',
