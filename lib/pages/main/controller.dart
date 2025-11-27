@@ -31,6 +31,8 @@ class MainController extends GetxController
 
   StreamController<bool>? bottomBarStream;
   late bool hideTabBar = Pref.hideTabBar;
+  late bool enableTabBarSwipe = Pref.enableTabBarSwipe;
+  late bool enablePageAnimation = Pref.enablePageAnimation;
   late dynamic controller;
   RxInt selectedIndex = 0.obs;
 
@@ -288,7 +290,15 @@ class MainController extends GetxController
       if (mainTabBarView) {
         controller.animateTo(value);
       } else {
-        controller.jumpToPage(value);
+        if (enablePageAnimation) {
+          controller.animateToPage(
+            value,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOutCubicEmphasized,
+          );
+        } else {
+          controller.jumpToPage(value);
+        }
       }
       if (currentNav == NavigationBarType.home) {
         checkDefaultSearch();

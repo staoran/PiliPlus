@@ -216,6 +216,8 @@ abstract class SettingBoxKey {
       enableMYBar = 'enableMYBar',
       hideSearchBar = 'hideSearchBar',
       hideTabBar = 'hideTabBar',
+      enableTabBarSwipe = 'enableTabBarSwipe',
+      enablePageAnimation = 'enablePageAnimation',
       showBottomLabel = 'showBottomLabel',
       scrollThreshold = 'scrollThreshold',
       enableScrollThreshold = 'enableScrollThreshold',

@@ -456,11 +456,48 @@ class _MainAppState extends State<MainApp>
                             .distinct(),
                         initialData: true,
                         builder: (context, AsyncSnapshot snapshot) {
-                          return AnimatedSlide(
-                            curve: Curves.easeInOutCubicEmphasized,
-                            duration: const Duration(milliseconds: 500),
-                            offset: Offset(0, snapshot.data ? 0 : 1),
-                            child: bottomNav,
+                          final bool isVisible = snapshot.data ?? true;
+                          return Stack(
+                            children: [
+                              // 底栏隐藏时的滑动切换区域
+                              if (!isVisible &&
+                                  _mainController.enableTabBarSwipe)
+                                Positioned.fill(
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onHorizontalDragEnd: (details) {
+                                      final velocity =
+                                          details.primaryVelocity ?? 0;
+                                      final currentIndex =
+                                          _mainController.selectedIndex.value;
+                                      final maxIndex =
+                                          _mainController
+                                              .navigationBars
+                                              .length -
+                                          1;
+                                      if (velocity < -300 &&
+                                          currentIndex < maxIndex) {
+                                        // 向左滑，切换到下一页
+                                        _mainController.setIndex(
+                                          currentIndex + 1,
+                                        );
+                                      } else if (velocity > 300 &&
+                                          currentIndex > 0) {
+                                        // 向右滑，切换到上一页
+                                        _mainController.setIndex(
+                                          currentIndex - 1,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              AnimatedSlide(
+                                curve: Curves.easeInOutCubicEmphasized,
+                                duration: const Duration(milliseconds: 500),
+                                offset: Offset(0, isVisible ? 0 : 1),
+                                child: bottomNav,
+                              ),
+                            ],
                           );
                         },
                       )
