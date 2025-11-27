@@ -678,6 +678,9 @@ abstract class Pref {
   static bool get hideTabBar =>
       _setting.get(SettingBoxKey.hideTabBar, defaultValue: true);
 
+  static bool get showBottomLabel =>
+      _setting.get(SettingBoxKey.showBottomLabel, defaultValue: true);
+
   static int get dynamicBadgeMode => _setting.get(
     SettingBoxKey.dynamicBadgeMode,
     defaultValue: DynamicBadgeMode.number.index,

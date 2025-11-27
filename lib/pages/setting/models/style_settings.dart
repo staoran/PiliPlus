@@ -350,6 +350,15 @@ List<SettingsModel> get styleSettings => [
   ),
   SettingsModel(
     settingsType: SettingsType.sw1tch,
+    title: 'Navbar显示文字',
+    subtitle: 'Navbar按钮是否显示文字标签',
+    leading: const Icon(Icons.text_fields),
+    setKey: SettingBoxKey.showBottomLabel,
+    defaultVal: true,
+    onChanged: (val) => Get.find<MainController>().showBottomLabel.value = val,
+  ),
+  SettingsModel(
+    settingsType: SettingsType.sw1tch,
     title: '顶/底栏滚动阈值',
     subtitle: '滚动多少像素后收起/展开顶底栏，默认50像素',
     leading: const Icon(Icons.swipe_vertical),

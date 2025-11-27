@@ -248,6 +248,9 @@ class _MainAppState extends State<MainApp>
                     ? Obx(
                         () => NavigationBar(
                           maintainBottomViewPadding: true,
+                          labelBehavior: _mainController.showBottomLabel.value
+                              ? NavigationDestinationLabelBehavior.alwaysShow
+                              : NavigationDestinationLabelBehavior.alwaysHide,
                           onDestinationSelected: _mainController.setIndex,
                           selectedIndex: _mainController.selectedIndex.value,
                           destinations: _mainController.navigationBars
@@ -271,6 +274,10 @@ class _MainAppState extends State<MainApp>
                           iconSize: 16,
                           selectedFontSize: 12,
                           unselectedFontSize: 12,
+                          showSelectedLabels:
+                              _mainController.showBottomLabel.value,
+                          showUnselectedLabels:
+                              _mainController.showBottomLabel.value,
                           type: BottomNavigationBarType.fixed,
                           items: _mainController.navigationBars
                               .map(
@@ -324,55 +331,63 @@ class _MainAppState extends State<MainApp>
                 if (!useBottomNav) ...[
                   _mainController.navigationBars.length > 1
                       ? context.isTablet && _mainController.optTabletNav
-                            ? Column(
-                                children: [
-                                  const SizedBox(height: 25),
-                                  userAndSearchVertical(theme),
-                                  const Spacer(flex: 2),
-                                  Expanded(
-                                    flex: 5,
-                                    child: SizedBox(
-                                      width: 130,
-                                      child: Obx(
-                                        () => NavigationDrawer(
-                                          backgroundColor: Colors.transparent,
-                                          tilePadding:
-                                              const EdgeInsets.symmetric(
-                                                vertical: 5,
-                                                horizontal: 12,
-                                              ),
-                                          indicatorShape:
-                                              const RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.all(
-                                                  Radius.circular(16),
+                            ? Obx(
+                                () {
+                                  final showLabel =
+                                      _mainController.showBottomLabel.value;
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 25),
+                                      userAndSearchVertical(theme),
+                                      const Spacer(flex: 2),
+                                      Expanded(
+                                        flex: 5,
+                                        child: SizedBox(
+                                          width: showLabel ? 130 : 80,
+                                          child: NavigationDrawer(
+                                            backgroundColor: Colors.transparent,
+                                            tilePadding:
+                                                const EdgeInsets.symmetric(
+                                                  vertical: 5,
+                                                  horizontal: 12,
                                                 ),
-                                              ),
-                                          onDestinationSelected:
-                                              _mainController.setIndex,
-                                          selectedIndex: _mainController
-                                              .selectedIndex
-                                              .value,
-                                          children: _mainController
-                                              .navigationBars
-                                              .map(
-                                                (e) =>
-                                                    NavigationDrawerDestination(
-                                                      label: Text(e.label),
-                                                      icon: _buildIcon(
-                                                        type: e,
+                                            indicatorShape:
+                                                const RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.all(
+                                                        Radius.circular(16),
                                                       ),
-                                                      selectedIcon: _buildIcon(
-                                                        type: e,
-                                                        selected: true,
-                                                      ),
+                                                ),
+                                            onDestinationSelected:
+                                                _mainController.setIndex,
+                                            selectedIndex: _mainController
+                                                .selectedIndex
+                                                .value,
+                                            children: _mainController
+                                                .navigationBars
+                                                .map(
+                                                  (
+                                                    e,
+                                                  ) => NavigationDrawerDestination(
+                                                    label: showLabel
+                                                        ? Text(e.label)
+                                                        : const SizedBox.shrink(),
+                                                    icon: _buildIcon(
+                                                      type: e,
                                                     ),
-                                              )
-                                              .toList(),
+                                                    selectedIcon: _buildIcon(
+                                                      type: e,
+                                                      selected: true,
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ],
+                                    ],
+                                  );
+                                },
                               )
                             : Obx(
                                 () => NavigationRail(
@@ -381,7 +396,10 @@ class _MainAppState extends State<MainApp>
                                       _mainController.selectedIndex.value,
                                   onDestinationSelected:
                                       _mainController.setIndex,
-                                  labelType: NavigationRailLabelType.selected,
+                                  labelType:
+                                      _mainController.showBottomLabel.value
+                                      ? NavigationRailLabelType.selected
+                                      : NavigationRailLabelType.none,
                                   leading: userAndSearchVertical(theme),
                                   destinations: _mainController.navigationBars
                                       .map(
