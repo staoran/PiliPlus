@@ -227,6 +227,8 @@ dependencies:
       ref: mod
   dlna_dart: ^0.1.0
   battery_plus: ^7.0.0
+  # 后台下载前台服务
+  flutter_foreground_task: ^8.13.2
 
   vector_math: any
   fixnum: any
