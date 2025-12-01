@@ -1134,7 +1134,12 @@ class VideoDetailController extends GetxController
   }
 
   FutureOr<void> _initPlayerIfNeeded() {
+    // 后台播放模式下，无需检查 widget mounted 状态
+    final isBackgroundPlayEnabled =
+        plPlayerController.continuePlayInBackground.value;
+
     if (autoPlay.value ||
+        isBackgroundPlayEnabled ||
         (plPlayerController.preInitPlayer && !plPlayerController.processing) &&
             (isFileSource
                 ? true
