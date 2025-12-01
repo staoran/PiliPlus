@@ -7,13 +7,13 @@
 <div align="center">
     <h1>PiliPlus</h1>
 <div align="center">
-    
-![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus) 
-![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus) 
-![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total) 
+
+![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus)
+![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus)
+![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total)
 </div>
     <p>使用Flutter开发的BiliBili第三方客户端</p>
-    
+
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="home" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="home" />
 <img src="assets/screenshots/850shots_so.png" width="32%" alt="home" />
@@ -24,6 +24,25 @@
 
 
 <br/>
+
+**感谢上游的无私奉献。本项目在上游的基础上根据个人使用习惯做了更多的激进修改，具体改动如下：**
+
+- [x] 偶发耗电的问题
+- [x] 后台播放暂停时，有被杀后台的情况
+- [x] 优化列表顺序播放时偶尔失败的问题，特别是后台或锁屏播放时
+- [x] 支持后台下线离线视频
+- [x] 点击首页/动态页的 Navbar 按钮时，直接回到顶部且刷新并显示加载动画
+- [x] 增加新窗口打开播放页功能
+- [x] 媒体卡片两侧按钮在列表播放时改为上一个/下一个
+- [x] 底栏在收起时支持左右滑动切换 Navbar 页
+- [x] 底栏文字支持隐藏
+- [x] 动态页 up 主面板顶部显示时支持随列表滑动时收起
+- [x] 离线视频和听视频支持空降助手
+- [x] 首页动态页视频卡片增加快捷稍后再看按钮
+- [x] 首页动态页视频卡片菜单增加离线下载
+- [x] 稍后再看、收藏夹增加批量离线下载
+- [x] 修改包名和更新检测位置
+
 
 ## 适配平台
 
@@ -158,7 +177,7 @@
   - [x] 观看记录
   - [x] 我的收藏
   - [x] 站内私信
-  
+
 - [x] 动态相关
   - [x] 全部、投稿、番剧分类查看
   - [x] 动态评论查看
@@ -180,14 +199,14 @@
   - [x] 字幕
   - [x] 记忆播放
   - [x] 视频比例：高度/宽度适应、填充、包含等
-     
+
 - [x] 搜索相关
   - [x] 热搜
   - [x] 搜索历史
   - [x] 默认搜索词
   - [x] 投稿、番剧、直播间、用户搜索
   - [x] 视频搜索排序、按时长筛选
-    
+
 - [x] 视频详情页相关
   - [x] 视频选集(分p)切换
   - [x] 点赞、投币、收藏/取消收藏
@@ -199,7 +218,7 @@
   - [x] 评论笔记图片查看、保存
 
 - [x] 设置相关
-  - [x] 画质、音质、解码方式预设      
+  - [x] 画质、音质、解码方式预设
   - [x] 图片质量设定
   - [x] 主题模式：亮色/暗色/跟随系统
   - [x] 震动反馈(可选)
