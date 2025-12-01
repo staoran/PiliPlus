@@ -357,15 +357,6 @@ List<SettingsModel> get styleSettings => [
     defaultVal: true,
     needReboot: true,
   ),
-  const SettingsModel(
-    settingsType: SettingsType.sw1tch,
-    title: '页面切换动画',
-    subtitle: '切换底栏页面时是否显示滑动动画',
-    leading: Icon(Icons.animation_outlined),
-    setKey: SettingBoxKey.enablePageAnimation,
-    defaultVal: true,
-    needReboot: true,
-  ),
   SettingsModel(
     settingsType: SettingsType.sw1tch,
     title: 'Navbar显示文字',
