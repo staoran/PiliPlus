@@ -81,14 +81,21 @@ class _DynamicsPageState extends State<DynamicsPage>
         stream: _dynamicsController.upPanelStream?.stream.distinct(),
         initialData: true,
         builder: (BuildContext context, AsyncSnapshot snapshot) {
+          final isVisible = snapshot.data == true;
           return AnimatedOpacity(
-            opacity: snapshot.data ? 1 : 0,
+            opacity: isVisible ? 1 : 0,
             duration: const Duration(milliseconds: 300),
-            child: AnimatedContainer(
-              curve: Curves.easeInOutCubicEmphasized,
-              duration: const Duration(milliseconds: 500),
-              height: snapshot.data ? 76 : 0,
-              child: panel,
+            child: SizedBox(
+              height: 76,
+              child: ClipRect(
+                child: AnimatedAlign(
+                  alignment: Alignment.topCenter,
+                  curve: Curves.easeInOutCubicEmphasized,
+                  duration: const Duration(milliseconds: 500),
+                  heightFactor: isVisible ? 1.0 : 0.0,
+                  child: panel,
+                ),
+              ),
             ),
           );
         },

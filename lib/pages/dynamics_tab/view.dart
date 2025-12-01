@@ -68,17 +68,37 @@ class _DynamicsTabPageState
     return super.onNotification(notification);
   }
 
+  // UP主面板向上滚动计数器
+  double _upPanelUpScrollCount = 0.0;
+  double? _upPanelLastScrollPosition;
+
   @override
   void listener() {
     if (checkPage) {
       return;
     }
-    // 同时触发 UP 主面板收起
-    final direction = controller.scrollController.position.userScrollDirection;
-    if (direction == ScrollDirection.reverse) {
-      _upPanelStream?.add(false);
-    } else if (direction == ScrollDirection.forward) {
-      _upPanelStream?.add(true);
+    // 同时触发 UP 主面板收起（使用与底栏相同的阈值逻辑）
+    if (_upPanelStream != null) {
+      final scrollController = controller.scrollController;
+      final direction = scrollController.position.userScrollDirection;
+      final double currentPosition = scrollController.position.pixels;
+
+      _upPanelLastScrollPosition ??= currentPosition;
+      final double scrollDelta = currentPosition - _upPanelLastScrollPosition!;
+
+      if (direction == ScrollDirection.reverse) {
+        _upPanelStream?.add(false);
+        _upPanelUpScrollCount = 0.0;
+      } else if (direction == ScrollDirection.forward) {
+        if (scrollDelta < 0) {
+          _upPanelUpScrollCount += (-scrollDelta);
+          if (_upPanelUpScrollCount >= scrollThreshold) {
+            _upPanelStream?.add(true);
+          }
+        }
+      }
+
+      _upPanelLastScrollPosition = currentPosition;
     }
     super.listener();
   }
@@ -86,6 +106,13 @@ class _DynamicsTabPageState
   @override
   void initState() {
     super.initState();
+    // 如果启用阈值且有 upPanelStream，但父类没有添加监听器，则在此添加
+    if (enableScrollThreshold &&
+        _upPanelStream != null &&
+        mainStream == null &&
+        searchBarStream == null) {
+      controller.scrollController.addListener(listener);
+    }
     if (widget.dynamicsType == DynamicsTabType.up) {
       _listener = dynamicsController.mid.listen((mid) {
         if (mid != -1) {
@@ -102,6 +129,21 @@ class _DynamicsTabPageState
     _listener?.cancel();
     dynamicsController.mid.close();
     super.dispose();
+  }
+
+  @override
+  Widget onBuild(Widget child) {
+    // 如果未启用阈值且有 upPanelStream，需要添加 NotificationListener
+    if (!enableScrollThreshold &&
+        _upPanelStream != null &&
+        mainStream == null &&
+        searchBarStream == null) {
+      return NotificationListener<UserScrollNotification>(
+        onNotification: onNotification,
+        child: child,
+      );
+    }
+    return super.onBuild(child);
   }
 
   @override

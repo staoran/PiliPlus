@@ -19,8 +19,8 @@ abstract class CommonPageState<
   // late double _downScrollCount = 0.0; // 向下滚动计数器
   late double _upScrollCount = 0.0; // 向上滚动计数器
   double? _lastScrollPosition; // 记录上次滚动位置
-  final _enableScrollThreshold = Pref.enableScrollThreshold;
-  late final double _scrollThreshold = Pref.scrollThreshold; // 滚动阈值
+  final enableScrollThreshold = Pref.enableScrollThreshold;
+  late final double scrollThreshold = Pref.scrollThreshold; // 滚动阈值
   late final scrollController = controller.scrollController;
 
   @override
@@ -30,14 +30,14 @@ abstract class CommonPageState<
       mainStream = Get.find<MainController>().bottomBarStream;
       searchBarStream = Get.find<HomeController>().searchBarStream;
     } catch (_) {}
-    if (_enableScrollThreshold &&
+    if (enableScrollThreshold &&
         (mainStream != null || searchBarStream != null)) {
       controller.scrollController.addListener(listener);
     }
   }
 
   Widget onBuild(Widget child) {
-    if (!_enableScrollThreshold &&
+    if (!enableScrollThreshold &&
         (mainStream != null || searchBarStream != null)) {
       return NotificationListener<UserScrollNotification>(
         onNotification: onNotification,
@@ -92,7 +92,7 @@ abstract class CommonPageState<
         // _downScrollCount = 0.0; // 重置向下滚动计数器
 
         // 当累计向上滚动距离超过阈值时，显示顶底栏
-        if (_upScrollCount >= _scrollThreshold) {
+        if (_upScrollCount >= scrollThreshold) {
           mainStream?.add(true);
           searchBarStream?.add(true);
         }
