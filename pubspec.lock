@@ -239,7 +239,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "9c0fa799948ca1eaf3a8e654958caab0d8064639"
+      resolved-ref: e13ec72d2406b1ede94bbeec64dd0941a7dd9ac2
       url: "https://github.com/bggRGjQaUbCoE/canvas_danmaku.git"
     source: git
     version: "0.2.6"
@@ -400,10 +400,10 @@ packages:
     dependency: "direct main"
     description:
       name: device_info_plus
-      sha256: dd0e8e02186b2196c7848c9d394a5fd6e5b57a43a546082c5820b1ec72317e33
+      sha256: "4df8babf73058181227e18b08e6ea3520cf5fc5d796888d33b7cb0f33f984b7c"
       url: "https://pub.dev"
     source: hosted
-    version: "12.2.0"
+    version: "12.3.0"
   device_info_plus_platform_interface:
     dependency: transitive
     description:

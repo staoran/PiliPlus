@@ -158,7 +158,7 @@ class _LaterPageState extends State<LaterPage>
     return MultiSelectAppBarWidget(
       visible: enableMultiSelect,
       ctr: currCtr(),
-      children: [
+      actions: [
         TextButton(
           style: TextButton.styleFrom(
             visualDensity: VisualDensity.compact,
