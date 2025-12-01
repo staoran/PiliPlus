@@ -14,6 +14,7 @@ import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/pages/danmaku/controller.dart';
+import 'package:PiliPlus/services/download/download_foreground_service.dart';
 import 'package:PiliPlus/services/download/download_manager.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -46,6 +47,8 @@ class DownloadService extends GetxService {
       curDownload
         ..value!.status = status
         ..refresh();
+      // 更新前台服务通知
+      _updateForegroundNotification();
     }
   }
 
@@ -62,6 +65,59 @@ class DownloadService extends GetxService {
 
   void initDownloadList() {
     waitForInitialization = _readDownloadList();
+  }
+
+  /// 启动前台服务
+  Future<void> _startForegroundService(BiliDownloadEntryInfo entry) async {
+    await DownloadForegroundService.start(
+      title: '正在下载: ${entry.title}',
+      text: '准备中...',
+    );
+  }
+
+  /// 更新前台服务通知
+  void _updateForegroundNotification() {
+    final entry = curDownload.value;
+    if (entry == null) return;
+
+    final status = entry.status;
+    String text;
+
+    switch (status) {
+      case DownloadStatus.downloading:
+      case DownloadStatus.audioDownloading:
+        final progress = entry.totalBytes > 0
+            ? (entry.downloadedBytes / entry.totalBytes * 100).toStringAsFixed(
+                1,
+              )
+            : '0';
+        text = '下载中: $progress%';
+      case DownloadStatus.getDanmaku:
+        text = '正在获取弹幕...';
+      case DownloadStatus.getPlayUrl:
+        text = '正在获取视频地址...';
+      case DownloadStatus.completed:
+        text = '下载完成';
+      case DownloadStatus.failDanmaku:
+        text = '获取弹幕失败';
+      case DownloadStatus.failPlayUrl:
+        text = '获取视频地址失败';
+      case DownloadStatus.failDownload:
+      case DownloadStatus.failDownloadAudio:
+        text = '下载失败';
+      default:
+        text = '等待中...';
+    }
+
+    DownloadForegroundService.updateNotification(
+      title: '正在下载: ${entry.title}',
+      text: text,
+    );
+  }
+
+  /// 停止前台服务
+  Future<void> _stopForegroundService() async {
+    await DownloadForegroundService.stop();
   }
 
   Future<void> _readDownloadList() async {
@@ -352,6 +408,8 @@ class DownloadService extends GetxService {
       _curCid = entry.cid;
       curDownload.value = entry;
       waitDownloadQueue.refresh();
+      // 启动前台服务保持后台下载
+      await _startForegroundService(entry);
       await _startDownload(entry);
     });
   }
@@ -577,6 +635,9 @@ class DownloadService extends GetxService {
   void nextDownload() {
     if (waitDownloadQueue.isNotEmpty) {
       startDownload(waitDownloadQueue.first);
+    } else {
+      // 没有更多下载任务，停止前台服务
+      _stopForegroundService();
     }
   }
 
@@ -648,6 +709,9 @@ class DownloadService extends GetxService {
     }
     if (downloadNext) {
       nextDownload();
+    } else {
+      // 不继续下一个任务时，停止前台服务
+      _stopForegroundService();
     }
   }
 }
