@@ -417,7 +417,11 @@ class VideoDetailController extends GetxController
           } catch (_) {}
         },
         panelTitle: watchLaterTitle,
-        bvid: bvid,
+        bvid: () {
+          // 访问 cid.value 使 Obx 能够监听到视频切换
+          cid.value;
+          return bvid;
+        },
         count: args['count'],
         loadMoreMedia: getMediaList,
         desc: _mediaDesc,

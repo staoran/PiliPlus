@@ -36,7 +36,7 @@ class MediaListPanel extends CommonSlidePage {
   final RxList<MediaListItemModel> mediaList;
   final ValueChanged<BaseEpisodeItem> onChangeEpisode;
   final String? panelTitle;
-  final String bvid;
+  final ValueGetter<String> bvid;
   final VoidCallback loadMoreMedia;
   final int? count;
   final bool desc;
@@ -55,7 +55,7 @@ class _MediaListPanelState extends State<MediaListPanel>
   @override
   void initState() {
     super.initState();
-    final bvid = widget.bvid;
+    final bvid = widget.bvid();
     final bvIndex = widget.mediaList.indexWhere((item) => item.bvid == bvid);
     _controller = ScrollController(
       initialScrollOffset: bvIndex <= 0 ? 0 : bvIndex * 100.0 + 7,
@@ -130,8 +130,9 @@ class _MediaListPanelState extends State<MediaListPanel>
             top: 7,
             bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
           ),
-          sliver: Obx(
-            () => SliverFixedExtentList.builder(
+          sliver: Obx(() {
+            final currentBvid = widget.bvid();
+            return SliverFixedExtentList.builder(
               itemExtent: 100,
               itemCount: widget.mediaList.length,
               itemBuilder: (context, index) {
@@ -141,11 +142,11 @@ class _MediaListPanelState extends State<MediaListPanel>
                   widget.loadMoreMedia();
                 }
                 var item = widget.mediaList[index];
-                final isCurr = item.bvid == widget.bvid;
+                final isCurr = item.bvid == currentBvid;
                 return _buildItem(theme, index, item, isCurr, showDelBtn);
               },
-            ),
-          ),
+            );
+          }),
         ),
       ],
     );
