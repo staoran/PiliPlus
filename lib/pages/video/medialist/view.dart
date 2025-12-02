@@ -20,6 +20,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 class MediaListPanel extends CommonSlidePage {
   const MediaListPanel({
     super.key,
+    super.enableSlide,
     required this.mediaList,
     required this.onChangeEpisode,
     this.panelTitle,

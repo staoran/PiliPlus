@@ -996,7 +996,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 backgroundColor: Colors.transparent,
                 body: Column(
                   children: [
-                    buildTabbar(showIntro: false),
+                    buildTabbar(showIntro: false, showPlaylistHeader: true),
                     Expanded(
                       child: videoTabBarView(
                         controller: videoDetailController.tabCtr,
@@ -1076,6 +1076,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     showIntro: videoDetailController.isFileSource
                         ? true
                         : showIntro,
+                    showPlaylistHeader: true,
                   ),
                   Expanded(
                     child: videoTabBarView(
@@ -1163,7 +1164,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 body: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    buildTabbar(needIndicator: false),
+                    buildTabbar(needIndicator: false, showPlaylistHeader: true),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1426,6 +1427,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     String? introText,
     bool showIntro = true,
     VoidCallback? onTap,
+    bool showPlaylistHeader = false,
   }) {
     List<String> tabs = [
       if (showIntro)
@@ -1492,7 +1494,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       }).toList(),
     );
 
-    return Container(
+    final tabbarWidget = Container(
       height: 45,
       decoration: BoxDecoration(
         border: Border(
@@ -1570,6 +1572,66 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             ),
           ),
         ],
+      ),
+    );
+
+    // 如果需要显示播放列表头部（桌面端列表播放时）
+    if (showPlaylistHeader && videoDetailController.isPlayAll) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildDesktopPlaylistHeader(),
+          tabbarWidget,
+        ],
+      );
+    }
+
+    return tabbarWidget;
+  }
+
+  /// 构建桌面端播放列表头部按钮
+  Widget _buildDesktopPlaylistHeader() {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => videoDetailController.showMediaListPanel(context),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: themeData.colorScheme.secondaryContainer.withValues(
+              alpha: 0.5,
+            ),
+            border: Border(
+              bottom: BorderSide(
+                width: 1,
+                color: themeData.dividerColor.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.playlist_play, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  videoDetailController.watchLaterTitle,
+                  style: TextStyle(
+                    color: themeData.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(
+                Icons.keyboard_arrow_up_rounded,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1843,7 +1905,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         return child;
       },
     );
-    if (videoDetailController.isPlayAll) {
+    // 桌面端使用 tabbar 上方的播放列表按钮，移动端使用底部的按钮
+    if (videoDetailController.isPlayAll && !Utils.isDesktop) {
       return Stack(
         clipBehavior: Clip.none,
         children: [
