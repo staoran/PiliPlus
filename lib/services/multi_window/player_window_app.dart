@@ -83,8 +83,16 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
     channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'playVideo':
-          final args = call.arguments as Map<String, dynamic>;
-          _navigateToVideo(PlayerWindowArguments.fromJson(args));
+          // Note: IPC may pass Map<Object?, Object?>, need to convert properly
+          final rawArgs = call.arguments;
+          if (rawArgs is Map) {
+            final args = Map<String, dynamic>.from(
+              rawArgs.map(
+                (key, value) => MapEntry(key.toString(), value),
+              ),
+            );
+            _navigateToVideo(PlayerWindowArguments.fromJson(args));
+          }
           return 'ok';
         default:
           throw MissingPluginException('Not implemented: ${call.method}');

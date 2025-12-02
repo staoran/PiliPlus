@@ -77,6 +77,20 @@ class PlayerWindowArguments extends WindowArguments {
       videoTypeStr = 'ugc';
     }
 
+    // Helper to convert Map<Object?, Object?> to Map<String, dynamic>
+    Map<String, dynamic>? convertMap(dynamic raw) {
+      if (raw == null) return null;
+      if (raw is Map<String, dynamic>) return raw;
+      if (raw is Map) {
+        return Map<String, dynamic>.from(
+          raw.map(
+            (key, value) => MapEntry(key.toString(), value),
+          ),
+        );
+      }
+      return null;
+    }
+
     return PlayerWindowArguments(
       aid: json['aid'] as int,
       bvid: json['bvid'] as String,
@@ -88,8 +102,8 @@ class PlayerWindowArguments extends WindowArguments {
       title: json['title'] as String?,
       progress: json['progress'] as int?,
       videoType: videoTypeStr,
-      extraArguments: json['extraArguments'] as Map<String, dynamic>?,
-      settings: json['settings'] as Map<String, dynamic>?,
+      extraArguments: convertMap(json['extraArguments']),
+      settings: convertMap(json['settings']),
     );
   }
 

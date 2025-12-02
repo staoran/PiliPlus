@@ -81,6 +81,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     PlayerWindowService.isPlayerWindow = true;
     _parseSettings();
     _initWindow();
+    _setupWindowMethodHandler();
     _setupPlayerChannel();
     // Navigate to initial video if args provided
     _navigateToInitialVideo();
@@ -265,6 +266,27 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     });
   }
 
+  /// 设置 WindowController 的方法处理器，用于接收来自主窗口的消息
+  Future<void> _setupWindowMethodHandler() async {
+    try {
+      final controller = await WindowController.fromCurrentEngine();
+      await controller.setWindowMethodHandler((call) async {
+        switch (call.method) {
+          case 'playVideo':
+            final args = call.arguments;
+            if (args is Map) {
+              _navigateToVideo(args);
+            }
+            return 'ok';
+          default:
+            return null;
+        }
+      });
+    } catch (e) {
+      debugPrint('_setupWindowMethodHandler error: $e');
+    }
+  }
+
   void _navigateToInitialVideo() {
     final args = widget.args;
     if (args != null &&
@@ -301,7 +323,15 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
 
     // Get extraArguments and convert sourceType if needed
-    final extraArgs = args['extraArguments'] as Map<String, dynamic>? ?? {};
+    // Note: IPC may pass Map<Object?, Object?>, need to convert properly
+    final rawExtraArgs = args['extraArguments'];
+    final Map<String, dynamic> extraArgs = rawExtraArgs is Map
+        ? Map<String, dynamic>.from(
+            rawExtraArgs.map(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          )
+        : {};
     SourceType? sourceType;
     final sourceTypeArg = extraArgs['sourceType'];
     if (sourceTypeArg is SourceType) {

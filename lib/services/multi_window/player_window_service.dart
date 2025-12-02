@@ -47,11 +47,20 @@ class PlayerWindowService {
       final existingController = await findPlayerWindow();
 
       if (existingController != null) {
-        // 已存在播放器窗口，发送新的视频参数
-        await _sendVideoToPlayer(arguments);
-        await existingController.show();
-        await existingController.focus();
-        return;
+        // 已存在播放器窗口，尝试发送新的视频参数
+        try {
+          await _sendVideoToPlayer(existingController, arguments);
+          await existingController.show();
+          await existingController.focus();
+          return;
+        } catch (e) {
+          // 窗口可能已关闭，继续创建新窗口
+          if (kDebugMode) {
+            debugPrint(
+              'Existing player window not responding, creating new one: $e',
+            );
+          }
+        }
       }
 
       // 添加设置快照到参数中
@@ -148,23 +157,12 @@ class PlayerWindowService {
   }
 
   /// 向播放器窗口发送新视频参数
-  Future<void> _sendVideoToPlayer(PlayerWindowArguments arguments) async {
-    // 重试几次，因为子窗口可能还没准备好
-    for (int i = 0; i < 3; i++) {
-      try {
-        const channel = WindowMethodChannel('player_window_channel');
-        await channel.invokeMethod('playVideo', arguments.toJson());
-        return; // 成功则返回
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('_sendVideoToPlayer attempt ${i + 1} error: $e');
-        }
-        if (i < 2) {
-          // 等待一段时间后重试
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-      }
-    }
+  Future<void> _sendVideoToPlayer(
+    WindowController controller,
+    PlayerWindowArguments arguments,
+  ) async {
+    // 使用 WindowController.invokeMethod 向特定窗口发送消息
+    await controller.invokeMethod('playVideo', arguments.toJson());
   }
 
   /// 关闭播放器窗口
