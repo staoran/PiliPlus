@@ -45,6 +45,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view.dart';
+import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
@@ -177,6 +178,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     late final ctr = videoDetailController.plPlayerController;
+    batteryDebug.trackBackgroundTask(
+      'VideoPage_lifecycle_$state',
+      start: state == AppLifecycleState.paused,
+    );
     if (state == AppLifecycleState.resumed) {
       if (!ctr.showDanmaku) {
         introController.startTimer();
@@ -201,6 +206,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     } else if (state == AppLifecycleState.paused) {
       introController.canelTimer();
       ctr.showDanmaku = false;
+      // 输出当前电池调试状态
+      batteryDebug.logStatus();
     }
   }
 

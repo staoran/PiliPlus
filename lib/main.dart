@@ -11,6 +11,7 @@ import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
@@ -176,6 +177,8 @@ void main() async {
   RequestUtils.syncHistoryStatus();
   if (Utils.isMobile) {
     PiliScheme.init();
+    // 初始化电池调试服务
+    batteryDebug.init();
   }
 
   SmartDialog.config.toast = SmartConfigToast(
