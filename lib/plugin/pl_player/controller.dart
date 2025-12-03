@@ -214,6 +214,11 @@ class PlPlayerController {
   /// 全屏方向
   bool get isVertical => _isVertical;
 
+  /// 更新竖屏状态（用于离线视频在播放后检测实际视频尺寸）
+  void updateVerticalState(bool isVertical) {
+    _isVertical = isVertical;
+  }
+
   /// 弹幕开关
   late final RxBool _enableShowDanmaku = Pref.enableShowDanmaku.obs;
   late final RxBool _enableShowLiveDanmaku = Pref.enableShowLiveDanmaku.obs;

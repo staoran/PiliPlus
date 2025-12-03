@@ -268,6 +268,30 @@ class VideoDetailController extends GetxController
     }
   }
 
+  /// 离线视频：从播放器获取实际视频尺寸并更新竖屏状态
+  void _updateVerticalStateFromPlayer() {
+    try {
+      final state = plPlayerController.videoController?.player.state;
+      final actualWidth = state?.width;
+      final actualHeight = state?.height;
+      if (actualWidth != null &&
+          actualHeight != null &&
+          actualWidth > 0 &&
+          actualHeight > 0) {
+        final actualIsVertical = actualWidth < actualHeight;
+        if (actualIsVertical != isVertical.value) {
+          isVertical.value = actualIsVertical;
+          // 更新播放器的竖屏状态
+          plPlayerController.updateVerticalState(actualIsVertical);
+          // 更新视频高度
+          setVideoHeight();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('_updateVerticalStateFromPlayer error: $e');
+    }
+  }
+
   bool imageview = false;
 
   final isLoginVideo = Accounts.get(AccountType.video).isLogin;
@@ -1197,6 +1221,10 @@ class VideoDetailController extends GetxController
           videoState.value = const Success(null);
         }
         await setSubtitle(vttSubtitlesIndex.value);
+        // 离线视频：检测实际视频尺寸并更新竖屏状态
+        if (isFileSource) {
+          _updateVerticalStateFromPlayer();
+        }
       },
       width: firstVideo.width,
       height: firstVideo.height,
