@@ -572,6 +572,8 @@ class DownloadService extends GetxService {
         ..downloadedBytes = progress
         ..status = DownloadStatus.downloading;
       curDownload.refresh();
+      // 更新前台服务通知
+      _updateForegroundNotification();
     }
   }
 
