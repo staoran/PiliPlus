@@ -268,30 +268,59 @@ class _MainAppState extends State<MainApp>
                         ),
                       )
                     : Obx(
-                        () => BottomNavigationBar(
-                          currentIndex: _mainController.selectedIndex.value,
-                          onTap: _mainController.setIndex,
-                          iconSize: 16,
-                          selectedFontSize: 12,
-                          unselectedFontSize: 12,
-                          showSelectedLabels:
-                              _mainController.showBottomLabel.value,
-                          showUnselectedLabels:
-                              _mainController.showBottomLabel.value,
-                          type: BottomNavigationBarType.fixed,
-                          items: _mainController.navigationBars
-                              .map(
-                                (e) => BottomNavigationBarItem(
-                                  label: e.label,
-                                  icon: _buildIcon(type: e),
-                                  activeIcon: _buildIcon(
-                                    type: e,
-                                    selected: true,
+                        () {
+                          final showLabel =
+                              _mainController.showBottomLabel.value;
+                          // 关闭 MD3 样式时降低底栏高度
+                          // 不显示文字时高度进一步降低
+                          final bottomBarHeight = showLabel ? 48.0 : 40.0;
+                          return MediaQuery.removePadding(
+                            context: context,
+                            removeBottom: true,
+                            child: SizedBox(
+                              height: bottomBarHeight + padding.bottom,
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    height: bottomBarHeight,
+                                    child: BottomNavigationBar(
+                                      currentIndex:
+                                          _mainController.selectedIndex.value,
+                                      onTap: _mainController.setIndex,
+                                      iconSize: showLabel ? 16 : 22,
+                                      selectedFontSize: 12,
+                                      unselectedFontSize: 12,
+                                      showSelectedLabels: showLabel,
+                                      showUnselectedLabels: showLabel,
+                                      type: BottomNavigationBarType.fixed,
+                                      items: _mainController.navigationBars
+                                          .map(
+                                            (e) => BottomNavigationBarItem(
+                                              label: e.label,
+                                              icon: _buildIcon(type: e),
+                                              activeIcon: _buildIcon(
+                                                type: e,
+                                                selected: true,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                        ),
+                                  // 底部安全区域填充
+                                  Container(
+                                    height: padding.bottom,
+                                    color:
+                                        theme
+                                            .bottomNavigationBarTheme
+                                            .backgroundColor ??
+                                        theme.colorScheme.surface,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       )
               : const SizedBox.shrink()
         : null;
