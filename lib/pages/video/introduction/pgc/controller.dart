@@ -471,7 +471,18 @@ class PgcIntroController extends CommonIntroController {
           return false;
         }
       }
-      onChangeEpisode(episodes[nextIndex]);
+      onChangeEpisode(episodes[nextIndex]).then((changed) async {
+        if (changed) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          try {
+            await videoDetailCtr.playerInit(autoplay: true);
+          } catch (_) {
+            try {
+              videoDetailCtr.plPlayerController.play();
+            } catch (_) {}
+          }
+        }
+      });
       return true;
     } catch (_) {
       return false;

@@ -423,9 +423,19 @@ class LocalIntroController extends CommonIntroController {
       ..bvid = entry.bvid
       ..cid.value = entry.cid
       ..args['dirPath'] = entry.entryDirPath
-      ..initFileSource(entry, isInit: false)
-      // 调用 queryVideoUrl() 来获取新视频的空降助手数据（如果有网络）
-      ..queryVideoUrl();
+      ..initFileSource(entry, isInit: false);
+    // 调用 queryVideoUrl() 来获取新视频的空降助手数据（如果有网络），完成后尝试自动播放
+    videoDetailCtr.queryVideoUrl().whenComplete(() async {
+      // 等待短暂时间，确保数据/状态稳定，特别是 Android 后台播放场景
+      await Future.delayed(const Duration(milliseconds: 250));
+      try {
+        await videoDetailCtr.playerInit(autoplay: true);
+      } catch (_) {
+        try {
+          videoDetailCtr.plPlayerController.play();
+        } catch (_) {}
+      }
+    });
     videoDetail
       ..value.title = entry.showTitle
       ..refresh();

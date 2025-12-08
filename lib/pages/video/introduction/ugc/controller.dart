@@ -758,7 +758,21 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       }
 
       if (cid != this.cid.value) {
-        onChangeEpisode(episodes[nextIndex]);
+        // trigger change, and ensure playerInit runs to autoplay when resources ready
+        onChangeEpisode(episodes[nextIndex]).then((changed) async {
+          if (changed) {
+            // 等待短暂时间让资源和状态稳定，尤其在 Android 后台场景
+            await Future.delayed(const Duration(milliseconds: 250));
+            try {
+              await videoDetailCtr.playerInit(autoplay: true);
+            } catch (_) {
+              // 回退到直接调用底层播放，部分情况下 playerInit 可能已初始化完毕
+              try {
+                videoDetailCtr.plPlayerController.play();
+              } catch (_) {}
+            }
+          }
+        });
         return true;
       } else {
         return false;
