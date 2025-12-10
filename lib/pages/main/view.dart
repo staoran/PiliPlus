@@ -277,46 +277,32 @@ class _MainAppState extends State<MainApp>
                           return MediaQuery.removePadding(
                             context: context,
                             removeBottom: true,
-                            child: SizedBox(
-                              height: bottomBarHeight + padding.bottom,
-                              child: Column(
-                                children: [
-                                  SizedBox(
-                                    height: bottomBarHeight,
-                                    child: BottomNavigationBar(
-                                      currentIndex:
-                                          _mainController.selectedIndex.value,
-                                      onTap: _mainController.setIndex,
-                                      iconSize: showLabel ? 16 : 22,
-                                      selectedFontSize: 12,
-                                      unselectedFontSize: 12,
-                                      showSelectedLabels: showLabel,
-                                      showUnselectedLabels: showLabel,
-                                      type: BottomNavigationBarType.fixed,
-                                      items: _mainController.navigationBars
-                                          .map(
-                                            (e) => BottomNavigationBarItem(
-                                              label: e.label,
-                                              icon: _buildIcon(type: e),
-                                              activeIcon: _buildIcon(
-                                                type: e,
-                                                selected: true,
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  ),
-                                  // 底部安全区域填充
-                                  Container(
-                                    height: padding.bottom,
-                                    color:
-                                        theme
-                                            .bottomNavigationBarTheme
-                                            .backgroundColor ??
-                                        theme.colorScheme.surface,
-                                  ),
-                                ],
+                            child: ClipRect(
+                              child: SizedBox(
+                                height: bottomBarHeight + padding.bottom,
+                                child: BottomNavigationBar(
+                                  currentIndex:
+                                      _mainController.selectedIndex.value,
+                                  onTap: _mainController.setIndex,
+                                  iconSize: showLabel ? 16 : 22,
+                                  selectedFontSize: 12,
+                                  unselectedFontSize: 12,
+                                  showSelectedLabels: showLabel,
+                                  showUnselectedLabels: showLabel,
+                                  type: BottomNavigationBarType.fixed,
+                                  items: _mainController.navigationBars
+                                      .map(
+                                        (e) => BottomNavigationBarItem(
+                                          label: e.label,
+                                          icon: _buildIcon(type: e),
+                                          activeIcon: _buildIcon(
+                                            type: e,
+                                            selected: true,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
                               ),
                             ),
                           );
