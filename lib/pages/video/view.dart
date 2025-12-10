@@ -931,6 +931,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     child: videoTabBarView(
                       controller: videoDetailController.tabCtr,
                       children: [
+                        if (videoDetailController.isPlayAll && Utils.isDesktop)
+                          mediaListTab(),
                         videoIntro(
                           isHorizontal: false,
                           needCtr: false,
@@ -1000,6 +1002,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     child: videoTabBarView(
                       controller: videoDetailController.tabCtr,
                       children: [
+                        if (videoDetailController.isPlayAll && Utils.isDesktop)
+                          mediaListTab(),
                         videoIntro(
                           width: introWidth,
                           height: maxHeight,
@@ -1068,6 +1072,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       child: videoTabBarView(
                         controller: videoDetailController.tabCtr,
                         children: [
+                          if (videoDetailController.isPlayAll &&
+                              Utils.isDesktop)
+                            mediaListTab(),
                           if (videoDetailController.showReply)
                             videoReplyPanel(),
                           if (_shouldShowSeasonPanel) seasonPanel,
@@ -1149,6 +1156,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     child: videoTabBarView(
                       controller: videoDetailController.tabCtr,
                       children: [
+                        if (videoDetailController.isPlayAll && Utils.isDesktop)
+                          mediaListTab(),
                         if (videoDetailController.isFileSource)
                           localIntroPanel()
                         else if (showIntro)
