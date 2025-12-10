@@ -1383,7 +1383,12 @@ class VideoDetailController extends GetxController
     }
     isQuerying = true;
     if (plPlayerController.enableSponsorBlock && _isBlock && !fromReset) {
-      _querySponsorBlock();
+      // 空降助手请求异步进行，不阻止视频加载
+      // SponsorBlock请求超时或失败不应该阻塞主流程
+      _querySponsorBlock().onError((error, stackTrace) {
+        if (kDebugMode) debugPrint('SponsorBlock query failed: $error');
+        return null;
+      });
     }
     if (plPlayerController.cacheVideoQa == null) {
       final isWiFi = await Utils.isWiFi;

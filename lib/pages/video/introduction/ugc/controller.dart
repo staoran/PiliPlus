@@ -548,7 +548,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
           videoDetailCtr.cover.value = cover;
         }
 
-        // 重新请求相关视频
+        // 重新请求相关视频（异步，不阻止切换）
         if (videoDetailCtr.plPlayerController.showRelatedVideo) {
           try {
             Get.find<RelatedController>(tag: heroTag)
@@ -557,7 +557,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
           } catch (_) {}
         }
 
-        // 重新请求评论
+        // 重新请求评论（异步，不阻止切换）
         if (videoDetailCtr.showReply) {
           try {
             Get.find<VideoReplyController>(tag: heroTag)
@@ -568,7 +568,12 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
         hasLater.value = videoDetailCtr.sourceType == SourceType.watchLater;
         this.bvid = bvid;
-        queryVideoIntro();
+
+        // 异步查询视频简介，不阻止播放切换
+        queryVideoIntro().onError((error, stackTrace) {
+          if (kDebugMode) debugPrint('queryVideoIntro failed: $error');
+          return null;
+        });
       } else {
         if (episode is Part) {
           final videoDetail = this.videoDetail.value;

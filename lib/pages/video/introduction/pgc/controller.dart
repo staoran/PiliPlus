@@ -380,6 +380,8 @@ class PgcIntroController extends CommonIntroController {
       hasLater.value = videoDetailCtr.sourceType == SourceType.watchLater;
       this.cid.value = cid;
       queryOnlineTotal();
+
+      // 异步查询视频简介，不阻止播放切换
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e, s) {
