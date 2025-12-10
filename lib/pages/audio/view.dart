@@ -495,7 +495,7 @@ class _AudioPageState extends State<AudioPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: PlayRepeat.values
-                        .sublist(0, 4)
+                        .take(4)
                         .map(
                           (e) => _playModeWidget(
                             colorScheme: colorScheme,

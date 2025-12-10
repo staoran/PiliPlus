@@ -144,7 +144,7 @@ class _HotPageState extends CommonPageState<HotPage, HotController>
     return switch (loadingState) {
       Loading() => gridSkeleton,
       Success(:var response) =>
-        response?.isNotEmpty == true
+        response != null && response.isNotEmpty
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
                 itemBuilder: (context, index) {
@@ -158,7 +158,7 @@ class _HotPageState extends CommonPageState<HotPage, HotController>
                       ..refresh(),
                   );
                 },
-                itemCount: response!.length,
+                itemCount: response.length,
               )
             : HttpError(onReload: controller.onReload),
       Error(:var errMsg) => HttpError(

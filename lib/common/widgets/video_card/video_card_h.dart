@@ -51,8 +51,8 @@ class _VideoCardHState extends State<VideoCardH> {
     String? badge;
     if (videoItem case SearchVideoItemModel item) {
       var typeOrNull = item.type;
-      if (typeOrNull?.isNotEmpty == true) {
-        type = typeOrNull!;
+      if (typeOrNull != null && typeOrNull.isNotEmpty) {
+        type = typeOrNull;
         if (type == 'ketang') {
           badge = '课堂';
         } else if (type == 'live_room') {

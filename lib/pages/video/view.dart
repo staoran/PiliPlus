@@ -244,7 +244,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       }
     } else if (state == AppLifecycleState.paused) {
-      introController.canelTimer();
+      introController.cancelTimer();
       ctr.showDanmaku = false;
       // 输出当前电池调试状态
       batteryDebug.logStatus();
@@ -279,7 +279,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('handle playe status: $e');
+      if (kDebugMode) debugPrint('handle player status: $e');
     }
 
     if (status == PlayerStatus.completed) {
@@ -398,10 +398,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (!videoDetailController.isFileSource) {
       if (videoDetailController.isUgc) {
         ugcIntroController
-          ..canelTimer()
+          ..cancelTimer()
           ..videoDetail.close();
       } else {
-        pgcIntroController.canelTimer();
+        pgcIntroController.cancelTimer();
       }
     }
     if (!videoDetailController.horizontalScreen) {
@@ -443,7 +443,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     videoDetailController.positionSubscription?.cancel();
 
-    introController.canelTimer();
+    introController.cancelTimer();
 
     videoDetailController
       ..playerStatus = plPlayerController?.playerStatus.value
@@ -926,7 +926,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               backgroundColor: Colors.transparent,
               body: Column(
                 children: [
-                  buildTabbar(onTap: videoDetailController.animToTop),
+                  buildTabBar(onTap: videoDetailController.animToTop),
                   Expanded(
                     child: videoTabBarView(
                       controller: videoDetailController.tabCtr,
@@ -997,7 +997,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  buildTabbar(),
+                  buildTabBar(),
                   Expanded(
                     child: videoTabBarView(
                       controller: videoDetailController.tabCtr,
@@ -1067,7 +1067,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 backgroundColor: Colors.transparent,
                 body: Column(
                   children: [
-                    buildTabbar(showIntro: false, showPlaylistHeader: true),
+                    buildTabBar(showIntro: false, showPlaylistHeader: true),
                     Expanded(
                       child: videoTabBarView(
                         controller: videoDetailController.tabCtr,
@@ -1145,7 +1145,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  buildTabbar(
+                  buildTabBar(
                     introText: '相关视频',
                     showIntro: videoDetailController.isFileSource
                         ? true
@@ -1240,7 +1240,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 body: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    buildTabbar(needIndicator: false, showPlaylistHeader: true),
+                    buildTabBar(needIndicator: false, showPlaylistHeader: true),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1505,7 +1505,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         : child;
   }
 
-  Widget buildTabbar({
+  Widget buildTabBar({
     bool needIndicator = true,
     String? introText,
     bool showIntro = true,
@@ -1534,7 +1534,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     final flag = !needIndicator || tabs.length == 1;
-    Widget tabbar() => TabBar(
+    Widget tabBar() => TabBar(
       labelColor: flag ? themeData.colorScheme.onSurface : null,
       indicator: flag ? const BoxDecoration() : null,
       padding: EdgeInsets.zero,
@@ -1684,7 +1684,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         if (tabs.isEmpty)
           const Spacer()
         else
-          Expanded(child: tabbar()),
+          Expanded(child: tabBar()),
         rightWidget,
       ],
     );

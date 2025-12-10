@@ -101,7 +101,7 @@ abstract class CommonIntroController extends GetxController
     }
   }
 
-  void canelTimer() {
+  void cancelTimer() {
     if (timer != null) {
       batteryDebug.trackTimerStop('onlineTotal_$heroTag');
     }
@@ -126,7 +126,7 @@ abstract class CommonIntroController extends GetxController
 
   @override
   void onClose() {
-    canelTimer();
+    cancelTimer();
     super.onClose();
   }
 

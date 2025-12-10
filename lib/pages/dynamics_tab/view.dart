@@ -176,7 +176,7 @@ class _DynamicsTabPageState
     return switch (loadingState) {
       Loading() => dynSkeleton,
       Success(:var response) =>
-        response?.isNotEmpty == true
+        response != null && response.isNotEmpty
             ? GlobalData().dynamicsWaterfallFlow
                   ? SliverWaterfallFlow(
                       gridDelegate: dynGridDelegate,
@@ -195,7 +195,7 @@ class _DynamicsTabPageState
                             onUnfold: () => controller.onUnfold(item, index),
                           );
                         },
-                        childCount: response!.length,
+                        childCount: response.length,
                       ),
                     )
                   : SliverList.builder(
@@ -213,7 +213,7 @@ class _DynamicsTabPageState
                           onUnfold: () => controller.onUnfold(item, index),
                         );
                       },
-                      itemCount: response!.length,
+                      itemCount: response.length,
                     )
             : HttpError(onReload: controller.onReload),
       Error(:var errMsg) => HttpError(

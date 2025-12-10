@@ -12,7 +12,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get_utils/get_utils.dart';
 
-Future<VideoPlayerServiceHandler> initAudioService() async {
+Future<VideoPlayerServiceHandler> initAudioService() {
   return AudioService.init(
     builder: VideoPlayerServiceHandler.new,
     config: const AudioServiceConfig(
