@@ -124,6 +124,7 @@ class DetailItem extends StatelessWidget {
           if (entry.isCompleted) {
             await PageUtils.toVideoPage(
               aid: entry.avid,
+              bvid: entry.bvid,
               cid: cid!,
               cover: entry.cover,
               title: entry.showTitle,

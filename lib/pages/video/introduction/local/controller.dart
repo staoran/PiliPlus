@@ -1,317 +1,53 @@
-import 'dart:math';
-
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/member.dart';
-import 'package:PiliPlus/http/user.dart';
-import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
-import 'package:PiliPlus/models_new/member_card_info/data.dart';
-import 'package:PiliPlus/models_new/triple/ugc_triple.dart';
-import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/stat_detail.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/download/controller.dart';
-import 'package:PiliPlus/pages/dynamics_repost/view.dart';
-import 'package:PiliPlus/pages/video/pay_coins/view.dart';
-import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
-import 'package:PiliPlus/utils/global_data.dart';
-import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:expandable/expandable.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class LocalIntroController extends CommonIntroController {
-  // 网络状态
-  final RxBool hasNetwork = false.obs;
-  // 是否加载了在线详情
-  final RxBool onlineDetailLoaded = false.obs;
-  // 是否点踩
-  final RxBool hasDislike = false.obs;
-  // up主粉丝数
-  final Rx<MemberCardInfoData> userStat = MemberCardInfoData().obs;
-  // 关注状态
-  late final RxMap followStatus = {}.obs;
-
-  late ExpandableController expandableCtr;
-
   @override
-  void queryVideoIntro() {
-    // 检查网络后加载在线详情
-    _checkNetworkAndLoadDetail();
-  }
-
-  /// 检查网络状态并加载在线详情
-  Future<void> _checkNetworkAndLoadDetail() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    hasNetwork.value = !connectivityResult.contains(ConnectivityResult.none);
-
-    // 同步网络状态到 VideoDetailController
-    videoDetailCtr.localHasNetwork.value = hasNetwork.value;
-
-    if (hasNetwork.value) {
-      await _loadOnlineDetail();
-    } else {
-      // 离线时，标记本地详情已加载（使用本地存储的数据）
-      onlineDetailLoaded.value = true;
-    }
-  }
-
-  /// 加载在线视频详情
-  Future<void> _loadOnlineDetail() async {
-    try {
-      queryVideoTags();
-      final res = await VideoHttp.videoIntro(bvid: bvid);
-      if (res.isSuccess) {
-        final data = res.data;
-        // 保留本地标题，但更新其他在线数据
-        final localTitle = videoDetail.value.title;
-        videoDetail.value = data;
-        if (localTitle?.isNotEmpty == true) {
-          videoDetail.value.title = localTitle;
-        }
-        onlineDetailLoaded.value = true;
-
-        // 更新评论数
-        if (videoDetailCtr.showReply) {
-          try {
-            Get.find<VideoReplyController>(tag: heroTag).count.value =
-                data.stat?.reply ?? 0;
-          } catch (_) {}
-        }
-
-        // 获取UP主信息
-        final mid = data.owner?.mid;
-        if (mid != null) {
-          _queryUserStat(mid);
-        }
-
-        // 登录状态下查询点赞收藏状态
-        if (isLogin) {
-          _queryAllStatus();
-          _queryFollowStatus();
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('Load online detail error: $e');
-    }
-  }
-
-  /// 获取UP主粉丝数
-  Future<void> _queryUserStat(int mid) async {
-    final result = await MemberHttp.memberCardInfo(mid: mid);
-    if (result.isSuccess) {
-      userStat.value = result.data;
-    }
-  }
-
-  /// 查询视频状态（点赞、收藏等）
-  Future<void> _queryAllStatus() async {
-    final result = await VideoHttp.videoRelation(bvid: bvid);
-    if (result case Success(:var response)) {
-      late final stat = videoDetail.value.stat!;
-      if (response.like!) {
-        stat.like = max(1, stat.like);
-      }
-      if (response.favorite!) {
-        stat.favorite = max(1, stat.favorite);
-      }
-      hasLike.value = response.like!;
-      hasDislike.value = response.dislike!;
-      coinNum.value = response.coin!;
-      hasFav.value = response.favorite!;
-    }
-  }
-
-  /// 查询关注状态
-  Future<void> _queryFollowStatus() async {
-    final mid = videoDetail.value.owner?.mid;
-    if (mid == null) return;
-    final result = await UserHttp.hasFollow(mid);
-    if (result['status']) {
-      followStatus['attribute'] = result['data']['attribute'];
-    }
-  }
+  void queryVideoIntro() {}
 
   @override
   void actionCoinVideo() {
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-
-    int copyright = videoDetail.value.copyright ?? 1;
-    if ((copyright != 1 && coinNum.value >= 1) || coinNum.value >= 2) {
-      SmartDialog.showToast('达到投币上限啦~');
-      return;
-    }
-
-    if (GlobalData().coins != null && GlobalData().coins! < 1) {
-      SmartDialog.showToast('硬币不足');
-    }
-
-    PayCoinsPage.toPayCoinsPage(
-      onPayCoin: coinVideo,
-      copyright: copyright,
-      hasCoin: coinNum.value == 1,
-    );
+    SmartDialog.showToast('离线播放不支持该操作');
   }
 
   @override
   Future<void> actionLikeVideo() async {
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    if (videoDetail.value.stat == null) {
-      return;
-    }
-    final newVal = !hasLike.value;
-    var result = await VideoHttp.likeVideo(bvid: bvid, type: newVal);
-    if (result['status']) {
-      SmartDialog.showToast(newVal ? result['data']['toast'] : '取消赞');
-      videoDetail.value.stat!.like += newVal ? 1 : -1;
-      hasLike.value = newVal;
-      if (newVal) {
-        hasDislike.value = false;
-      }
-    } else {
-      SmartDialog.showToast(result['msg']);
-    }
-  }
-
-  /// 点踩视频
-  Future<void> actionDislikeVideo() async {
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    var result = await VideoHttp.dislikeVideo(
-      bvid: bvid,
-      type: !hasDislike.value,
-    );
-    if (result['status']) {
-      if (!hasDislike.value) {
-        SmartDialog.showToast('点踩成功');
-        hasDislike.value = true;
-        if (hasLike.value) {
-          videoDetail.value.stat!.like--;
-          hasLike.value = false;
-        }
-      } else {
-        SmartDialog.showToast('取消踩');
-        hasDislike.value = false;
-      }
-    } else {
-      SmartDialog.showToast(result['msg']);
-    }
+    SmartDialog.showToast('离线播放不支持该操作');
   }
 
   @override
   void actionShareVideo(context) {
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    final vd = videoDetail.value;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => RepostPanel(
-        rid: vd.aid,
-        dynType: 8,
-        pic: vd.pic,
-        title: vd.title,
-        uname: vd.owner?.name,
-      ),
-    );
+    SmartDialog.showToast('离线播放不支持该操作');
   }
 
   @override
   Future<void> actionTriple() async {
-    feedBack();
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    if (hasLike.value && hasCoin && hasFav.value) {
-      SmartDialog.showToast('已三连');
-      return;
-    }
-    var result = await VideoHttp.ugcTriple(bvid: bvid);
-    if (result['status']) {
-      UgcTriple data = result['data'];
-      late final stat = videoDetail.value.stat!;
-      if (data.like == true && !hasLike.value) {
-        stat.like++;
-        hasLike.value = true;
-      }
-      if (data.coin == true && !hasCoin) {
-        stat.coin += 2;
-        coinNum.value = 2;
-        GlobalData().afterCoin(2);
-      }
-      if (data.fav == true && !hasFav.value) {
-        stat.favorite++;
-        hasFav.value = true;
-      }
-      hasDislike.value = false;
-      if (!hasCoin) {
-        SmartDialog.showToast('投币失败');
-      } else {
-        SmartDialog.showToast('三连成功');
-      }
-    } else {
-      SmartDialog.showToast(result['msg']);
-    }
+    SmartDialog.showToast('离线播放不支持该操作');
   }
 
   @override
   Future<void> actionFavVideo({bool isQuick = false}) async {
-    if (!hasNetwork.value) {
-      SmartDialog.showToast('当前无网络连接');
-      return;
-    }
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    await super.actionFavVideo(isQuick: isQuick);
+    SmartDialog.showToast('离线播放不支持该操作');
   }
 
   @override
-  (Object, int) get getFavRidType => (IdUtils.bv2av(bvid), 2);
+  (Object, int) get getFavRidType => (bvid, 2);
 
   @override
   StatDetail? getStat() => videoDetail.value.stat;
 
   @override
-  bool get isShowOnlineTotal => hasNetwork.value && super.isShowOnlineTotal;
+  bool get isShowOnlineTotal => false;
 
   late final Set<String> aidSet = {};
 
@@ -343,12 +79,12 @@ class LocalIntroController extends CommonIntroController {
     final currCid = videoDetailCtr.cid.value;
     final index = list.indexWhere((e) => e.cid == currCid);
     this.index.value = index;
-    if ((videoDetail.value.title?.trim().isNotEmpty ?? false) == false &&
+    if (!(videoDetail.value.title?.trim().isNotEmpty ?? false) &&
         index >= 0 &&
         index < list.length) {
       videoDetail.value.title = list[index].showTitle;
     }
-    if (Utils.isMobile) {
+    if (Utils.isMobile && index >= 0 && index < list.length) {
       onVideoDetailChange(list[index]);
     }
     if (index != 0) {
@@ -429,21 +165,6 @@ class LocalIntroController extends CommonIntroController {
   }) {
     entry ??= list[index];
 
-    // 切换离线视频时：必须同步更新 IntroController 自身的 bvid/cid，
-    // 否则 queryVideoIntro/评论等仍会沿用旧视频的信息。
-    bvid = entry.bvid;
-    cid.value = entry.cid;
-
-    // 先清空上一条视频的在线详情状态，避免 UI 暂时显示旧数据
-    onlineDetailLoaded.value = false;
-    videoTags.value = null;
-    hasLike.value = false;
-    hasFav.value = false;
-    coinNum.value = 0;
-    hasDislike.value = false;
-    userStat.value = MemberCardInfoData();
-    followStatus.clear();
-
     videoDetailCtr
       ..onReset()
       ..cover.value = entry.cover
@@ -455,25 +176,10 @@ class LocalIntroController extends CommonIntroController {
       // 调用 queryVideoUrl() 来获取新视频的空降助手数据（如果有网络）
       ..queryVideoUrl();
 
-    // 先用本地信息更新标题/封面（无网络时至少不会显示上一条视频的详情）
-    videoDetail.value = VideoDetailData(
-      bvid: entry.bvid,
-      aid: entry.avid,
-      cid: entry.cid,
-      title: entry.showTitle,
-      pic: entry.cover,
-    );
-
-    // 异步检测网络并加载在线详情；完成后如允许显示评论则刷新评论列表
-    _checkNetworkAndLoadDetail().whenComplete(() {
-      if (!hasNetwork.value) return;
-      if (!videoDetailCtr.plPlayerController.showVideoReply) return;
-      try {
-        Get.find<VideoReplyController>(tag: heroTag)
-          ..aid = entry!.avid
-          ..onReload();
-      } catch (_) {}
-    });
+    // 仅更新本地标题，避免引入在线详情/评论等不稳定逻辑
+    videoDetail
+      ..value.title = entry.showTitle
+      ..refresh();
 
     this.index.value = index;
     if (Utils.isMobile) {

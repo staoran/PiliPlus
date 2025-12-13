@@ -136,13 +136,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     PlPlayerController.setPlayCallBack(playCallBack);
     videoDetailController = Get.put(VideoDetailController(), tag: heroTag);
 
-    // 对于离线视频，也创建评论控制器（如果设置允许显示评论）
-    // 因为网络状态是异步检测的，所以先创建控制器，后面根据网络状态决定是否显示
-    final shouldInitReply = videoDetailController.isFileSource
-        ? videoDetailController.plPlayerController.showVideoReply
-        : videoDetailController.showReply;
-
-    if (shouldInitReply) {
+    if (videoDetailController.showReply) {
       _videoReplyController = Get.put(
         VideoReplyController(
           aid: videoDetailController.aid,
@@ -1598,6 +1592,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+          if (!videoDetailController.isFileSource)
             SizedBox(
               width: 38,
               height: 38,

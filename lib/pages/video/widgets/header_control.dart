@@ -2658,22 +2658,23 @@ class HeaderControlState extends State<HeaderControl>
                 ),
               ],
               if (isFSOrPip || Utils.isDesktop) ...[
-                SizedBox(
-                  width: 42,
-                  height: 34,
-                  child: IconButton(
-                    tooltip: '发弹幕',
-                    style: const ButtonStyle(
-                      padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                    ),
-                    onPressed: videoDetailCtr.showShootDanmakuSheet,
-                    icon: const Icon(
-                      Icons.comment_outlined,
-                      size: 19,
-                      color: Colors.white,
+                if (!videoDetailCtr.isFileSource)
+                  SizedBox(
+                    width: 42,
+                    height: 34,
+                    child: IconButton(
+                      tooltip: '发弹幕',
+                      style: const ButtonStyle(
+                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+                      ),
+                      onPressed: videoDetailCtr.showShootDanmakuSheet,
+                      icon: const Icon(
+                        Icons.comment_outlined,
+                        size: 19,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
                 SizedBox(
                   width: 42,
                   height: 34,

@@ -154,11 +154,8 @@ class VideoDetailController extends GetxController
   late String cacheDecode = Pref.defaultDecode; // def avc
   late String cacheSecondDecode = Pref.secondDecode; // def av1
 
-  // 离线视频的网络状态（用于控制是否显示评论区）
-  final RxBool localHasNetwork = false.obs;
-
   bool get showReply => isFileSource
-      ? localHasNetwork.value && plPlayerController.showVideoReply
+      ? false
       : isUgc
       ? plPlayerController.showVideoReply
       : plPlayerController.showBangumiReply;
@@ -452,6 +449,7 @@ class VideoDetailController extends GetxController
     sourceType = args['sourceType'] ?? SourceType.normal;
     isFileSource = sourceType == SourceType.file;
     isPlayAll = sourceType != SourceType.normal && !isFileSource;
+
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
@@ -1283,6 +1281,7 @@ class VideoDetailController extends GetxController
     Volume? volume,
   }) async {
     final onlyPlayAudio = plPlayerController.onlyPlayAudio.value;
+
     await plPlayerController.setDataSource(
       DataSource(
         videoSource: isFileSource
@@ -1290,7 +1289,7 @@ class VideoDetailController extends GetxController
             : onlyPlayAudio
             ? audio ?? audioUrl
             : video ?? videoUrl,
-        audioSource: isFileSource || onlyPlayAudio ? null : audio ?? audioUrl,
+        audioSource: (isFileSource || onlyPlayAudio) ? null : audio ?? audioUrl,
         type: isFileSource ? DataSourceType.file : DataSourceType.network,
         httpHeaders: isFileSource
             ? null
@@ -1378,6 +1377,7 @@ class VideoDetailController extends GetxController
       }
       return _initPlayerIfNeeded();
     }
+
     if (isQuerying) {
       return;
     }
