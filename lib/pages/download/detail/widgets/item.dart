@@ -9,6 +9,7 @@ import 'package:PiliPlus/common/widgets/select_mask.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
+import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart';
 import 'package:PiliPlus/pages/download/downloading/view.dart';
@@ -122,16 +123,31 @@ class DetailItem extends StatelessWidget {
             return;
           }
           if (entry.isCompleted) {
+            final ep = entry.ep;
+            final VideoType videoType = ep == null
+                ? VideoType.ugc
+                : (ep.from == VideoType.pugv.name
+                      ? VideoType.pugv
+                      : VideoType.pgc);
+            final int? seasonId = int.tryParse(entry.seasonId ?? '');
             await PageUtils.toVideoPage(
+              videoType: videoType,
               aid: entry.avid,
               bvid: entry.bvid,
               cid: cid!,
+              seasonId: seasonId,
+              epId: ep?.episodeId,
+              pgcType: ep?.seasonType,
               cover: entry.cover,
               title: entry.showTitle,
               extraArguments: {
-                'sourceType': SourceType.file,
+                // 离线列表播放（isPlayAll）+ 在线详情/评论 + 本地文件播放
+                'sourceType': SourceType.normal,
+                'isPlayAll': true,
+                'offlineList': true,
+                'favTitle': '离线缓存',
+                'forceLocalPlay': true,
                 'entry': entry,
-                'dirPath': entry.entryDirPath,
               },
             );
             if (context.mounted) {

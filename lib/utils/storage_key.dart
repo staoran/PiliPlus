@@ -103,6 +103,7 @@ abstract class SettingBoxKey {
       searchSuggestion = 'searchSuggestion',
       showDynDecorate = 'showDynDecorate',
       showMoreDownloadButtons = 'showMoreDownloadButtons',
+      enableLocalPlayInOnlineList = 'enableLocalPlayInOnlineList',
       enableLivePhoto = 'enableLivePhoto',
       showSeekPreview = 'showSeekPreview',
       showDmChart = 'showDmChart',

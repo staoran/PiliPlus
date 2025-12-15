@@ -162,6 +162,11 @@ abstract class Pref {
     defaultValue: false,
   );
 
+  static bool get enableLocalPlayInOnlineList => _setting.get(
+    SettingBoxKey.enableLocalPlayInOnlineList,
+    defaultValue: false,
+  );
+
   static Set<MsgUnReadType> get msgUnReadTypeV2 =>
       (_setting.get(SettingBoxKey.msgUnReadTypeV2) as List?)
           ?.map((index) => MsgUnReadType.values[index])

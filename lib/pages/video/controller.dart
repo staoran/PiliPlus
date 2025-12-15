@@ -27,10 +27,13 @@ import 'package:PiliPlus/models/common/video/subtitle_pref_type.dart';
 import 'package:PiliPlus/models/common/video/video_decode_type.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
+import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
+import 'package:PiliPlus/models_new/fav/fav_detail/cnt_info.dart';
 import 'package:PiliPlus/models_new/media_list/data.dart';
 import 'package:PiliPlus/models_new/media_list/media_list.dart';
+import 'package:PiliPlus/models_new/media_list/page.dart' as media_list;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
@@ -103,6 +106,9 @@ class VideoDetailController extends GetxController
   late BiliDownloadEntryInfo entry;
   late bool isFileSource;
   final RxBool _mediaDesc = false.obs;
+
+  int? _mediaListCountOverride;
+  bool get _isOfflineListPlayAll => args['offlineList'] == true;
 
   /// 列表排序（true: 顺序, false: 倒序）
   bool get mediaDesc => _mediaDesc.value;
@@ -447,13 +453,19 @@ class VideoDetailController extends GetxController
     cover = RxString(args['cover'] ?? '');
 
     sourceType = args['sourceType'] ?? SourceType.normal;
-    isFileSource = sourceType == SourceType.file;
-    isPlayAll = sourceType != SourceType.normal && !isFileSource;
+    // 离线列表播放：需要走在线详情/评论逻辑，因此不能被视为纯 file source。
+    isFileSource = sourceType == SourceType.file && !_isOfflineListPlayAll;
+    // 支持通过 arguments 显式开启列表播放（用于离线列表 -> 在线数据 + 本地播放的混合模式）。
+    isPlayAll =
+        args['isPlayAll'] == true ||
+        (sourceType != SourceType.normal && !isFileSource);
 
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
-      watchLaterTitle = args['favTitle'];
+      watchLaterTitle = _isOfflineListPlayAll
+          ? '离线缓存'
+          : (args['favTitle'] ?? '播放列表');
       _mediaDesc.value = args['desc'] ?? false;
       getMediaList();
     }
@@ -469,6 +481,13 @@ class VideoDetailController extends GetxController
     bool isReverse = false,
     bool isLoadPrevious = false,
   }) async {
+    if (_isOfflineListPlayAll) {
+      if (isLoadPrevious) {
+        return;
+      }
+      await _buildOfflineMediaList(isReverse: isReverse);
+      return;
+    }
     final count = args['count'];
     if (!isReverse && count != null && mediaList.length >= count) {
       return;
@@ -542,16 +561,20 @@ class VideoDetailController extends GetxController
           cid.value;
           return bvid;
         },
-        count: args['count'],
-        loadMoreMedia: getMediaList,
+        count: _mediaListCountOverride ?? args['count'],
+        loadMoreMedia: _isOfflineListPlayAll
+            ? _loadOfflineMoreMedia
+            : getMediaList,
         desc: _mediaDesc.value,
         onReverse: () {
           _mediaDesc.value = !_mediaDesc.value;
           getMediaList(isReverse: true);
         },
-        loadPrevious: args['isContinuePlaying'] == true
-            ? () => getMediaList(isLoadPrevious: true)
-            : null,
+        loadPrevious: _isOfflineListPlayAll
+            ? null
+            : (args['isContinuePlaying'] == true
+                  ? () => getMediaList(isLoadPrevious: true)
+                  : null),
         onDelete:
             sourceType == SourceType.watchLater ||
                 (sourceType == SourceType.fav && args['isOwner'] == true)
@@ -599,6 +622,78 @@ class VideoDetailController extends GetxController
       }
     } else {
       getMediaList();
+    }
+  }
+
+  Future<void> _loadOfflineMoreMedia({
+    bool isReverse = false,
+    bool isLoadPrevious = false,
+  }) async {
+    // 离线列表播放不分页；仅用于适配 MediaListPanel 的 loadMore 回调签名。
+    if (isReverse) {
+      await getMediaList(isReverse: true);
+    }
+  }
+
+  Future<void> _buildOfflineMediaList({
+    bool isReverse = false,
+  }) async {
+    final downloadService = Get.find<DownloadService>();
+    await downloadService.waitForInitialization;
+
+    final String? pageId = args['offlinePageId'] as String?;
+    // 默认将“离线缓存”列表（全部已缓存内容）作为播放队列；
+    // 若显式传入 offlinePageId，则只播放同一 pageId 组。
+    final entries = (pageId == null || pageId.isEmpty)
+        ? downloadService.downloadList.toList()
+        : downloadService.downloadList
+              .where((e) => e.pageId == pageId)
+              .toList();
+
+    final sorted = _mediaDesc.value ? entries : entries.reversed.toList();
+    final items = sorted
+        .map((e) {
+          final int? localCid = e.source?.cid ?? e.pageData?.cid;
+          if (localCid == null) {
+            return null;
+          }
+          return MediaListItemModel(
+            aid: e.avid,
+            bvid: e.bvid,
+            cover: e.cover,
+            title: e.showTitle,
+            // MediaListPanel 内部仅允许 type==2 的条目点击播放
+            type: 2,
+            duration: e.totalTimeMilli ~/ 1000,
+            upper: Owner(name: e.ownerName ?? ''),
+            cntInfo: CntInfo(play: 0, danmaku: e.danmakuCount),
+            pages: [
+              media_list.Page(
+                id: localCid,
+                title: e.showTitle,
+                duration: e.totalTimeMilli ~/ 1000,
+              ),
+            ],
+          );
+        })
+        .whereType<MediaListItemModel>()
+        .toList();
+
+    _mediaListCountOverride = items.length;
+    if (items.isNotEmpty) {
+      mediaList.value = items;
+      if (isReverse) {
+        for (var item in mediaList) {
+          if (item.cid != null) {
+            try {
+              Get.find<UgcIntroController>(
+                tag: heroTag,
+              ).onChangeEpisode(item);
+            } catch (_) {}
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -1257,7 +1352,9 @@ class VideoDetailController extends GetxController
     playerInit();
   }
 
-  FutureOr<void> _initPlayerIfNeeded() {
+  FutureOr<void> _initPlayerIfNeeded({
+    BiliDownloadEntryInfo? localEntry,
+  }) {
     // 后台播放模式下，无需检查 widget mounted 状态
     final isBackgroundPlayEnabled =
         plPlayerController.continuePlayInBackground.value;
@@ -1268,7 +1365,7 @@ class VideoDetailController extends GetxController
             (isFileSource
                 ? true
                 : videoPlayerKey.currentState?.mounted == true)) {
-      return playerInit();
+      return playerInit(localEntry: localEntry);
     }
   }
 
@@ -1279,19 +1376,33 @@ class VideoDetailController extends GetxController
     Duration? duration,
     bool? autoplay,
     Volume? volume,
+    BiliDownloadEntryInfo? localEntry,
   }) async {
     final onlyPlayAudio = plPlayerController.onlyPlayAudio.value;
 
+    final bool playFromLocal = localEntry != null;
+    final BiliDownloadEntryInfo? effectiveLocalEntry = playFromLocal
+        ? localEntry
+        : (isFileSource ? entry : null);
+
+    // 当 playFromLocal=true 时，只替换播放数据源为本地文件，不改变页面的 isFileSource 判定
+    // （以避免影响列表播放的在线简介/评论等逻辑）。
+    final DataSourceType dataSourceType = (playFromLocal || isFileSource)
+        ? DataSourceType.file
+        : DataSourceType.network;
+
     await plPlayerController.setDataSource(
       DataSource(
-        videoSource: isFileSource
+        videoSource: dataSourceType == DataSourceType.file
             ? null
             : onlyPlayAudio
             ? audio ?? audioUrl
             : video ?? videoUrl,
-        audioSource: (isFileSource || onlyPlayAudio) ? null : audio ?? audioUrl,
-        type: isFileSource ? DataSourceType.file : DataSourceType.network,
-        httpHeaders: isFileSource
+        audioSource: (dataSourceType == DataSourceType.file || onlyPlayAudio)
+            ? null
+            : audio ?? audioUrl,
+        type: dataSourceType,
+        httpHeaders: dataSourceType == DataSourceType.file
             ? null
             : {
                 'user-agent': UaType.pc.ua,
@@ -1301,9 +1412,11 @@ class VideoDetailController extends GetxController
       seekTo: seekToTime ?? defaultST ?? playedTime,
       duration:
           duration ??
-          (data.timeLength == null
-              ? null
-              : Duration(milliseconds: data.timeLength!)),
+          (effectiveLocalEntry != null
+              ? Duration(milliseconds: effectiveLocalEntry.totalTimeMilli)
+              : (data.timeLength == null
+                    ? null
+                    : Duration(milliseconds: data.timeLength!))),
       isVertical: isVertical.value,
       aid: aid,
       bvid: bvid,
@@ -1320,16 +1433,32 @@ class VideoDetailController extends GetxController
         await setSubtitle(vttSubtitlesIndex.value);
         // 离线视频：监听视频尺寸变化来更新竖屏状态
         // 因为此时视频尺寸可能还未解码完成，所以需要通过流监听
-        if (isFileSource) {
+        if (dataSourceType == DataSourceType.file) {
           _listenVideoSizeForVerticalState();
         }
       },
-      width: firstVideo.width,
-      height: firstVideo.height,
+      width: playFromLocal
+          ? (effectiveLocalEntry?.ep?.width ??
+                effectiveLocalEntry?.pageData?.width ??
+                firstVideo.width)
+          : firstVideo.width,
+      height: playFromLocal
+          ? (effectiveLocalEntry?.ep?.height ??
+                effectiveLocalEntry?.pageData?.height ??
+                firstVideo.height)
+          : firstVideo.height,
       volume: volume ?? this.volume,
-      dirPath: isFileSource ? args['dirPath'] : null,
-      typeTag: isFileSource ? entry.typeTag : null,
-      mediaType: isFileSource ? entry.mediaType : null,
+      dirPath: dataSourceType == DataSourceType.file
+          ? (playFromLocal
+                ? effectiveLocalEntry?.entryDirPath
+                : args['dirPath'])
+          : null,
+      typeTag: dataSourceType == DataSourceType.file
+          ? effectiveLocalEntry?.typeTag
+          : null,
+      mediaType: dataSourceType == DataSourceType.file
+          ? effectiveLocalEntry?.mediaType
+          : null,
     );
 
     if (!isFileSource) {
@@ -1382,6 +1511,23 @@ class VideoDetailController extends GetxController
       return;
     }
     isQuerying = true;
+
+    // 列表播放（含离线列表混合模式）：优先使用本地缓存条目作为播放器数据源。
+    // 注意：只替换播放器数据源，不改变列表播放队列/切集/在线详情评论等逻辑。
+    final bool forceLocalPlay = args['forceLocalPlay'] == true;
+    final bool shouldTryLocal =
+        forceLocalPlay || (isPlayAll && Pref.enableLocalPlayInOnlineList);
+    BiliDownloadEntryInfo? localEntry;
+    if (shouldTryLocal) {
+      final passed = args['entry'];
+      if (passed is BiliDownloadEntryInfo &&
+          passed.isCompleted &&
+          passed.cid == cid.value) {
+        localEntry = passed;
+      } else {
+        localEntry = await _findLocalCompletedEntryByCid(cid.value);
+      }
+    }
     if (plPlayerController.enableSponsorBlock && _isBlock && !fromReset) {
       // 空降助手请求异步进行，不阻止视频加载
       // SponsorBlock请求超时或失败不应该阻塞主流程
@@ -1461,7 +1607,7 @@ class VideoDetailController extends GetxController
         setVideoHeight();
         currentDecodeFormats = VideoDecodeFormatType.fromString('avc1');
         currentVideoQa.value = videoQuality;
-        await _initPlayerIfNeeded();
+        await _initPlayerIfNeeded(localEntry: localEntry);
         isQuerying = false;
         return;
       }
@@ -1560,15 +1706,40 @@ class VideoDetailController extends GetxController
       } else {
         audioUrl = '';
       }
-      await _initPlayerIfNeeded();
+      await _initPlayerIfNeeded(localEntry: localEntry);
     } else {
-      autoPlay.value = false;
-      videoState.value = result..toast();
-      if (plPlayerController.isFullScreen.value) {
-        plPlayerController.toggleFullScreen(false);
+      if (forceLocalPlay && localEntry != null) {
+        // 在线 playurl 获取失败时，仍允许离线列表使用本地文件播放。
+        autoPlay.value = true;
+        await _initPlayerIfNeeded(localEntry: localEntry);
+      } else {
+        autoPlay.value = false;
+        videoState.value = result..toast();
+        if (plPlayerController.isFullScreen.value) {
+          plPlayerController.toggleFullScreen(false);
+        }
       }
     }
     isQuerying = false;
+  }
+
+  Future<BiliDownloadEntryInfo?> _findLocalCompletedEntryByCid(int cid) async {
+    try {
+      if (!Get.isRegistered<DownloadService>()) {
+        return null;
+      }
+      final ds = Get.find<DownloadService>();
+      await ds.waitForInitialization;
+      for (final entry in ds.downloadList) {
+        if (entry.isCompleted &&
+            entry.cid == cid &&
+            entry.entryDirPath.isNotEmpty &&
+            entry.typeTag?.isNotEmpty == true) {
+          return entry;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   void onBlock(BuildContext context) {

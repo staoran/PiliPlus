@@ -246,6 +246,13 @@ List<SettingsModel> get extraSettings => [
     defaultVal: false,
   ),
   const SwitchModel(
+    title: '在线列表播放使用本地缓存',
+    subtitle: '在收藏/稍后再看等“列表播放”场景下，若本地已缓存则用本地文件替换在线播放地址',
+    leading: Icon(MdiIcons.folderPlayOutline),
+    setKey: SettingBoxKey.enableLocalPlayInOnlineList,
+    defaultVal: false,
+  ),
+  const SwitchModel(
     title: '视频页显示相关视频',
     leading: Icon(MdiIcons.motionPlayOutline),
     setKey: SettingBoxKey.showRelatedVideo,
