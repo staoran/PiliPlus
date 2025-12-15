@@ -104,6 +104,7 @@ abstract class SettingBoxKey {
       showDynDecorate = 'showDynDecorate',
       showMoreDownloadButtons = 'showMoreDownloadButtons',
       enableLocalPlayInOnlineList = 'enableLocalPlayInOnlineList',
+      useOnlinePlayerForOfflineCacheList = 'useOnlinePlayerForOfflineCacheList',
       enableLivePhoto = 'enableLivePhoto',
       showSeekPreview = 'showSeekPreview',
       showDmChart = 'showDmChart',

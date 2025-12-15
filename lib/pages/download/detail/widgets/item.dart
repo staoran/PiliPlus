@@ -20,6 +20,7 @@ import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -130,6 +131,9 @@ class DetailItem extends StatelessWidget {
                       ? VideoType.pugv
                       : VideoType.pgc);
             final int? seasonId = int.tryParse(entry.seasonId ?? '');
+
+            final bool useOnlinePlayer =
+                Pref.useOnlinePlayerForOfflineCacheList;
             await PageUtils.toVideoPage(
               videoType: videoType,
               aid: entry.avid,
@@ -141,13 +145,20 @@ class DetailItem extends StatelessWidget {
               cover: entry.cover,
               title: entry.showTitle,
               extraArguments: {
-                // 离线列表播放（isPlayAll）+ 在线详情/评论 + 本地文件播放
-                'sourceType': SourceType.normal,
-                'isPlayAll': true,
-                'offlineList': true,
-                'favTitle': '离线缓存',
-                'forceLocalPlay': true,
-                'entry': entry,
+                if (useOnlinePlayer) ...{
+                  // 离线列表播放（isPlayAll）+ 在线详情/评论 + 本地文件播放
+                  'sourceType': SourceType.normal,
+                  'isPlayAll': true,
+                  'offlineList': true,
+                  'favTitle': '离线缓存',
+                  'forceLocalPlay': true,
+                  'entry': entry,
+                } else ...{
+                  // 原版离线播放器
+                  'sourceType': SourceType.file,
+                  'entry': entry,
+                  'dirPath': entry.entryDirPath,
+                },
               },
             );
             if (context.mounted) {

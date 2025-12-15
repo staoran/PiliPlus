@@ -246,6 +246,13 @@ List<SettingsModel> get extraSettings => [
     defaultVal: false,
   ),
   const SwitchModel(
+    title: '离线缓存列表使用在线列表播放器',
+    subtitle: '开启后：离线缓存进入播放页将使用“列表播放+在线详情/评论+本地文件播放”；关闭则使用原版离线播放器',
+    leading: Icon(MdiIcons.playlistPlay),
+    setKey: SettingBoxKey.useOnlinePlayerForOfflineCacheList,
+    defaultVal: false,
+  ),
+  const SwitchModel(
     title: '在线列表播放使用本地缓存',
     subtitle: '在收藏/稍后再看等“列表播放”场景下，若本地已缓存则用本地文件替换在线播放地址',
     leading: Icon(MdiIcons.folderPlayOutline),

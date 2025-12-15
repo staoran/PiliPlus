@@ -162,6 +162,11 @@ abstract class Pref {
     defaultValue: false,
   );
 
+  static bool get useOnlinePlayerForOfflineCacheList => _setting.get(
+    SettingBoxKey.useOnlinePlayerForOfflineCacheList,
+    defaultValue: false,
+  );
+
   static bool get enableLocalPlayInOnlineList => _setting.get(
     SettingBoxKey.enableLocalPlayInOnlineList,
     defaultValue: false,
