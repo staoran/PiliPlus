@@ -1512,11 +1512,11 @@ class VideoDetailController extends GetxController
     }
     isQuerying = true;
 
-    // 列表播放（含离线列表混合模式）：优先使用本地缓存条目作为播放器数据源。
+    // 在线播放：优先使用本地缓存条目作为播放器数据源。
     // 注意：只替换播放器数据源，不改变列表播放队列/切集/在线详情评论等逻辑。
     final bool forceLocalPlay = args['forceLocalPlay'] == true;
     final bool shouldTryLocal =
-        forceLocalPlay || (isPlayAll && Pref.enableLocalPlayInOnlineList);
+        forceLocalPlay || Pref.enableLocalPlayInOnlineList;
     BiliDownloadEntryInfo? localEntry;
     if (shouldTryLocal) {
       final passed = args['entry'];
