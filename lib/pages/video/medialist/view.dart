@@ -192,7 +192,9 @@ class _MediaListPanelState extends State<MediaListPanel>
                 SmartDialog.showToast('不支持播放该类型视频');
                 return;
               }
-              Get.back();
+              if (!widget.inTab) {
+                Get.back();
+              }
               widget.onChangeEpisode(item);
             },
             onLongPress: onLongPress,
