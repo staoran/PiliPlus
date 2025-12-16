@@ -466,7 +466,7 @@ class VideoDetailController extends GetxController
       watchLaterTitle = _isOfflineListPlayAll
           ? '离线缓存'
           : (args['favTitle'] ?? '播放列表');
-      _mediaDesc.value = args['desc'] ?? false;
+      _mediaDesc.value = args['desc'] ?? (_isOfflineListPlayAll ? true : false);
       getMediaList();
     }
 
@@ -642,15 +642,39 @@ class VideoDetailController extends GetxController
     await downloadService.waitForInitialization;
 
     final String? pageId = args['offlinePageId'] as String?;
-    // 默认将“离线缓存”列表（全部已缓存内容）作为播放队列；
-    // 若显式传入 offlinePageId，则只播放同一 pageId 组。
-    final entries = (pageId == null || pageId.isEmpty)
-        ? downloadService.downloadList.toList()
-        : downloadService.downloadList
-              .where((e) => e.pageId == pageId)
-              .toList();
+    // 构建离线播放队列顺序：
+    // - 同一页面/分组内按 sortKey 正序（与离线缓存详情页一致）
+    // - 若未指定 pageId，则按下载页分组出现顺序依次展开（更接近离线缓存页的感知顺序）
+    final List<BiliDownloadEntryInfo> flattened;
+    if (pageId != null && pageId.isNotEmpty) {
+      final list =
+          downloadService.downloadList.where((e) => e.pageId == pageId)
+          .toList()
+            ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+      flattened = list;
+    } else {
+      final order = <String>[];
+      final grouped = <String, List<BiliDownloadEntryInfo>>{};
+      for (final e in downloadService.downloadList) {
+        final pid = e.pageId;
+        final bucket = grouped.putIfAbsent(pid, () {
+          order.add(pid);
+          return <BiliDownloadEntryInfo>[];
+        });
+        bucket.add(e);
+      }
+      final out = <BiliDownloadEntryInfo>[];
+      for (final pid in order) {
+        final bucket = grouped[pid];
+        if (bucket == null || bucket.isEmpty) continue;
+        bucket.sort((a, b) => a.sortKey.compareTo(b.sortKey));
+        out.addAll(bucket);
+      }
+      flattened = out;
+    }
 
-    final sorted = _mediaDesc.value ? entries : entries.reversed.toList();
+    // desc=true 视为“顺序播放”，false 为倒序
+    final sorted = _mediaDesc.value ? flattened : flattened.reversed.toList();
     final items = sorted
         .map((e) {
           final int? localCid = e.source?.cid ?? e.pageData?.cid;
