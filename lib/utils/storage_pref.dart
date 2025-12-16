@@ -689,8 +689,10 @@ abstract class Pref {
   static bool get hideTabBar =>
       _setting.get(SettingBoxKey.hideTabBar, defaultValue: true);
 
-  static bool get enableTabBarSwipe =>
-      _setting.get(SettingBoxKey.enableTabBarSwipe, defaultValue: true);
+  static bool get enableBottomThirdNavbarSwipe => _setting.get(
+    SettingBoxKey.enableBottomThirdNavbarSwipe,
+    defaultValue: false,
+  );
 
   static bool get showBottomLabel =>
       _setting.get(SettingBoxKey.showBottomLabel, defaultValue: true);

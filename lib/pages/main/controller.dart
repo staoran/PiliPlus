@@ -35,7 +35,6 @@ class MainController extends GetxController
   // 底栏滚动比例，1.0 = 完全显示，0.0 = 完全隐藏
   final RxDouble bottomBarRatio = 1.0.obs;
   late bool hideTabBar = Pref.hideTabBar;
-  late bool enableTabBarSwipe = Pref.enableTabBarSwipe;
   late dynamic controller;
   final RxInt selectedIndex = 0.obs;
 

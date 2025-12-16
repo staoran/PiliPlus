@@ -17,13 +17,83 @@ import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide ContextExtensionss;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+
+class _BottomThirdHorizontalSwipeToNavbarRecognizer
+    extends OneSequenceGestureRecognizer {
+  _BottomThirdHorizontalSwipeToNavbarRecognizer({required this.isInRegion});
+
+  final bool Function(Offset position) isInRegion;
+  GestureDragEndCallback? onEnd;
+
+  Offset? _initialPosition;
+  VelocityTracker? _velocityTracker;
+  bool _hasAccepted = false;
+
+  @override
+  void addPointer(PointerDownEvent event) {
+    if (!isInRegion(event.position)) return;
+    startTrackingPointer(event.pointer, event.transform);
+    _initialPosition = event.position;
+    _velocityTracker = VelocityTracker.withKind(event.kind)
+      ..addPosition(event.timeStamp, event.position);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event is PointerMoveEvent) {
+      _velocityTracker?.addPosition(event.timeStamp, event.position);
+      final initial = _initialPosition;
+      if (initial != null && !_hasAccepted) {
+        final dx = (event.position.dx - initial.dx).abs();
+        final dy = (event.position.dy - initial.dy).abs();
+
+        // 仅当明显横向时接管；明显纵向则放行给滚动视图。
+        final horizontalSlop = kTouchSlop * 0.5;
+        if (dx > horizontalSlop && dx > dy) {
+          _hasAccepted = true;
+          resolve(GestureDisposition.accepted);
+        } else if (dy > kTouchSlop && dy > dx) {
+          resolve(GestureDisposition.rejected);
+          stopTrackingPointer(event.pointer);
+        }
+      }
+    } else if (event is PointerUpEvent) {
+      _velocityTracker?.addPosition(event.timeStamp, event.position);
+      if (_hasAccepted) {
+        final v = _velocityTracker?.getVelocity();
+        final dx = v?.pixelsPerSecond.dx ?? 0.0;
+        onEnd?.call(
+          DragEndDetails(
+            primaryVelocity: dx,
+            velocity: Velocity(pixelsPerSecond: Offset(dx, 0)),
+          ),
+        );
+      }
+      stopTrackingPointer(event.pointer);
+    } else if (event is PointerCancelEvent) {
+      stopTrackingPointer(event.pointer);
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _initialPosition = null;
+    _velocityTracker = null;
+    _hasAccepted = false;
+  }
+
+  @override
+  String get debugDescription => 'bottomThirdSwipeToNavbar';
+}
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -310,7 +380,12 @@ class _MainAppState extends State<MainApp>
                       )
               : const SizedBox.shrink()
         : null;
-    return PopScope(
+    final enableBottomThirdNavbarSwipe =
+        useBottomNav && Pref.enableBottomThirdNavbarSwipe && !Utils.isDesktop;
+    final screenSize = MediaQuery.sizeOf(context);
+    final yThreshold = screenSize.height * 2 / 3;
+
+    Widget content = PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (_mainController.directExitOnBack) {
@@ -335,175 +410,185 @@ class _MainAppState extends State<MainApp>
           extendBody: true,
           resizeToAvoidBottomInset: false,
           appBar: AppBar(toolbarHeight: 0),
-          body: Padding(
-            padding: EdgeInsets.only(
-              left: useBottomNav ? padding.left : 0.0,
-              right: padding.right,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (!useBottomNav) ...[
-                  _mainController.navigationBars.length > 1
-                      ? context.isTablet && _mainController.optTabletNav
-                            ? Obx(
-                                () {
-                                  final showLabel =
-                                      _mainController.showBottomLabel.value;
-                                  return Column(
-                                    children: [
-                                      const SizedBox(height: 25),
-                                      userAndSearchVertical(theme),
-                                      const Spacer(flex: 2),
-                                      Expanded(
-                                        flex: 5,
-                                        child: SizedBox(
-                                          width: showLabel ? 130 : 80,
-                                          child: NavigationDrawer(
-                                            backgroundColor: Colors.transparent,
-                                            tilePadding:
-                                                const EdgeInsets.symmetric(
-                                                  vertical: 5,
-                                                  horizontal: 12,
-                                                ),
-                                            indicatorShape:
-                                                const RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                        Radius.circular(16),
-                                                      ),
-                                                ),
-                                            onDestinationSelected:
-                                                _mainController.setIndex,
-                                            selectedIndex: _mainController
-                                                .selectedIndex
-                                                .value,
-                                            children: _mainController
-                                                .navigationBars
-                                                .map(
-                                                  (
-                                                    e,
-                                                  ) => NavigationDrawerDestination(
-                                                    label: showLabel
-                                                        ? Text(e.label)
-                                                        : const SizedBox.shrink(),
-                                                    icon: _buildIcon(
-                                                      type: e,
-                                                    ),
-                                                    selectedIcon: _buildIcon(
-                                                      type: e,
-                                                      selected: true,
-                                                    ),
-                                                  ),
-                                                )
-                                                .toList(),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              )
-                            : Obx(
-                                () => NavigationRail(
-                                  groupAlignment: 0.5,
-                                  selectedIndex:
-                                      _mainController.selectedIndex.value,
-                                  onDestinationSelected:
-                                      _mainController.setIndex,
-                                  labelType:
-                                      _mainController.showBottomLabel.value
-                                      ? NavigationRailLabelType.selected
-                                      : NavigationRailLabelType.none,
-                                  leading: userAndSearchVertical(theme),
-                                  destinations: _mainController.navigationBars
-                                      .map(
-                                        (e) => NavigationRailDestination(
-                                          label: Text(e.label),
-                                          icon: _buildIcon(type: e),
-                                          selectedIcon: _buildIcon(
-                                            type: e,
-                                            selected: true,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              )
-                      : Container(
-                          padding: const EdgeInsets.only(top: 10),
-                          width: 80,
-                          child: userAndSearchVertical(theme),
-                        ),
-                  VerticalDivider(
-                    width: 1,
-                    endIndent: padding.bottom,
-                    color: theme.colorScheme.outline.withValues(alpha: 0.06),
-                  ),
-                ],
-                Expanded(
-                  child: _mainController.mainTabBarView
-                      ? CustomTabBarView(
-                          scrollDirection: useBottomNav
-                              ? Axis.horizontal
-                              : Axis.vertical,
-                          physics: const NeverScrollableScrollPhysics(),
-                          controller: _mainController.controller,
-                          children: _mainController.navigationBars
-                              .map((i) => i.page)
-                              .toList(),
-                        )
-                      : PageView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          controller: _mainController.controller,
-                          children: _mainController.navigationBars
-                              .map((i) => i.page)
-                              .toList(),
-                        ),
+          body: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: useBottomNav ? padding.left : 0.0,
+                  right: padding.right,
                 ),
-              ],
-            ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!useBottomNav) ...[
+                      _mainController.navigationBars.length > 1
+                          ? context.isTablet && _mainController.optTabletNav
+                                ? Obx(
+                                    () {
+                                      final showLabel =
+                                          _mainController.showBottomLabel.value;
+                                      return Column(
+                                        children: [
+                                          const SizedBox(height: 25),
+                                          userAndSearchVertical(theme),
+                                          const Spacer(flex: 2),
+                                          Expanded(
+                                            flex: 5,
+                                            child: SizedBox(
+                                              width: showLabel ? 130 : 80,
+                                              child: NavigationDrawer(
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                tilePadding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 5,
+                                                      horizontal: 12,
+                                                    ),
+                                                indicatorShape:
+                                                    const RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.all(
+                                                            Radius.circular(16),
+                                                          ),
+                                                    ),
+                                                onDestinationSelected:
+                                                    _mainController.setIndex,
+                                                selectedIndex: _mainController
+                                                    .selectedIndex
+                                                    .value,
+                                                children: _mainController
+                                                    .navigationBars
+                                                    .map(
+                                                      (
+                                                        e,
+                                                      ) => NavigationDrawerDestination(
+                                                        label: showLabel
+                                                            ? Text(e.label)
+                                                            : const SizedBox.shrink(),
+                                                        icon: _buildIcon(
+                                                          type: e,
+                                                        ),
+                                                        selectedIcon:
+                                                            _buildIcon(
+                                                              type: e,
+                                                              selected: true,
+                                                            ),
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  )
+                                : Obx(
+                                    () => NavigationRail(
+                                      groupAlignment: 0.5,
+                                      selectedIndex:
+                                          _mainController.selectedIndex.value,
+                                      onDestinationSelected:
+                                          _mainController.setIndex,
+                                      labelType:
+                                          _mainController.showBottomLabel.value
+                                          ? NavigationRailLabelType.selected
+                                          : NavigationRailLabelType.none,
+                                      leading: userAndSearchVertical(theme),
+                                      destinations: _mainController
+                                          .navigationBars
+                                          .map(
+                                            (e) => NavigationRailDestination(
+                                              label: Text(e.label),
+                                              icon: _buildIcon(type: e),
+                                              selectedIcon: _buildIcon(
+                                                type: e,
+                                                selected: true,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  )
+                          : Container(
+                              padding: const EdgeInsets.only(top: 10),
+                              width: 80,
+                              child: userAndSearchVertical(theme),
+                            ),
+                      VerticalDivider(
+                        width: 1,
+                        endIndent: padding.bottom,
+                        color: theme.colorScheme.outline.withValues(
+                          alpha: 0.06,
+                        ),
+                      ),
+                    ],
+                    Expanded(
+                      child: _mainController.mainTabBarView
+                          ? CustomTabBarView(
+                              scrollDirection: useBottomNav
+                                  ? Axis.horizontal
+                                  : Axis.vertical,
+                              physics: const NeverScrollableScrollPhysics(),
+                              controller: _mainController.controller,
+                              children: _mainController.navigationBars
+                                  .map((i) => i.page)
+                                  .toList(),
+                            )
+                          : PageView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              controller: _mainController.controller,
+                              children: _mainController.navigationBars
+                                  .map((i) => i.page)
+                                  .toList(),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (enableBottomThirdNavbarSwipe)
+                Positioned.fill(
+                  child: RawGestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    gestures: {
+                      _BottomThirdHorizontalSwipeToNavbarRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                            _BottomThirdHorizontalSwipeToNavbarRecognizer
+                          >(
+                            () => _BottomThirdHorizontalSwipeToNavbarRecognizer(
+                              isInRegion: (position) =>
+                                  position.dy >= yThreshold,
+                            ),
+                            (instance) {
+                              instance.onEnd = (details) {
+                                final velocity = details.primaryVelocity ?? 0;
+                                final currentIndex =
+                                    _mainController.selectedIndex.value;
+                                final maxIndex =
+                                    _mainController.navigationBars.length - 1;
+                                if (velocity < -300 &&
+                                    currentIndex < maxIndex) {
+                                  _mainController.setIndex(currentIndex + 1);
+                                } else if (velocity > 300 && currentIndex > 0) {
+                                  _mainController.setIndex(currentIndex - 1);
+                                }
+                              };
+                            },
+                          ),
+                    },
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+            ],
           ),
           bottomNavigationBar: useBottomNav
               ? _mainController.hideTabBar
                     ? Obx(
                         () {
                           final ratio = _mainController.bottomBarRatio.value;
-                          final isHidden = ratio == 0;
                           return Stack(
                             children: [
-                              // 底栏隐藏时的滑动切换区域
-                              if (isHidden &&
-                                  _mainController.enableTabBarSwipe)
-                                Positioned.fill(
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onHorizontalDragEnd: (details) {
-                                      final velocity =
-                                          details.primaryVelocity ?? 0;
-                                      final currentIndex =
-                                          _mainController.selectedIndex.value;
-                                      final maxIndex =
-                                          _mainController
-                                              .navigationBars
-                                              .length -
-                                          1;
-                                      if (velocity < -300 &&
-                                          currentIndex < maxIndex) {
-                                        // 向左滑，切换到下一页
-                                        _mainController.setIndex(
-                                          currentIndex + 1,
-                                        );
-                                      } else if (velocity > 300 &&
-                                          currentIndex > 0) {
-                                        // 向右滑，切换到上一页
-                                        _mainController.setIndex(
-                                          currentIndex - 1,
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
                               // 使用 Transform 实现跟随手指的平滑滑动
                               Transform.translate(
                                 offset: Offset(0, (1 - ratio) * 100),
@@ -521,6 +606,8 @@ class _MainAppState extends State<MainApp>
         ),
       ),
     );
+
+    return content;
   }
 
   Widget _buildIcon({

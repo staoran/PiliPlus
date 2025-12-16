@@ -333,14 +333,15 @@ List<SettingsModel> get styleSettings => [
     defaultVal: true,
     needReboot: true,
   ),
-  const SwitchModel(
-    title: '底栏滑动切换页面',
-    subtitle: '底栏收起后，在底栏区域左右滑动切换页面',
-    leading: Icon(Icons.swipe_outlined),
-    setKey: SettingBoxKey.enableTabBarSwipe,
-    defaultVal: true,
-    needReboot: true,
-  ),
+  if (!Utils.isDesktop)
+    const SwitchModel(
+      title: '底部区域滑动切换页面',
+      subtitle: '开启后，在屏幕下方 1/3 区域左右滑动切换页面',
+      leading: Icon(Icons.swipe_outlined),
+      setKey: SettingBoxKey.enableBottomThirdNavbarSwipe,
+      defaultVal: false,
+      needReboot: true,
+    ),
   SwitchModel(
     title: 'Navbar显示文字',
     subtitle: 'Navbar按钮是否显示文字标签',
