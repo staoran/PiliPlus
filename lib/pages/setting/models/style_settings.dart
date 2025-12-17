@@ -364,7 +364,7 @@ List<SettingsModel> get styleSettings => [
                   heightValue = value;
                 },
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d+(\.\d*)?$')),
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+(\.\d+)?$')),
                 ],
                 decoration: const InputDecoration(suffixText: 'px'),
               ),
