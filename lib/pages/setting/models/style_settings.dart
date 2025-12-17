@@ -336,11 +336,75 @@ List<SettingsModel> get styleSettings => [
   if (!Utils.isDesktop)
     const SwitchModel(
       title: '底部区域滑动切换页面',
-      subtitle: '开启后，在屏幕下方 1/3 区域左右滑动切换页面',
+      subtitle: '开启后，在屏幕底部区域左右滑动切换页面',
       leading: Icon(Icons.swipe_outlined),
       setKey: SettingBoxKey.enableBottomThirdNavbarSwipe,
       defaultVal: false,
       needReboot: true,
+    ),
+  if (!Utils.isDesktop)
+    NormalModel(
+      title: '底部滑动区域高度',
+      subtitle: '设置底部可滑动切换页面的区域高度，默认150像素',
+      leading: const Icon(Icons.height_outlined),
+      onTap: (context, setState) {
+        String heightValue = Pref.bottomNavbarSwipeHeight.toString();
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('底部滑动区域高度'),
+              content: TextFormField(
+                autofocus: true,
+                initialValue: heightValue,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                onChanged: (value) {
+                  heightValue = value;
+                },
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d\.]+')),
+                ],
+                decoration: const InputDecoration(suffixText: 'px'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: Get.back,
+                  child: Text(
+                    '取消',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Get.back();
+                    GStorage.setting.put(
+                      SettingBoxKey.bottomNavbarSwipeHeight,
+                      max(
+                        50.0,
+                        double.tryParse(heightValue) ?? 150.0,
+                      ),
+                    );
+                    SmartDialog.showToast('重启生效');
+                    setState();
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+      getTrailing: () => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Text(
+          '${Pref.bottomNavbarSwipeHeight.toInt()}px',
+          style: Get.theme.textTheme.titleSmall,
+        ),
+      ),
     ),
   SwitchModel(
     title: 'Navbar显示文字',

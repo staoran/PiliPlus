@@ -694,6 +694,11 @@ abstract class Pref {
     defaultValue: false,
   );
 
+  static double get bottomNavbarSwipeHeight => _setting.get(
+    SettingBoxKey.bottomNavbarSwipeHeight,
+    defaultValue: 150.0,
+  );
+
   static bool get showBottomLabel =>
       _setting.get(SettingBoxKey.showBottomLabel, defaultValue: true);
 

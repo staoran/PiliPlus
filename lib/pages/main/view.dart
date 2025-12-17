@@ -32,11 +32,12 @@ class _BottomThirdHorizontalSwipeToNavbarRecognizer
   _BottomThirdHorizontalSwipeToNavbarRecognizer({required this.isInRegion});
 
   final bool Function(Offset position) isInRegion;
-  GestureDragEndCallback? onEnd;
+  void Function(DragEndDetails details, double distance)? onEnd;
 
   Offset? _initialPosition;
   VelocityTracker? _velocityTracker;
   bool _hasAccepted = false;
+  bool _hasRejected = false;
 
   @override
   void addPointer(PointerDownEvent event) {
@@ -52,16 +53,18 @@ class _BottomThirdHorizontalSwipeToNavbarRecognizer
     if (event is PointerMoveEvent) {
       _velocityTracker?.addPosition(event.timeStamp, event.position);
       final initial = _initialPosition;
-      if (initial != null && !_hasAccepted) {
-        final dx = (event.position.dx - initial.dx).abs();
+      if (initial != null && !_hasAccepted && !_hasRejected) {
+        final dx = event.position.dx - initial.dx;
         final dy = (event.position.dy - initial.dy).abs();
+        final absDx = dx.abs();
 
         // 仅当明显横向时接管；明显纵向则放行给滚动视图。
-        final horizontalSlop = kTouchSlop * 0.5;
-        if (dx > horizontalSlop && dx > dy) {
+        final horizontalSlop = kTouchSlop * 0.8;
+        if (absDx > horizontalSlop && absDx > dy * 1.5) {
           _hasAccepted = true;
           resolve(GestureDisposition.accepted);
-        } else if (dy > kTouchSlop && dy > dx) {
+        } else if (dy > kTouchSlop && dy > absDx * 1.5) {
+          _hasRejected = true;
           resolve(GestureDisposition.rejected);
           stopTrackingPointer(event.pointer);
         }
@@ -71,11 +74,15 @@ class _BottomThirdHorizontalSwipeToNavbarRecognizer
       if (_hasAccepted) {
         final v = _velocityTracker?.getVelocity();
         final dx = v?.pixelsPerSecond.dx ?? 0.0;
+        final initial = _initialPosition;
+        final distance = initial != null ? event.position.dx - initial.dx : 0.0;
+        
         onEnd?.call(
           DragEndDetails(
             primaryVelocity: dx,
             velocity: Velocity(pixelsPerSecond: Offset(dx, 0)),
           ),
+          distance,
         );
       }
       stopTrackingPointer(event.pointer);
@@ -89,6 +96,7 @@ class _BottomThirdHorizontalSwipeToNavbarRecognizer
     _initialPosition = null;
     _velocityTracker = null;
     _hasAccepted = false;
+    _hasRejected = false;
   }
 
   @override
@@ -383,7 +391,8 @@ class _MainAppState extends State<MainApp>
     final enableBottomThirdNavbarSwipe =
         useBottomNav && Pref.enableBottomThirdNavbarSwipe && !Utils.isDesktop;
     final screenSize = MediaQuery.sizeOf(context);
-    final yThreshold = screenSize.height * 2 / 3;
+    final swipeHeight = Pref.bottomNavbarSwipeHeight;
+    final yThreshold = screenSize.height - swipeHeight;
 
     Widget content = PopScope(
       canPop: false,
@@ -548,7 +557,11 @@ class _MainAppState extends State<MainApp>
               ),
 
               if (enableBottomThirdNavbarSwipe)
-                Positioned.fill(
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: swipeHeight,
                   child: RawGestureDetector(
                     behavior: HitTestBehavior.translucent,
                     gestures: {
@@ -557,20 +570,27 @@ class _MainAppState extends State<MainApp>
                             _BottomThirdHorizontalSwipeToNavbarRecognizer
                           >(
                             () => _BottomThirdHorizontalSwipeToNavbarRecognizer(
-                              isInRegion: (position) =>
-                                  position.dy >= yThreshold,
+                              isInRegion: (position) => true,
                             ),
                             (instance) {
-                              instance.onEnd = (details) {
+                              instance.onEnd = (details, distance) {
                                 final velocity = details.primaryVelocity ?? 0;
                                 final currentIndex =
                                     _mainController.selectedIndex.value;
                                 final maxIndex =
                                     _mainController.navigationBars.length - 1;
-                                if (velocity < -300 &&
-                                    currentIndex < maxIndex) {
+                                
+                                // 支持速度触发或距离触发
+                                // 向左滑动（下一页）：速度 < -300 或 距离 < -80
+                                // 向右滑动（上一页）：速度 > 300 或 距离 > 80
+                                final shouldGoNext = (velocity < -300 || distance < -80) &&
+                                    currentIndex < maxIndex;
+                                final shouldGoPrev = (velocity > 300 || distance > 80) &&
+                                    currentIndex > 0;
+                                
+                                if (shouldGoNext) {
                                   _mainController.setIndex(currentIndex + 1);
-                                } else if (velocity > 300 && currentIndex > 0) {
+                                } else if (shouldGoPrev) {
                                   _mainController.setIndex(currentIndex - 1);
                                 }
                               };
