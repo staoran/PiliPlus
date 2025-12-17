@@ -222,7 +222,6 @@ abstract class SettingBoxKey {
       enableMYBar = 'enableMYBar',
       hideSearchBar = 'hideSearchBar',
       hideTabBar = 'hideTabBar',
-      enableBottomThirdNavbarSwipe = 'enableBottomThirdNavbarSwipe',
       showBottomLabel = 'showBottomLabel',
       scrollThreshold = 'scrollThreshold',
       enableScrollThreshold = 'enableScrollThreshold',
