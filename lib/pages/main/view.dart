@@ -27,6 +27,10 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+// 底部导航栏滑动切换的阈值
+const double _kSwipeVelocityThreshold = 300.0; // 像素/秒
+const double _kSwipeDistanceThreshold = 80.0;  // 像素
+
 class _BottomThirdHorizontalSwipeToNavbarRecognizer
     extends OneSequenceGestureRecognizer {
   _BottomThirdHorizontalSwipeToNavbarRecognizer();
@@ -577,11 +581,13 @@ class _MainAppState extends State<MainApp>
                                     _mainController.navigationBars.length - 1;
                                 
                                 // 支持速度触发或距离触发
-                                // 向左滑动（下一页）：速度 < -300 或 距离 < -80
-                                // 向右滑动（上一页）：速度 > 300 或 距离 > 80
-                                final shouldGoNext = (velocity < -300 || distance < -80) &&
+                                // 向左滑动（下一页）
+                                final shouldGoNext = (velocity < -_kSwipeVelocityThreshold || 
+                                    distance < -_kSwipeDistanceThreshold) &&
                                     currentIndex < maxIndex;
-                                final shouldGoPrev = (velocity > 300 || distance > 80) &&
+                                // 向右滑动（上一页）
+                                final shouldGoPrev = (velocity > _kSwipeVelocityThreshold || 
+                                    distance > _kSwipeDistanceThreshold) &&
                                     currentIndex > 0;
                                 
                                 if (shouldGoNext) {
