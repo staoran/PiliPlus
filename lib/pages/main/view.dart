@@ -29,9 +29,8 @@ import 'package:window_manager/window_manager.dart';
 
 class _BottomThirdHorizontalSwipeToNavbarRecognizer
     extends OneSequenceGestureRecognizer {
-  _BottomThirdHorizontalSwipeToNavbarRecognizer({required this.isInRegion});
+  _BottomThirdHorizontalSwipeToNavbarRecognizer();
 
-  final bool Function(Offset position) isInRegion;
   void Function(DragEndDetails details, double distance)? onEnd;
 
   Offset? _initialPosition;
@@ -41,7 +40,6 @@ class _BottomThirdHorizontalSwipeToNavbarRecognizer
 
   @override
   void addPointer(PointerDownEvent event) {
-    if (!isInRegion(event.position)) return;
     startTrackingPointer(event.pointer, event.transform);
     _initialPosition = event.position;
     _velocityTracker = VelocityTracker.withKind(event.kind)
@@ -569,9 +567,7 @@ class _MainAppState extends State<MainApp>
                           GestureRecognizerFactoryWithHandlers<
                             _BottomThirdHorizontalSwipeToNavbarRecognizer
                           >(
-                            () => _BottomThirdHorizontalSwipeToNavbarRecognizer(
-                              isInRegion: (position) => true,
-                            ),
+                            () => _BottomThirdHorizontalSwipeToNavbarRecognizer(),
                             (instance) {
                               instance.onEnd = (details, distance) {
                                 final velocity = details.primaryVelocity ?? 0;
