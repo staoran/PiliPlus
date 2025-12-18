@@ -59,17 +59,6 @@ class VideoPopupMenu extends StatelessWidget {
               [
                     if (videoItem.bvid?.isNotEmpty == true) ...[
                       _VideoCustomAction(
-                        videoItem.bvid!,
-                        const Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(MdiIcons.identifier, size: 16),
-                            Icon(MdiIcons.circleOutline, size: 16),
-                          ],
-                        ),
-                        () => Utils.copyText(videoItem.bvid!),
-                      ),
-                      _VideoCustomAction(
                         '稍后再看',
                         const Icon(MdiIcons.clockTimeEightOutline, size: 16),
                         () async {
@@ -180,6 +169,17 @@ class VideoPopupMenu extends StatelessWidget {
                             }
                           },
                         ),
+                      _VideoCustomAction(
+                        videoItem.bvid!,
+                        const Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(MdiIcons.identifier, size: 16),
+                            Icon(MdiIcons.circleOutline, size: 16),
+                          ],
+                        ),
+                        () => Utils.copyText(videoItem.bvid!),
+                      ),
                     ],
                     if (videoItem is! SpaceArchiveItem) ...[
                       _VideoCustomAction(
