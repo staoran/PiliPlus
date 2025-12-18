@@ -536,10 +536,6 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         ..aid = aid
         ..cid.value = cid;
 
-      // 重要：在后台/锁屏场景下，必须等待 queryVideoUrl 完成才能继续
-      // 否则播放器尚未初始化好，自动播放会失败
-      await videoDetailCtr.queryVideoUrl();
-
       if (this.bvid != bvid) {
         reload = true;
         aiConclusionResult = null;
@@ -589,6 +585,11 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
       this.cid.value = cid;
       queryOnlineTotal();
+
+      // 重要：在后台/锁屏场景下，必须等待 queryVideoUrl 完成才能继续
+      // 否则播放器尚未初始化好，自动播放会失败
+      await videoDetailCtr.queryVideoUrl();
+
       return true;
     } catch (e, s) {
       if (kDebugMode) debugPrint('ugc onChangeEpisode: $e');
