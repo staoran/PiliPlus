@@ -28,6 +28,20 @@ try {
                     $versionName += '-' + $commitHash.Substring(0, 9)
                 }
             }
+
+            if ($versionName -match '^(\d+)\.(\d+)\.(\d+)(\..+)$') {
+                $versionName = "$($matches[1]).$($matches[2]).$($matches[3])"
+                $extra = $matches[4].TrimStart('.')
+                if (-not [string]::IsNullOrEmpty($versionCode)) {
+                    $versionCode = "$extra.$versionCode"
+                } else {
+                    $versionCode = $extra
+                }
+            }
+            elseif ($versionName -match '^(\d+)\.(\d+)$') {
+                $versionName = "$($matches[1]).$($matches[2]).0"
+            }
+
             "version: $versionName+$versionCode"
         }
         else {
