@@ -96,7 +96,7 @@ jobs:
 
             - name: Set and Extract version
               shell: pwsh
-              run: lib/scripts/build.ps1 android
+              run: lib/scripts/build.ps1 -Arg android -Tag "${{ github.event.inputs.tag }}"
 
             - name: flutter build apk
               run: flutter build apk --release --split-per-abi --dart-define-from-file=pili_release.json --pub
