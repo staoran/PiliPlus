@@ -23,6 +23,7 @@ import 'package:PiliPlus/http/ua_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/segment_model.dart';
 import 'package:PiliPlus/models/common/sponsor_block/segment_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
+import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart'
     show FavMixin;
@@ -33,6 +34,7 @@ import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart'
 import 'package:PiliPlus/pages/video/pay_coins/view.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
@@ -42,6 +44,7 @@ import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -55,10 +58,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as path;
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class AudioController extends GetxController
     with GetTickerProviderStateMixin, TripleMixin, FavMixin {
+  late final Map args;
   late Int64 id;
   late Int64 oid;
   late List<Int64> subId;
@@ -114,11 +119,13 @@ class AudioController extends GetxController
   int _playUrlRetryCount = 0;
   static const int _maxPlayUrlRetry = 2;
   bool _fgStartedForCurrent = false;
+  bool _isLocalPlayback = false;
+  BiliDownloadEntryInfo? _localEntry;
 
   @override
   void onInit() {
     super.onInit();
-    final args = Get.arguments;
+    args = Get.arguments;
     oid = Int64(args['oid']);
     final id = args['id'];
     this.id = id != null ? Int64(id) : oid;
@@ -249,6 +256,14 @@ class AudioController extends GetxController
   }
 
   Future<bool> _queryPlayUrl() async {
+    if (_isLocalPlayback) return true;
+
+    // 尝试使用本地已缓存的离线音频
+    final triedLocal = await _tryPlayLocalIfAvailable();
+    if (triedLocal) {
+      return true;
+    }
+
     // 查询空降助手
     if (enableSponsorBlock && isVideo) {
       try {
@@ -298,6 +313,45 @@ class AudioController extends GetxController
     }
   }
 
+  Future<bool> _tryPlayLocalIfAvailable() async {
+    // 与视频页保持一致：允许通过参数强制本地播放，或全局开关 Pref.enableLocalPlayInOnlineList
+    final bool forceLocalPlay = args['forceLocalPlay'] == true;
+    final bool shouldTryLocal = forceLocalPlay || Pref.enableLocalPlayInOnlineList;
+    if (!shouldTryLocal) return false;
+
+    final int? targetCid = subId.firstOrNull?.toInt();
+    if (targetCid == null) return false;
+
+    BiliDownloadEntryInfo? local;
+    final passed = args['entry'];
+    if (passed is BiliDownloadEntryInfo &&
+        passed.isCompleted &&
+        passed.cid == targetCid &&
+        passed.entryDirPath.isNotEmpty &&
+        passed.typeTag?.isNotEmpty == true) {
+      local = passed;
+    } else {
+      local = await _findLocalCompletedEntryByCid(targetCid);
+    }
+
+    if (local == null) return false;
+
+    final audioPath = path.join(
+      local.entryDirPath,
+      local.typeTag!,
+      PathUtils.audioNameType2,
+    );
+    if (!File(audioPath).existsSync()) {
+      return false;
+    }
+
+    _localEntry = local;
+    _isLocalPlayback = true;
+    duration.value = Duration(milliseconds: local.totalTimeMilli);
+    _onOpenMedia(audioPath, ua: '', referer: null);
+    return true;
+  }
+
   void _onPlay(PlayURLResp data) {
     final PlayInfo? playInfo = data.playerInfo.values.firstOrNull;
     if (playInfo != null) {
@@ -331,6 +385,10 @@ class AudioController extends GetxController
     String? referer,
     String ua = Constants.userAgentApp,
   }) {
+    // 切换媒资时重置本地播放标记
+    if (!_isLocalPlayback) {
+      _localEntry = null;
+    }
     _fgStartedForCurrent = false;
     PlaybackForegroundService.stop();
     _initPlayerIfNeeded();
@@ -1023,6 +1081,8 @@ class AudioController extends GetxController
   void playIndex(int index, {List<Int64>? subId}) {
     if (index == this.index && subId == null) return;
     this.index = index;
+    _isLocalPlayback = false;
+    _localEntry = null;
     final audioItem = playlist![index];
     final item = audioItem.item;
     oid = item.oid;
@@ -1116,6 +1176,25 @@ class AudioController extends GetxController
     player = null;
     animController.dispose();
     super.onClose();
+  }
+
+  Future<BiliDownloadEntryInfo?> _findLocalCompletedEntryByCid(int cid) async {
+    try {
+      if (!Get.isRegistered<DownloadService>()) {
+        return null;
+      }
+      final ds = Get.find<DownloadService>();
+      await ds.waitForInitialization;
+      for (final entry in ds.downloadList) {
+        if (entry.isCompleted &&
+            entry.cid == cid &&
+            entry.entryDirPath.isNotEmpty &&
+            entry.typeTag?.isNotEmpty == true) {
+          return entry;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 }
 
