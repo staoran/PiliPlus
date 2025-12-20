@@ -8,7 +8,6 @@ import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
-import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -85,6 +84,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _initWindow();
     // Only setup window channels on desktop platforms
     if (Utils.isDesktop) {
+      // Register window method handler early so main window can reuse this one
+      // without spawning extra player windows.
       _setupWindowMethodHandler();
       _setupPlayerChannel();
     }
@@ -129,11 +130,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   Future<void> _initWindow() async {
     await windowManager.ensureInitialized();
 
-    try {
-      final controller = await WindowController.fromCurrentEngine();
-      await controller.doCustomInitialize();
-    } catch (_) {}
-
     WindowOptions windowOptions = WindowOptions(
       size: _windowSize,
       minimumSize: const Size(640, 480),
@@ -143,7 +139,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       title: '${Constants.appName} - 播放器',
     );
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
+    windowManager
+      ..waitUntilReadyToShow(windowOptions, () async {
       final pos = _windowPosition;
       if (pos != null) {
         await windowManager.setPosition(
@@ -159,10 +156,10 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       if (_alwaysOnTop) {
         await windowManager.setAlwaysOnTop(true);
       }
-    });
+      })
 
-    windowManager.addListener(this);
-    windowManager.setPreventClose(true);
+      ..addListener(this)
+      ..setPreventClose(true);
   }
 
   /// Calculate center position for window (simplified, no Pref dependency)
@@ -273,7 +270,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
           if (args != null) {
             _navigateToVideo(args);
           }
-          return 'ok';
+          return;
         default:
           throw MissingPluginException('Not implemented: ${call.method}');
       }
@@ -286,14 +283,34 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       final controller = await WindowController.fromCurrentEngine();
       await controller.setWindowMethodHandler((call) async {
         switch (call.method) {
+          case 'window_center':
+            return windowManager.center();
+          case 'window_close':
+            return windowManager.close();
+          case 'window_show':
+            return windowManager.show();
+          case 'window_focus':
+            return windowManager.focus();
+          case 'window_hide':
+            return windowManager.hide();
+          case 'window_minimize':
+            return windowManager.minimize();
+          case 'window_maximize':
+            return windowManager.maximize();
+          case 'window_restore':
+            return windowManager.restore();
+          case 'window_set_always_on_top':
+            final args = call.arguments as Map?;
+            final isOn = args?['isOn'] as bool? ?? false;
+            return windowManager.setAlwaysOnTop(isOn);
           case 'playVideo':
             final args = call.arguments;
             if (args is Map) {
               _navigateToVideo(args);
             }
-            return 'ok';
+            return;
           default:
-            return null;
+            throw MissingPluginException('Not implemented: ${call.method}');
         }
       });
     } catch (e) {
@@ -356,6 +373,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       sourceType = SourceType.values.firstWhereOrNull((e) => e.name == sourceTypeArg);
     }
 
+    // Remove sourceType from extraArgs to avoid duplication in spread
+    extraArgs.remove('sourceType');
+
     Get.offAllNamed(
       '/videoV',
       arguments: {
@@ -371,7 +391,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         if (args['progress'] != null) 'progress': args['progress'],
         // Include converted sourceType and other extraArguments
         if (sourceType != null) 'sourceType': sourceType,
-        ...extraArgs..remove('sourceType'),
+        ...extraArgs,
       },
     );
   }

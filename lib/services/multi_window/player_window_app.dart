@@ -7,7 +7,6 @@ import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/multi_window/window_arguments.dart';
-import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
 import 'package:PiliPlus/utils/calc_window_position.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
@@ -50,9 +49,44 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
 
   Future<void> _initWindow() async {
     await windowManager.ensureInitialized();
-
-    // 初始化窗口控制器
-    widget.windowController.doCustomInitialize();
+    // 注册窗口方法处理器，支持窗口控制与播放指令复用
+    await widget.windowController.setWindowMethodHandler((call) async {
+      switch (call.method) {
+        case 'window_center':
+          return windowManager.center();
+        case 'window_close':
+          return windowManager.close();
+        case 'window_show':
+          return windowManager.show();
+        case 'window_focus':
+          return windowManager.focus();
+        case 'window_hide':
+          return windowManager.hide();
+        case 'window_minimize':
+          return windowManager.minimize();
+        case 'window_maximize':
+          return windowManager.maximize();
+        case 'window_restore':
+          return windowManager.restore();
+        case 'window_set_always_on_top':
+          final args = call.arguments as Map?;
+          final isOn = args?['isOn'] as bool? ?? false;
+          return windowManager.setAlwaysOnTop(isOn);
+        case 'playVideo':
+          final rawArgs = call.arguments;
+          if (rawArgs is Map) {
+            final args = Map<String, dynamic>.from(
+              rawArgs.map(
+                (key, value) => MapEntry(key.toString(), value),
+              ),
+            );
+            _navigateToVideo(PlayerWindowArguments.fromJson(args));
+          }
+          return;
+        default:
+          throw MissingPluginException('Not implemented: ${call.method}');
+      }
+    });
 
     final savedSize = PlayerWindowService.savedPlayerWindowSize;
     final savedPosition = PlayerWindowService.savedPlayerWindowPosition;
@@ -67,7 +101,8 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
       title: '${Constants.appName} - 播放器',
     );
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
+    windowManager
+      ..waitUntilReadyToShow(windowOptions, () async {
       if (savedPosition != null) {
         await windowManager.setPosition(
           Offset(savedPosition[0], savedPosition[1]),
@@ -80,10 +115,10 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
       if (Pref.playerWindowAlwaysOnTop) {
         await windowManager.setAlwaysOnTop(true);
       }
-    });
+      })
 
-    windowManager.addListener(this);
-    windowManager.setPreventClose(true);
+      ..addListener(this)
+      ..setPreventClose(true);
   }
 
   void _setupWindowChannel() {
@@ -101,7 +136,7 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
             );
             _navigateToVideo(PlayerWindowArguments.fromJson(args));
           }
-          return 'ok';
+          return;
         default:
           throw MissingPluginException('Not implemented: ${call.method}');
       }
