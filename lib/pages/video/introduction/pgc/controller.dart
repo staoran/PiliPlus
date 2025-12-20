@@ -358,6 +358,9 @@ class PgcIntroController extends CommonIntroController {
         ..aid = aid
         ..cid.value = cid;
 
+      // 重要：在后台/锁屏场景下，必须等待 queryVideoUrl 完成才能继续
+      await videoDetailCtr.queryVideoUrl();
+
       if (cover != null && cover.isNotEmpty) {
         videoDetailCtr.cover.value = cover;
       }
@@ -381,10 +384,6 @@ class PgcIntroController extends CommonIntroController {
 
       // 异步查询视频简介，不阻止播放切换
       queryVideoIntro(episode as EpisodeItem);
-
-      // 重要：在后台/锁屏场景下，必须等待 queryVideoUrl 完成才能继续
-      await videoDetailCtr.queryVideoUrl();
-
       return true;
     } catch (e, s) {
       if (kDebugMode) debugPrint('pgc onChangeEpisode: $e');
