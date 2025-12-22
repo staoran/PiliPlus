@@ -55,25 +55,6 @@ class _WhisperDetailPageState
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        leading: Center(
-          child: SizedBox(
-            width: 34,
-            height: 34,
-            child: IconButton(
-              tooltip: '返回',
-              style: IconButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: theme.colorScheme.secondaryContainer,
-              ),
-              onPressed: Get.back,
-              icon: Icon(
-                Icons.arrow_back_outlined,
-                size: 18,
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-          ),
-        ),
         title: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
@@ -118,18 +99,19 @@ class _WhisperDetailPageState
         ),
         actions: [
           IconButton(
+            tooltip: '设置',
             onPressed: () => Get.to(
               WhisperLinkSettingPage(
                 talkerUid: _whisperDetailController.talkerId,
               ),
             ),
             icon: Icon(
-              size: 20,
+              size: 22,
               Icons.settings,
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 5),
         ],
       ),
       body: Padding(

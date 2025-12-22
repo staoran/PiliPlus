@@ -169,14 +169,24 @@ class _EpisodePanelState extends State<EpisodePanel>
     _isReversed = List.filled(widget.list.length, false);
 
     if (widget.type == EpisodeType.season && Accounts.main.isLogin) {
-      _favState = LoadingState<bool>.loading().obs;
-      VideoHttp.videoRelation(bvid: widget.bvid).then(
-        (result) {
-          if (result case Success(:var response)) {
-            _favState!.value = Success(response.seasonFav ?? false);
-          }
-        },
-      );
+      final favState =
+          widget.ugcIntroController?.seasonFavState[widget.seasonId];
+      if (favState != null) {
+        _favState = Success(favState).obs;
+      } else {
+        _favState = LoadingState<bool>.loading().obs;
+        VideoHttp.videoRelation(bvid: widget.bvid).then(
+          (result) {
+            if (!mounted) return;
+            if (result case Success(:var response)) {
+              final seasonFav = response.seasonFav ?? false;
+              _favState!.value = Success(seasonFav);
+              widget.ugcIntroController?.seasonFavState[widget.seasonId] =
+                  seasonFav;
+            }
+          },
+        );
+      }
     }
   }
 
@@ -588,6 +598,8 @@ class _EpisodePanelState extends State<EpisodePanel>
           if (result.isSuccess) {
             SmartDialog.showToast('${response ? '取消' : ''}订阅成功');
             _favState!.value = Success(!response);
+            widget.ugcIntroController?.seasonFavState[widget.seasonId] =
+                !response;
           } else {
             result.toast();
           }

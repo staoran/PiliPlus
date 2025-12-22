@@ -202,11 +202,11 @@ class _SharePanelState extends State<SharePanel> {
                           height: 40,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: theme.colorScheme.secondaryContainer,
+                            color: theme.colorScheme.onInverseSurface,
                           ),
                           child: Icon(
                             Icons.person_add_alt,
-                            color: theme.colorScheme.onSecondaryContainer,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),

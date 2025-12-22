@@ -256,19 +256,20 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
   }
 
   List<Widget> _buildFollowList(ThemeData theme, LiveCardList item) {
+    final totalCount = item.cardData?.myIdolV1?.extraInfo?.totalCount ?? 0;
     return [
       SliverToBoxAdapter(
         child: Padding(
           padding: const .only(bottom: 8.0),
           child: Row(
+            mainAxisAlignment: .spaceBetween,
             children: [
               Text.rich(
                 TextSpan(
                   children: [
                     const TextSpan(text: '我的关注  '),
                     TextSpan(
-                      text:
-                          '${item.cardData?.myIdolV1?.extraInfo?.totalCount ?? 0}',
+                      text: totalCount.toString(),
                       style: TextStyle(
                         fontSize: 13,
                         color: theme.colorScheme.primary,
@@ -284,7 +285,6 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
                   ],
                 ),
               ),
-              const Spacer(),
               moreTextButton(
                 onTap: () => Get.to(const LiveFollowPage()),
                 color: theme.colorScheme.outline,
@@ -294,11 +294,16 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
         ),
       ),
       if (item.cardData?.myIdolV1?.list case final list?)
-        if (list.isNotEmpty) _buildFollowBody(theme, list),
+        if (list.isNotEmpty) _buildFollowBody(theme, list, totalCount),
     ];
   }
 
-  Widget _buildFollowBody(ThemeData theme, List<CardLiveItem> followList) {
+  Widget _buildFollowBody(
+    ThemeData theme,
+    List<CardLiveItem> followList,
+    int totalCount,
+  ) {
+    final listLength = followList.length;
     return SliverToBoxAdapter(
       child: SizedBox(
         // 3+4+45+6+10+12*textScaler
@@ -309,8 +314,28 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
           slivers: [
             SliverFixedExtentList.builder(
               itemExtent: 70,
-              itemCount: followList.length,
+              itemCount: totalCount > listLength ? listLength + 1 : listLength,
               itemBuilder: (context, index) {
+                if (index == listLength) {
+                  return Align(
+                    alignment: const Alignment(0, -0.3),
+                    child: GestureDetector(
+                      onTap: () => Get.to(const LiveFollowPage()),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: .circle,
+                          color: theme.colorScheme.onInverseSurface,
+                        ),
+                        child: Icon(
+                          Icons.keyboard_arrow_right,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 final item = followList[index];
                 return Padding(
                   padding: const .only(right: 5),

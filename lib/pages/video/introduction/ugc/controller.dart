@@ -64,6 +64,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
   AiConclusionResult? aiConclusionResult;
 
+  late final Map<int?, bool> seasonFavState = {};
+
   @override
   void onInit() {
     super.onInit();

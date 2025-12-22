@@ -374,11 +374,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       ?..removeStatusLister(playerListener)
       ..removePositionListener(positionListener);
 
-    videoDetailController
-      ..cancelSkipTimer()
-      ..positionSubscription?.cancel()
-      ..cid.close()
-      ..animController?.removeListener(animListener);
+    videoDetailController.animController?.removeListener(animListener);
 
     Get.delete<HorizontalMemberPageController>(
       tag: videoDetailController.heroTag,

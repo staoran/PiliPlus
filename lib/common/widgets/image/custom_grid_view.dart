@@ -77,7 +77,7 @@ class CustomGridView extends StatelessWidget {
   final bool fullScreen;
 
   static bool horizontalPreview = Pref.horizontalPreview;
-  static final _regex = RegExp(r'/(videoV|dynamicDetail)');
+  static const _routes = ['/videoV', '/dynamicDetail'];
 
   void onTap(BuildContext context, int index) {
     final imgList = picArr.map(
@@ -94,7 +94,7 @@ class CustomGridView extends StatelessWidget {
     ).toList();
     if (horizontalPreview &&
         !fullScreen &&
-        Get.currentRoute.startsWith(_regex) &&
+        _routes.contains(Get.currentRoute) &&
         !context.mediaQuerySize.isPortrait) {
       final scaffoldState = Scaffold.maybeOf(context);
       if (scaffoldState != null) {
