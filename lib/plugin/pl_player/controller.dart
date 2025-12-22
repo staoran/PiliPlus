@@ -1025,11 +1025,12 @@ class PlPlayerController {
   void _maybeStartPlaybackForeground(Duration pos) {
     if (!PlaybackForegroundService.isSupported) return;
 
-    // 切换到新媒资时重置标记
+    // 切换到新媒资时重置标记，但不要立即停止服务
+    // 让服务保护到新媒体开始播放
     if (pos <= const Duration(seconds: 1)) {
       _fgStartedForCurrent = false;
-      // 新一条已启动，停止旧的保活
-      PlaybackForegroundService.stop();
+      // 不要在这里停止，避免切换时的保护窗口期
+      // PlaybackForegroundService.stop();
       return;
     }
 
@@ -1040,6 +1041,9 @@ class PlPlayerController {
     final remaining = total - pos;
     if (remaining <= const Duration(seconds: 6)) {
       _fgStartedForCurrent = true;
+      if (kDebugMode) {
+        debugPrint('PlPlayerController: 启动前台服务保护切换，剩余时间: ${remaining.inSeconds}秒');
+      }
       PlaybackForegroundService.start(
         title: '${Constants.appName} 播放中',
         text: '即将切换下一集，保持后台播放不中断',
@@ -1054,6 +1058,13 @@ class PlPlayerController {
       controllerStream.playing.listen((event) {
         WakelockPlus.toggle(enable: event);
         if (event) {
+          // 新媒体开始播放时，安全地停止前台服务
+          if (PlaybackForegroundService.isRunning && !_fgStartedForCurrent) {
+            if (kDebugMode) {
+              debugPrint('PlPlayerController: 新媒体开始播放，停止前台服务');
+            }
+            PlaybackForegroundService.stop();
+          }
           if (_shouldSetPip) {
             if (_isCurrVideoPage) {
               enterPip(isAuto: true);
@@ -1082,9 +1093,13 @@ class PlPlayerController {
       }),
       controllerStream.completed.listen((event) {
         if (event) {
+          if (kDebugMode) {
+            debugPrint('PlPlayerController: 播放完成，准备切换下一个');
+          }
           playerStatus.value = PlayerStatus.completed;
           _fgStartedForCurrent = false;
-          PlaybackForegroundService.stop();
+          // 不要在这里停止前台服务，让它保护到新媒体开始播放
+          // PlaybackForegroundService.stop();
 
           /// 触发回调事件
           for (var element in _statusListeners) {

@@ -355,8 +355,14 @@ class AudioController extends GetxController
       // 非本地播放路径，确保标记清空
       _isLocalPlayback = false;
     }
+    // 重置前台服务标记，但不要立即停止服务
+    // 等到新媒体开始播放时再停止，避免切换时的保护窗口期
     _fgStartedForCurrent = false;
-    PlaybackForegroundService.stop();
+    if (kDebugMode) {
+      debugPrint(
+        'AudioController: _onOpenMedia called, url=${url.substring(0, url.length > 50 ? 50 : url.length)}...',
+      );
+    }
     _initPlayerIfNeeded();
     player!.open(
       Media(
@@ -398,6 +404,14 @@ class AudioController extends GetxController
       player!.stream.playing.listen((playing) {
         PlayerStatus playerStatus;
         if (playing) {
+          // 新媒体开始播放时，安全地停止前台服务
+          // 此时播放器已经初始化完成，可以安全停止
+          if (PlaybackForegroundService.isRunning && !_fgStartedForCurrent) {
+            if (kDebugMode) {
+              debugPrint('AudioController: 新媒体开始播放，停止前台服务');
+            }
+            PlaybackForegroundService.stop();
+          }
           animController.forward();
           playerStatus = PlayerStatus.playing;
         } else {
@@ -414,8 +428,12 @@ class AudioController extends GetxController
           false,
         );
         if (completed) {
+          if (kDebugMode) {
+            debugPrint('AudioController: 播放完成，准备切换下一个');
+          }
           _fgStartedForCurrent = false;
-          PlaybackForegroundService.stop();
+          // 不要在这里停止前台服务，让它保护到新媒体开始播放
+          // PlaybackForegroundService.stop();
           switch (playMode.value) {
             case PlayRepeat.pause:
               break;
@@ -968,6 +986,9 @@ class AudioController extends GetxController
     if (remaining <= const Duration(seconds: 6)) {
       _fgStartedForCurrent = true;
       final title = audioItem.value?.arc.title ?? Constants.appName;
+      if (kDebugMode) {
+        debugPrint('AudioController: 启动前台服务保护切换，剩余时间: ${remaining.inSeconds}秒');
+      }
       PlaybackForegroundService.start(
         title: '即将切换：$title',
         text: '保持后台播放不中断',
