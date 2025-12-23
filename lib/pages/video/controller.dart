@@ -111,6 +111,9 @@ class VideoDetailController extends GetxController
   int? _mediaListCountOverride;
   bool get _isOfflineListPlayAll => args['offlineList'] == true;
 
+  // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
+  BiliDownloadEntryInfo? currentLocalEntry;
+
   /// 列表排序（true: 顺序, false: 倒序）
   bool get mediaDesc => _mediaDesc.value;
 
@@ -1407,6 +1410,11 @@ class VideoDetailController extends GetxController
         ? localEntry
         : (isFileSource ? entry : null);
 
+    // 保存传入的本地缓存条目（如果有的话）
+    if (localEntry != null) {
+      currentLocalEntry = localEntry;
+    }
+
     // 当 playFromLocal=true 时，只替换播放数据源为本地文件，不改变页面的 isFileSource 判定
     // （以避免影响列表播放的在线简介/评论等逻辑）。
     final DataSourceType dataSourceType = (playFromLocal || isFileSource)
@@ -1550,6 +1558,8 @@ class VideoDetailController extends GetxController
         localEntry = await _findLocalCompletedEntryByCid(cid.value);
       }
     }
+    // 保存找到的本地缓存条目，以便从其他页面返回时能继续使用
+    currentLocalEntry = localEntry;
     if (plPlayerController.enableSponsorBlock && _isBlock && !fromReset) {
       // 空降助手请求异步进行，不阻止视频加载
       // SponsorBlock请求超时或失败不应该阻塞主流程

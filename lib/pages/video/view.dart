@@ -501,11 +501,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (videoDetailController.autoPlay.value) {
       await videoDetailController.playerInit(
         autoplay: videoDetailController.playerStatus == PlayerStatus.playing,
+        localEntry: videoDetailController.currentLocalEntry,
       );
     } else if (videoDetailController.plPlayerController.preInitPlayer &&
         !videoDetailController.isQuerying &&
         videoDetailController.videoState.value is! Error) {
-      await videoDetailController.playerInit();
+      await videoDetailController.playerInit(
+        localEntry: videoDetailController.currentLocalEntry,
+      );
     }
 
     plPlayerController

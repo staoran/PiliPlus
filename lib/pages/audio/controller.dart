@@ -110,6 +110,8 @@ class AudioController extends GetxController
   int _lastPos = -1;
   bool _fgStartedForCurrent = false;
   bool _isLocalPlayback = false;
+  // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
+  BiliDownloadEntryInfo? currentLocalEntry;
 
   @override
   void onInit() {
@@ -312,6 +314,8 @@ class AudioController extends GetxController
     }
 
     _isLocalPlayback = true;
+    // 保存找到的本地缓存条目
+    currentLocalEntry = local;
     duration.value = Duration(milliseconds: local.totalTimeMilli);
     _onOpenMedia(audioPath, ua: '', referer: null);
     return true;
