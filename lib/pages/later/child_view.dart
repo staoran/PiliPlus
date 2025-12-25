@@ -69,6 +69,7 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
                   }
                   var videoItem = response[index];
                   return VideoCardHLater(
+                    key: ValueKey('${videoItem.bvid}_${videoItem.progress}'),
                     index: index,
                     videoItem: videoItem,
                     ctr: _laterController,

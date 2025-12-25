@@ -529,6 +529,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
       videoDetailCtr
         ..plPlayerController.pause()
+        // 切换前先保存当前视频的进度（特别是新窗口模式）
+        ..saveProgressBeforeChange()
         ..makeHeartBeat()
         ..updateMediaListHistory(aid)
         ..onReset(isStein: isStein)

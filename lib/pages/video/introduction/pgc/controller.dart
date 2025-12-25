@@ -351,6 +351,8 @@ class PgcIntroController extends CommonIntroController {
 
       videoDetailCtr
         ..plPlayerController.pause()
+        // 切换前先保存当前视频的进度（特别是新窗口模式）
+        ..saveProgressBeforeChange()
         ..makeHeartBeat()
         ..onReset()
         ..epId = epId

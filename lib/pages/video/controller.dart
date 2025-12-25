@@ -43,6 +43,7 @@ import 'package:PiliPlus/models_new/video/video_pbp/data.dart';
 import 'package:PiliPlus/models_new/video/video_play_info/subtitle.dart';
 import 'package:PiliPlus/models_new/video/video_stein_edgeinfo/data.dart';
 import 'package:PiliPlus/pages/audio/view.dart';
+import 'package:PiliPlus/pages/later/controller.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/pages/video/download_panel/view.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
@@ -74,6 +75,7 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart' hide ContextExtensionss;
@@ -2001,12 +2003,267 @@ class VideoDetailController extends GetxController
           pgcType: isUgc ? null : pgcType,
           videoType: videoType,
         );
+
+        // 同步更新列表页面的进度
+        if (sourceType != SourceType.normal) {
+          // 立即捕获当前视频的 ID，避免异步时已切换视频
+          final currentAid = aid;
+          final currentBvid = bvid;
+          final currentCid = cid.value;
+          final currentDuration = data.timeLength ?? 0;
+          final progressSeconds = playedTime!.inSeconds;
+
+          if (kDebugMode) {
+            debugPrint(
+              '💓 心跳触发进度更新: sourceType=${sourceType.name}, bvid=$currentBvid, progress=${progressSeconds}s',
+            );
+          }
+
+          _updateListProgress(
+            progressSeconds,
+            currentAid,
+            currentBvid,
+            currentCid,
+            currentDuration,
+          );
+        }
       } catch (_) {}
+    }
+  }
+
+  /// 在切换视频前保存当前视频的进度（确保旧视频进度被保存）
+  void saveProgressBeforeChange() {
+    if (sourceType == SourceType.normal ||
+        plPlayerController.position.value == Duration.zero ||
+        data.timeLength == null) {
+      return;
+    }
+
+    try {
+      final playedTime = plPlayerController.position.value;
+      final currentAid = aid;
+      final currentBvid = bvid;
+      final currentCid = cid.value;
+      final currentDuration = data.timeLength ?? 0;
+      final progressSeconds = playedTime.inSeconds;
+
+      if (kDebugMode) {
+        debugPrint(
+          '🔄 切换视频前保存进度: bvid=$currentBvid, progress=${progressSeconds}s',
+        );
+      }
+
+      _updateListProgressSync(
+        progressSeconds,
+        currentAid,
+        currentBvid,
+        currentCid,
+        currentDuration,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('切换视频前保存进度失败: $e');
+      }
+    }
+  }
+
+  /// 更新列表页面中当前视频的播放进度（仅主窗口和移动端）
+  void _updateListProgress(
+    int progressSeconds,
+    int videoAid,
+    String videoBvid,
+    int videoCid,
+    int videoDuration,
+  ) {
+    // 仅在主窗口和移动端更新进度（不支持跨窗口同步）
+    _updateListProgressSync(
+      progressSeconds,
+      videoAid,
+      videoBvid,
+      videoCid,
+      videoDuration,
+    );
+  }
+
+  /// 同步更新列表进度（本地执行）
+  void _updateListProgressSync(
+    int progressSeconds,
+    int videoAid,
+    String videoBvid,
+    int videoCid,
+    int videoDuration,
+  ) {
+    try {
+      // 1. 更新 mediaList（播放列表）的进度
+      _updateMediaListProgress(
+        progressSeconds,
+        videoAid,
+        videoBvid,
+        videoDuration,
+      );
+
+      // 2. 根据 sourceType 更新对应的列表页面
+      switch (sourceType) {
+        case SourceType.watchLater:
+          _updateWatchLaterList(progressSeconds, videoAid, videoBvid);
+          break;
+        case SourceType.file:
+          // 离线缓存：更新 GStorage.watchProgress
+          _updateOfflineCacheProgress(progressSeconds, videoCid, videoDuration);
+          break;
+        case SourceType.archive:
+        case SourceType.fav:
+        case SourceType.playlist:
+          // 收藏夹、合集等没有独立的进度字段，只更新 mediaList
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('更新列表进度失败: $e');
+      }
+    }
+  }
+
+  /// 更新播放列表（mediaList）的进度百分比
+  void _updateMediaListProgress(
+    int progressSeconds,
+    int videoAid,
+    String videoBvid,
+    int videoDuration,
+  ) {
+    try {
+      final index = mediaList.indexWhere(
+        (item) => item.aid == videoAid || item.bvid == videoBvid,
+      );
+
+      if (index != -1 && videoDuration > 0) {
+        final item = mediaList[index];
+        final newProgressPercent = progressSeconds == -1
+            ? 100.0 // 已完成
+            : (progressSeconds / videoDuration * 100).clamp(0.0, 100.0);
+
+        if ((item.progressPercent ?? 0) != newProgressPercent) {
+          item.progressPercent = newProgressPercent;
+          mediaList.refresh();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('更新 mediaList 进度失败: $e');
+      }
+    }
+  }
+
+  /// 更新稍后再看列表的进度
+  void _updateWatchLaterList(
+    int progressSeconds,
+    int videoAid,
+    String videoBvid,
+  ) {
+    try {
+      // 尝试获取稍后再看页面的 controller
+      // tag 为 "0" (全部) 和 "2" (未看完)
+      for (final tag in ['0', '2']) {
+        if (!Get.isRegistered<LaterController>(tag: tag)) continue;
+
+        final laterController = Get.find<LaterController>(tag: tag);
+        if (laterController.loadingState.value.data case List list?) {
+          // 查找当前播放的视频
+          final index = list.indexWhere(
+            (item) => item.aid == videoAid || item.bvid == videoBvid,
+          );
+
+          if (index != -1) {
+            final item = list[index];
+
+            // 更新进度（秒数格式）
+            final newProgress = progressSeconds == -1
+                ? -1 // 已完成标记
+                : progressSeconds;
+
+            if (item.progress != newProgress) {
+              item.progress = newProgress;
+              // 延迟到下一帧更新状态，避免在 widget tree 锁定时触发重建
+              SchedulerBinding.instance.addPostFrameCallback((_) {
+                laterController.loadingState.value = Success(List.from(list));
+                if (kDebugMode) {
+                  debugPrint('✅ 本地更新稍后再看进度: ${item.title} -> ${newProgress}s');
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // 稍后再看页面未打开或其他错误，忽略
+      if (kDebugMode) {
+        debugPrint('更新稍后再看进度失败: $e');
+      }
+    }
+  }
+
+  /// 更新离线缓存的播放进度
+  void _updateOfflineCacheProgress(
+    int progressSeconds,
+    int videoCid,
+    int videoDuration,
+  ) {
+    try {
+      // 计算进度（毫秒）
+      final progressMilli = progressSeconds == -1
+          ? videoDuration *
+                1000 // 已完成
+          : progressSeconds * 1000;
+
+      // 保存到 GStorage.watchProgress
+      watchProgress.put(videoCid.toString(), progressMilli);
+
+      if (kDebugMode) {
+        debugPrint('✅ 更新离线缓存进度: cid=$videoCid -> ${progressMilli}ms');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('更新离线缓存进度失败: $e');
+      }
     }
   }
 
   @override
   void onClose() {
+    // 在关闭前保存最后的进度（主窗口和移动端）
+    if (sourceType != SourceType.normal &&
+        plPlayerController.position.value != Duration.zero &&
+        data.timeLength != null) {
+      final playedTime = plPlayerController.position.value;
+      final currentAid = aid;
+      final currentBvid = bvid;
+      final currentCid = cid.value;
+      final currentDuration = data.timeLength ?? 0;
+      final progressSeconds = playedTime.inSeconds;
+
+      if (kDebugMode) {
+        debugPrint(
+          '🚪 窗口关闭，保存最后的进度: bvid=$currentBvid, progress=${progressSeconds}s',
+        );
+      }
+
+      try {
+        _updateListProgressSync(
+          progressSeconds,
+          currentAid,
+          currentBvid,
+          currentCid,
+          currentDuration,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('关闭时更新进度失败: $e');
+        }
+      }
+    }
+
     cancelSkipTimer();
     positionSubscription?.cancel();
     positionSubscription = null;
