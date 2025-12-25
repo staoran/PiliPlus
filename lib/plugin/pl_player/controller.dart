@@ -1017,6 +1017,9 @@ class PlPlayerController {
   final Set<Function(PlayerStatus status)> _statusListeners = {};
 
   bool get _hasNextCandidate {
+    // 只有在列表播放模式（_looping != none）且播放模式支持切换时才返回 true
+    // 单视频播放时 _looping 为 PlaylistMode.none，因此不会启动前台服务
+    if (_looping == PlaylistMode.none) return false;
     return switch (playRepeat) {
       PlayRepeat.singleCycle || PlayRepeat.pause => false,
       _ => true,
