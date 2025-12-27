@@ -70,6 +70,7 @@ abstract final class GStorage {
     String appSupportPath,
     Map<String, dynamic>? initialSettings, {
     Map<String, dynamic>? accountData,
+    String subWindowType = 'player',
   }) async {
     isSubWindow = true;
 

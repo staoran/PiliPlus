@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/widgets/mouse_back.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
+import 'package:PiliPlus/pages/live_room/view.dart';
 import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
@@ -34,6 +35,11 @@ final List<GetPage> _playerWindowRoutes = [
   GetPage(
     name: '/videoV',
     page: () => const VideoDetailPageV(),
+    transition: Transition.noTransition,
+  ),
+  GetPage(
+    name: '/liveRoom',
+    page: () => const LiveRoomPage(),
     transition: Transition.noTransition,
   ),
 ];
@@ -75,6 +81,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   late final ThemeMode _themeMode;
   late final double _textScale;
   late bool _alwaysOnTop;
+  late final String _initialRoute;
+  late final dynamic _initialArguments;
 
   @override
   void initState() {
@@ -82,6 +90,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     // Mark that we are in a player sub-window
     PlayerWindowService.isPlayerWindow = true;
     _parseSettings();
+    _determineInitialRoute();
     _initWindow();
     // Only setup window channels on desktop platforms
     if (PlatformUtils.isDesktop) {
@@ -90,8 +99,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       _setupWindowMethodHandler();
       _setupPlayerChannel();
     }
-    // Navigate to initial video if args provided
-    _navigateToInitialVideo();
+    // Navigate to initial page after build
+    if (_initialRoute != '/') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigateToInitialPage();
+      });
+    }
   }
 
   void _parseSettings() {
@@ -126,6 +139,83 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _themeMode = ThemeMode.values[_settings?['themeMode'] as int? ?? 0];
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
+  }
+
+  void _determineInitialRoute() {
+    final args = widget.args;
+    if (args == null) {
+      _initialRoute = '/';
+      _initialArguments = null;
+    } else if (args['roomId'] != null) {
+      // Live room
+      _initialRoute = '/liveRoom';
+      _initialArguments = args['roomId'] as int;
+    } else if (args['aid'] != null && args['bvid'] != null && args['cid'] != null) {
+      // Video
+      _initialRoute = '/videoV';
+      _initialArguments = _buildVideoArguments(args);
+    } else {
+      // Default placeholder
+      _initialRoute = '/';
+      _initialArguments = null;
+    }
+  }
+
+  Map<String, dynamic> _buildVideoArguments(Map args) {
+    final videoTypeArg = args['videoType'];
+    VideoType videoType = VideoType.ugc;
+    if (videoTypeArg is VideoType) {
+      videoType = videoTypeArg;
+    } else if (videoTypeArg is int) {
+      videoType = VideoType.values[videoTypeArg.clamp(0, VideoType.values.length - 1)];
+    } else if (videoTypeArg is String) {
+      switch (videoTypeArg) {
+        case 'ugc':
+          videoType = VideoType.ugc;
+          break;
+        case 'pgc':
+          videoType = VideoType.pgc;
+          break;
+        case 'pugv':
+          videoType = VideoType.pugv;
+          break;
+      }
+    }
+
+    final rawExtraArgs = args['extraArguments'];
+    final Map<String, dynamic> extraArgs = rawExtraArgs is Map
+        ? Map<String, dynamic>.from(
+            rawExtraArgs.map(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          )
+        : {};
+    SourceType? sourceType;
+    final sourceTypeArg = extraArgs['sourceType'];
+    if (sourceTypeArg is SourceType) {
+      sourceType = sourceTypeArg;
+    } else if (sourceTypeArg is int) {
+      sourceType = SourceType.values[sourceTypeArg.clamp(0, SourceType.values.length - 1)];
+    } else if (sourceTypeArg is String) {
+      sourceType = SourceType.values.firstWhereOrNull((e) => e.name == sourceTypeArg);
+    }
+
+    extraArgs.remove('sourceType');
+
+    return {
+      'videoType': videoType,
+      'aid': args['aid'],
+      'bvid': args['bvid'],
+      'cid': args['cid'],
+      if (args['seasonId'] != null) 'seasonId': args['seasonId'],
+      if (args['epId'] != null) 'epId': args['epId'],
+      if (args['pgcType'] != null) 'pgcType': args['pgcType'],
+      if (args['cover'] != null) 'pic': args['cover'],
+      'heroTag': 'playerWindow_${args['bvid'] ?? args['aid']}',
+      if (args['progress'] != null) 'progress': args['progress'],
+      'sourceType': ?sourceType,
+      ...extraArgs,
+    };
   }
 
   Future<void> _initWindow() async {
@@ -272,6 +362,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
             _navigateToVideo(args);
           }
           return;
+        case 'playLive':
+          final args = call.arguments as Map?;
+          if (args != null) {
+            _navigateToLive(args);
+          }
+          return;
         default:
           throw MissingPluginException('Not implemented: ${call.method}');
       }
@@ -310,6 +406,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
               _navigateToVideo(args);
             }
             return;
+          case 'playLive':
+            final args = call.arguments;
+            if (args is Map) {
+              _navigateToLive(args);
+            }
+            return;
           default:
             throw MissingPluginException('Not implemented: ${call.method}');
         }
@@ -319,81 +421,46 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
   }
 
-  void _navigateToInitialVideo() {
-    final args = widget.args;
-    if (args != null &&
-        args['aid'] != null &&
-        args['bvid'] != null &&
-        args['cid'] != null) {
-      // Wait for first frame to ensure GetMaterialApp is fully built
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _navigateToVideo(args);
-      });
+  void _navigateToInitialPage() {
+    if (_initialRoute == '/liveRoom' && _initialArguments != null) {
+      windowManager.setTitle('${Constants.appName} - 直播');
+      Get.offAllNamed(
+        '/liveRoom',
+        arguments: _initialArguments,
+      );
+    } else if (_initialRoute == '/videoV' && _initialArguments != null) {
+      windowManager.setTitle('${Constants.appName} - 播放器');
+      Get.offAllNamed(
+        '/videoV',
+        arguments: _initialArguments,
+      );
     }
   }
 
   void _navigateToVideo(Map args) {
-    final videoTypeArg = args['videoType'];
-    // Convert videoType to VideoType enum
-    VideoType videoType = VideoType.ugc;
-    if (videoTypeArg is VideoType) {
-      videoType = videoTypeArg;
-    } else if (videoTypeArg is int) {
-      videoType = VideoType.values[videoTypeArg.clamp(0, VideoType.values.length - 1)];
-    } else if (videoTypeArg is String) {
-      switch (videoTypeArg) {
-        case 'ugc':
-          videoType = VideoType.ugc;
-          break;
-        case 'pgc':
-          videoType = VideoType.pgc;
-          break;
-        case 'pugv':
-          videoType = VideoType.pugv;
-          break;
-      }
-    }
-
-    // Get extraArguments and convert sourceType if needed
-    // Note: IPC may pass Map<Object?, Object?>, need to convert properly
-    final rawExtraArgs = args['extraArguments'];
-    final Map<String, dynamic> extraArgs = rawExtraArgs is Map
-        ? Map<String, dynamic>.from(
-            rawExtraArgs.map(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
-          )
-        : {};
-    SourceType? sourceType;
-    final sourceTypeArg = extraArgs['sourceType'];
-    if (sourceTypeArg is SourceType) {
-      sourceType = sourceTypeArg;
-    } else if (sourceTypeArg is int) {
-      sourceType = SourceType.values[sourceTypeArg.clamp(0, SourceType.values.length - 1)];
-    } else if (sourceTypeArg is String) {
-      sourceType = SourceType.values.firstWhereOrNull((e) => e.name == sourceTypeArg);
-    }
-
-    // Remove sourceType from extraArgs to avoid duplication in spread
-    extraArgs.remove('sourceType');
+    // Update window title for video
+    windowManager.setTitle('${Constants.appName} - 播放器');
 
     Get.offAllNamed(
       '/videoV',
-      arguments: {
-        'videoType': videoType,
-        'aid': args['aid'],
-        'bvid': args['bvid'],
-        'cid': args['cid'],
-        if (args['seasonId'] != null) 'seasonId': args['seasonId'],
-        if (args['epId'] != null) 'epId': args['epId'],
-        if (args['pgcType'] != null) 'pgcType': args['pgcType'],
-        if (args['cover'] != null) 'pic': args['cover'],
-        'heroTag': 'playerWindow_${args['bvid'] ?? args['aid']}',
-        if (args['progress'] != null) 'progress': args['progress'],
-        // Include converted sourceType and other extraArguments
-        'sourceType': ?sourceType,
-        ...extraArgs,
-      },
+      arguments: _buildVideoArguments(args),
+    );
+  }
+
+  void _navigateToLive(Map args) {
+    final roomId = args['roomId'] as int?;
+    if (roomId == null) {
+      debugPrint('Cannot navigate to live: roomId is null');
+      return;
+    }
+
+    // Update window title for live
+    windowManager.setTitle('${Constants.appName} - 直播');
+
+    // LiveRoomPage expects roomId as a direct int argument, not a Map
+    Get.offAllNamed(
+      '/liveRoom',
+      arguments: roomId,
     );
   }
 

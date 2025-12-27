@@ -87,11 +87,14 @@ void main() async {
       final settings = windowArgs?['settings'] as Map<String, dynamic>?;
       final allSettings = settings?['allSettings'] as Map<String, dynamic>?;
       final accountData = settings?['accountData'] as Map<String, dynamic>?;
+      // Get businessId from settings to determine window type
+      final businessIdFromSettings = settings?['businessId'] as String?;
       // This also initializes Accounts.initForSubWindow() internally
       await GStorage.initForSubWindow(
         appSupportDirPath,
         allSettings,
         accountData: accountData,
+        subWindowType: businessIdFromSettings ?? startupWindowType ?? 'player',
       );
 
       // Initialize downloadPath for sub-window so offline cache list works.

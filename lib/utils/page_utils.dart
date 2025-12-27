@@ -707,10 +707,39 @@ abstract final class PageUtils {
   static void toLiveRoom(
     int? roomId, {
     bool off = false,
+    String? cover,
+    String? title,
+    Map<String, dynamic>? extraArguments,
   }) {
     if (roomId == null) {
       return;
     }
+
+    // If already in a live/player window, navigate within this window
+    if (PlayerWindowService.isPlayerWindow) {
+      if (off) {
+        Get.offNamed('/liveRoom', arguments: roomId);
+      } else {
+        Get.toNamed('/liveRoom', arguments: roomId);
+      }
+      return;
+    }
+
+    // If desktop preference is to open player in new window, open live window
+    if (PlatformUtils.isDesktop && Pref.usePlayerWindow) {
+      try {
+        PlayerWindowManager.openLiveWindow(
+          roomId: roomId,
+          cover: cover,
+          title: title,
+          extraArguments: extraArguments,
+        );
+        return;
+      } catch (e) {
+        // fallback to in-app navigation on error
+      }
+    }
+
     if (off) {
       Get.offNamed('/liveRoom', arguments: roomId);
     } else {

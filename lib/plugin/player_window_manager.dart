@@ -23,6 +23,7 @@ class PlayerWindowManager {
   static const _knownFields = {
     'aid', 'bvid', 'cid', 'seasonId', 'epId', 'pgcType',
     'cover', 'title', 'progress', 'videoType', 'heroTag', 'pic',
+    'roomId', // For live streaming
     'settings', 'extraArguments', 'businessId',
   };
 
@@ -108,9 +109,9 @@ class PlayerWindowManager {
     }
 
     return PlayerWindowArguments(
-      aid: json['aid'] as int,
-      bvid: json['bvid'] as String,
-      cid: json['cid'] as int,
+      aid: json['aid'] as int?,
+      bvid: json['bvid'] as String?,
+      cid: json['cid'] as int?,
       seasonId: json['seasonId'] as int?,
       epId: json['epId'] as int?,
       pgcType: json['pgcType'] as int?,
@@ -118,6 +119,7 @@ class PlayerWindowManager {
       title: json['title'] as String?,
       progress: json['progress'] as int?,
       videoType: videoTypeStr,
+      roomId: json['roomId'] as int?,
       extraArguments: extraArgs.isNotEmpty ? extraArgs : null,
       settings: json['settings'] as Map<String, dynamic>?,
     );
@@ -161,6 +163,33 @@ class PlayerWindowManager {
       return true;
     }
     return false;
+  }
+
+  /// 打开直播窗口
+  static Future<void> openLiveWindow({
+    required int roomId,
+    String? cover,
+    String? title,
+    Map<String, dynamic>? extraArguments,
+  }) async {
+    final args = PlayerWindowArguments(
+      roomId: roomId,
+      cover: cover,
+      title: title,
+      extraArguments: extraArguments,
+    );
+    return PlayerWindowService.instance.openPlayerWindow(args);
+  }
+
+  /// 查找直播窗口（已合并到播放器窗口）
+  static Future<WindowController?> findLiveWindow() {
+    return PlayerWindowService.instance.findPlayerWindow();
+  }
+
+  /// 检查直播窗口是否已打开（已合并到播放器窗口）
+  static Future<bool> isLiveWindowOpen() async {
+    final controller = await findLiveWindow();
+    return controller != null;
   }
 
   /// 检查当前设置是否启用播放器窗口

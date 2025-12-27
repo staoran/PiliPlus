@@ -13,12 +13,15 @@ abstract class WindowArguments {
     }
     final json = jsonDecode(arguments) as Map<String, dynamic>;
     final businessId = json['businessId'] as String? ?? '';
-    switch (businessId) {
-      case businessIdPlayer:
-        return PlayerWindowArguments.fromJson(json);
-      default:
-        return const MainWindowArguments();
+
+    // Check if it contains player-related fields (video or live)
+    final hasVideoFields = json.containsKey('aid') || json.containsKey('bvid');
+    final hasLiveFields = json.containsKey('roomId');
+
+    if (businessId == businessIdPlayer || hasVideoFields || hasLiveFields) {
+      return PlayerWindowArguments.fromJson(json);
     }
+    return const MainWindowArguments();
   }
 
   Map<String, dynamic> toJson();
@@ -46,12 +49,12 @@ class MainWindowArguments extends WindowArguments {
   String get businessId => WindowArguments.businessIdMain;
 }
 
-/// 播放器窗口参数
+/// 播放器窗口参数（支持视频和直播）
 class PlayerWindowArguments extends WindowArguments {
   const PlayerWindowArguments({
-    required this.aid,
-    required this.bvid,
-    required this.cid,
+    this.aid,
+    this.bvid,
+    this.cid,
     this.seasonId,
     this.epId,
     this.pgcType,
@@ -59,6 +62,7 @@ class PlayerWindowArguments extends WindowArguments {
     this.title,
     this.progress,
     this.videoType = 'ugc',
+    this.roomId,
     this.extraArguments,
     // Settings passed from main window
     this.settings,
@@ -92,9 +96,9 @@ class PlayerWindowArguments extends WindowArguments {
     }
 
     return PlayerWindowArguments(
-      aid: json['aid'] as int,
-      bvid: json['bvid'] as String,
-      cid: json['cid'] as int,
+      aid: json['aid'] as int?,
+      bvid: json['bvid'] as String?,
+      cid: json['cid'] as int?,
       seasonId: json['seasonId'] as int?,
       epId: json['epId'] as int?,
       pgcType: json['pgcType'] as int?,
@@ -102,14 +106,15 @@ class PlayerWindowArguments extends WindowArguments {
       title: json['title'] as String?,
       progress: json['progress'] as int?,
       videoType: videoTypeStr,
+      roomId: json['roomId'] as int?,
       extraArguments: convertMap(json['extraArguments']),
       settings: convertMap(json['settings']),
     );
   }
 
-  final int aid;
-  final String bvid;
-  final int cid;
+  final int? aid;
+  final String? bvid;
+  final int? cid;
   final int? seasonId;
   final int? epId;
   final int? pgcType;
@@ -117,6 +122,7 @@ class PlayerWindowArguments extends WindowArguments {
   final String? title;
   final int? progress;
   final String videoType;
+  final int? roomId;
   final Map<String, dynamic>? extraArguments;
   /// Settings snapshot from main window
   final Map<String, dynamic>? settings;
@@ -124,9 +130,9 @@ class PlayerWindowArguments extends WindowArguments {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'aid': aid,
-      'bvid': bvid,
-      'cid': cid,
+      if (aid != null) 'aid': aid,
+      if (bvid != null) 'bvid': bvid,
+      if (cid != null) 'cid': cid,
       if (seasonId != null) 'seasonId': seasonId,
       if (epId != null) 'epId': epId,
       if (pgcType != null) 'pgcType': pgcType,
@@ -134,6 +140,7 @@ class PlayerWindowArguments extends WindowArguments {
       if (title != null) 'title': title,
       if (progress != null) 'progress': progress,
       'videoType': videoType,
+      if (roomId != null) 'roomId': roomId,
       if (extraArguments != null) 'extraArguments': extraArguments,
       if (settings != null) 'settings': settings,
     };

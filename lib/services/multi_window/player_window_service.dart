@@ -40,7 +40,7 @@ class PlayerWindowService {
     return null;
   }
 
-  /// 打开或重用播放器窗口
+  /// 打开或重用播放器窗口（支持视频和直播）
   Future<void> openPlayerWindow(PlayerWindowArguments arguments) async {
     try {
       // 查找现有播放器窗口
@@ -71,12 +71,16 @@ class PlayerWindowService {
         seasonId: arguments.seasonId,
         epId: arguments.epId,
         pgcType: arguments.pgcType,
+        roomId: arguments.roomId,
         cover: arguments.cover,
         title: arguments.title,
         progress: arguments.progress,
         videoType: arguments.videoType,
         extraArguments: arguments.extraArguments,
-        settings: _getSettingsSnapshot(),
+        settings: {
+          ..._getSettingsSnapshot(),
+          'businessId': WindowArguments.businessIdPlayer, // Add businessId to settings
+        },
       );
 
       // 创建新窗口
@@ -163,7 +167,9 @@ class PlayerWindowService {
     PlayerWindowArguments arguments,
   ) async {
     // 使用 WindowController.invokeMethod 向特定窗口发送消息
-    await controller.invokeMethod('playVideo', arguments.toJson());
+    // 根据参数类型决定发送playVideo还是playLive
+    final method = arguments.roomId != null ? 'playLive' : 'playVideo';
+    await controller.invokeMethod(method, arguments.toJson());
   }
 
   /// 关闭播放器窗口
