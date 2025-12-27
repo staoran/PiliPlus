@@ -10,6 +10,7 @@ import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:collection/collection.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
@@ -486,7 +487,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
                   return;
                 }
 
-                if (Get.isDialogOpen ?? Get.isBottomSheetOpen ?? false) {
+                if (Get.routing.route is! GetPageRoute) {
                   Get.back();
                   return;
                 }

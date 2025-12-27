@@ -291,7 +291,7 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
                   return;
                 }
 
-                if (Get.isDialogOpen ?? Get.isBottomSheetOpen ?? false) {
+                if (Get.routing.route is! GetPageRoute) {
                   Get.back();
                   return;
                 }
