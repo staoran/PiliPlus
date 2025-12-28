@@ -913,6 +913,38 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     );
   }
 
+  // 统一的Tab内容区域组件
+  Widget buildTabContentArea({
+    required double width,
+    required double height,
+    VoidCallback? onTap,
+  }) {
+    return Scaffold(
+      key: videoDetailController.childKey,
+      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.transparent,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          buildTabBar(onTap: onTap),
+          Expanded(
+            child: videoTabBarView(
+              controller: videoDetailController.tabCtr,
+              children: [
+                videoIntro(
+                  width: width,
+                  height: height,
+                ),
+                if (videoDetailController.showReply) videoReplyPanel(),
+                if (_shouldShowSeasonPanel) seasonPanel,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget get childWhenDisabledLandscape => Obx(
     () {
       final isFullScreen = this.isFullScreen;
@@ -937,6 +969,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 左侧：播放器
         SizedBox(
           width: videoWidth,
           height: videoHeight,
@@ -945,34 +978,15 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             height: videoHeight,
           ),
         ),
+        // 右侧：Tab内容区域
         Offstage(
           offstage: isFullScreen,
           child: SizedBox(
             width: introWidth,
             height: maxHeight - padding.top,
-            child: Scaffold(
-              key: videoDetailController.childKey,
-              resizeToAvoidBottomInset: false,
-              backgroundColor: Colors.transparent,
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTabBar(),
-                  Expanded(
-                    child: videoTabBarView(
-                      controller: videoDetailController.tabCtr,
-                      children: [
-                        videoIntro(
-                          width: introWidth,
-                          height: maxHeight,
-                        ),
-                        if (videoDetailController.showReply) videoReplyPanel(),
-                        if (_shouldShowSeasonPanel) seasonPanel,
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            child: buildTabContentArea(
+              width: introWidth,
+              height: maxHeight,
             ),
           ),
         ),
@@ -984,28 +998,19 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     bool isFullScreen,
     EdgeInsets padding,
   ) => Obx(() {
+    // 竖屏视频横屏展示
     if (videoDetailController.isVertical.value &&
         enableVerticalExpand &&
         !isPortrait) {
       final double videoHeight = maxHeight - padding.vertical;
       final double width = videoHeight * 9 / 16;
       final videoWidth = isFullScreen ? maxWidth : width;
-      final introWidth = (maxWidth - padding.horizontal - width) / 2;
+      final introWidth = maxWidth - padding.horizontal - width;
       final introHeight = maxHeight - padding.top;
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Offstage(
-            offstage: isFullScreen,
-            child: SizedBox(
-              width: introWidth,
-              height: introHeight,
-              child: videoIntro(
-                width: introWidth,
-                height: introHeight,
-              ),
-            ),
-          ),
+          // 左侧：播放器
           SizedBox(
             width: videoWidth,
             height: videoHeight,
@@ -1014,36 +1019,23 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               height: videoHeight,
             ),
           ),
+          // 右侧：Tab内容区域
           Offstage(
             offstage: isFullScreen,
             child: SizedBox(
               width: introWidth,
               height: introHeight,
-              child: Scaffold(
-                key: videoDetailController.childKey,
-                resizeToAvoidBottomInset: false,
-                backgroundColor: Colors.transparent,
-                body: Column(
-                  children: [
-                    buildTabBar(showIntro: false),
-                    Expanded(
-                      child: videoTabBarView(
-                        controller: videoDetailController.tabCtr,
-                        children: [
-                          if (videoDetailController.showReply)
-                            videoReplyPanel(),
-                          if (_shouldShowSeasonPanel) seasonPanel,
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              child: buildTabContentArea(
+                width: introWidth,
+                height: introHeight,
               ),
             ),
           ),
         ],
       );
     }
+
+    // 普通横屏布局
     double width =
         clampDouble(maxHeight / maxWidth * 1.08, 0.5, 0.7) * maxWidth;
     if (maxWidth >= 560) {
@@ -1055,84 +1047,28 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (height > maxHeight) {
       return childSplit(16 / 9);
     }
-    final introHeight = maxHeight - height - padding.top;
-    final showIntro =
-        videoDetailController.isUgc && videoDetailController.showRelatedVideo;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: videoWidth,
-              height: videoHeight,
-              child: videoPlayer(
-                width: videoWidth,
-                height: videoHeight,
-              ),
-            ),
-            if (!videoDetailController.isFileSource)
-              Offstage(
-                offstage: isFullScreen,
-                child: SizedBox(
-                  width: width,
-                  height: introHeight,
-                  child: videoIntro(
-                    width: width,
-                    height: introHeight,
-                    needRelated: false,
-                    needCtr: false,
-                  ),
-                ),
-              ),
-          ],
+        // 左侧：播放器
+        SizedBox(
+          width: videoWidth,
+          height: videoHeight,
+          child: videoPlayer(
+            width: videoWidth,
+            height: videoHeight,
+          ),
         ),
+        // 右侧：Tab内容区域
         Offstage(
           offstage: isFullScreen,
           child: SizedBox(
             width: maxWidth - width - padding.horizontal,
             height: maxHeight - padding.top,
-            child: Scaffold(
-              key: videoDetailController.childKey,
-              resizeToAvoidBottomInset: false,
-              backgroundColor: Colors.transparent,
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTabBar(
-                    introText: '相关视频',
-                    showIntro: videoDetailController.isFileSource
-                        ? true
-                        : showIntro,
-                  ),
-                  Expanded(
-                    child: videoTabBarView(
-                      controller: videoDetailController.tabCtr,
-                      children: [
-                        if (videoDetailController.isFileSource)
-                          localIntroPanel()
-                        else if (showIntro)
-                          KeepAliveWrapper(
-                            builder: (context) => CustomScrollView(
-                              key: const PageStorageKey(CommonIntroController),
-                              controller:
-                                  videoDetailController.effectiveIntroScrollCtr,
-                              slivers: [
-                                RelatedVideoPanel(
-                                  key: videoRelatedKey,
-                                  heroTag: heroTag,
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (videoDetailController.showReply) videoReplyPanel(),
-                        if (_shouldShowSeasonPanel) seasonPanel,
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            child: buildTabContentArea(
+              width: maxWidth - width - padding.horizontal,
+              height: maxHeight - padding.top,
             ),
           ),
         ),
@@ -1160,12 +1096,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   ) => Obx(
     () {
       final isFullScreen = this.isFullScreen;
+      // 竖屏视频横屏展示
       if (videoDetailController.isVertical.value &&
           enableVerticalExpand &&
           !isPortrait) {
         return childSplit(9 / 16);
       }
-      final shouldShowSeasonPanel = _shouldShowSeasonPanel;
+
+      // 接近正方形屏幕：上下布局
       final double height = maxHeight / 2.5;
       final videoHeight = isFullScreen ? maxHeight - padding.top : height;
       final bottomHeight = maxHeight - height - padding.top;
@@ -1185,38 +1123,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             child: SizedBox(
               width: maxWidth - padding.horizontal,
               height: bottomHeight,
-              child: Scaffold(
-                key: videoDetailController.childKey,
-                resizeToAvoidBottomInset: false,
-                backgroundColor: Colors.transparent,
-                body: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildTabBar(needIndicator: false),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: videoIntro(
-                              width: () {
-                                double flex = 1;
-                                if (videoDetailController.showReply) flex++;
-                                if (shouldShowSeasonPanel) flex++;
-                                return maxWidth / flex;
-                              }(),
-                              height: bottomHeight,
-                            ),
-                          ),
-                          if (videoDetailController.showReply)
-                            Expanded(child: videoReplyPanel()),
-                          if (shouldShowSeasonPanel)
-                            Expanded(child: seasonPanel),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              child: buildTabContentArea(
+                width: maxWidth - padding.horizontal,
+                height: bottomHeight,
               ),
             ),
           ),
