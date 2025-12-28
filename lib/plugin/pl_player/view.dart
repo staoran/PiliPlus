@@ -2519,11 +2519,11 @@ Widget buildDmChart(
               ),
               isCurved: true,
               barWidth: 1,
-              color: color,
+              color: color.withValues(alpha: 0.6),
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
                 show: true,
-                color: color.withValues(alpha: 0.2),
+                color: color.withValues(alpha: 0.4),
               ),
             ),
           ],
