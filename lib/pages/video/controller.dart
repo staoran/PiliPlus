@@ -459,7 +459,17 @@ class VideoDetailController extends GetxController
 
     if (isFileSource) {
       // 尝试从 args 获取 entry，如果为 null 则从下载服务中查找
-      BiliDownloadEntryInfo? entryArg = args['entry'];
+      BiliDownloadEntryInfo? entryArg;
+      final rawEntry = args['entry'];
+      if (rawEntry is BiliDownloadEntryInfo) {
+        entryArg = rawEntry;
+      } else if (rawEntry is Map<String, dynamic>) {
+        // 处理序列化传递的 entry（在已打开的窗口中切换视频时）
+        try {
+          entryArg = BiliDownloadEntryInfo.fromJson(rawEntry);
+        } catch (_) {}
+      }
+
       if (entryArg == null && Get.isRegistered<DownloadService>()) {
         // 从下载服务中通过 cid 查找 entry
         final downloadService = Get.find<DownloadService>();
@@ -1552,7 +1562,17 @@ class VideoDetailController extends GetxController
           passed.isCompleted &&
           passed.cid == cid.value) {
         localEntry = passed;
-      } else {
+      } else if (passed is Map<String, dynamic>) {
+        // 处理序列化传递的 entry（在已打开的窗口中切换视频时）
+        try {
+          final entry = BiliDownloadEntryInfo.fromJson(passed);
+          if (entry.isCompleted && entry.cid == cid.value) {
+            localEntry = entry;
+          }
+        } catch (_) {}
+      }
+
+      if (localEntry == null) {
         localEntry = await _findLocalCompletedEntryByCid(cid.value);
       }
     }

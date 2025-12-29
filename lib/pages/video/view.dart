@@ -163,14 +163,16 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   // 获取视频资源，初始化播放器
   Future<void> videoSourceInit() async {
-    videoDetailController.queryVideoUrl();
-    if (videoDetailController.autoPlay.value) {
-      plPlayerController = videoDetailController.plPlayerController;
-      plPlayerController!
-        ..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
-      await plPlayerController!.autoEnterFullscreen();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await videoDetailController.queryVideoUrl();
+      if (videoDetailController.autoPlay.value) {
+        plPlayerController = videoDetailController.plPlayerController;
+        plPlayerController!
+          ..addStatusLister(playerListener)
+          ..addPositionListener(positionListener);
+        await plPlayerController!.autoEnterFullscreen();
+      }
+    });
   }
 
   void positionListener(Duration position) {
@@ -214,7 +216,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   void playCallBack() {
-    plPlayerController?.play();
+    PlPlayerController.instance?.play();
   }
 
   // 播放器状态监听
