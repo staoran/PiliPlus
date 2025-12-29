@@ -881,7 +881,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       if (plPlayerController.isAnim) BottomControlType.superResolution,
       if (isNotFileSource && plPlayerController.showViewPoints)
         BottomControlType.viewPoints,
-      if (isNotFileSource && anySeason) BottomControlType.episode,
+      if (anySeason) BottomControlType.episode, // 只要有多个分集就显示选集按钮，支持缓存视频
       if (flag) BottomControlType.fit,
       if (isNotFileSource) BottomControlType.aiTranslate,
       BottomControlType.subtitle,
