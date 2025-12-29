@@ -264,6 +264,17 @@ abstract final class ImageUtils {
     }
   }
 
+  static final _suffixRegex = RegExp(
+    r'\.(jpg|jpeg|png|webp|gif|avif)$',
+    caseSensitive: false,
+  );
+  static String safeThumbnailUrl(String? src) {
+    if (src != null && _suffixRegex.hasMatch(src)) {
+      return thumbnailUrl(src);
+    }
+    return src.http2https;
+  }
+
   static final _thumbRegex = RegExp(
     r'(@(\d+[a-z]_?)*)(\..*)?$',
     caseSensitive: false,

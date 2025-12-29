@@ -2,10 +2,8 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models/common/avatar_badge_type.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
-import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class PendantAvatar extends StatelessWidget {
@@ -44,6 +42,23 @@ class PendantAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isMemberAvatar = size == 80;
+    Widget? pendant;
+    if (showDynDecorate && !garbPendantImage.isNullOrEmpty) {
+      final pendantSize = size * 1.75;
+      pendant = Positioned(
+        // -(size * 1.75 - size) / 2
+        top: -0.375 * size + (size == 80 ? 2 : 0),
+        child: IgnorePointer(
+          child: NetworkImgLayer(
+            radius: 0,
+            width: pendantSize,
+            height: pendantSize,
+            src: garbPendantImage,
+            getPlaceHolder: () => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
     return Stack(
       alignment: Alignment.bottomCenter,
       clipBehavior: Clip.none,
@@ -55,19 +70,7 @@ class PendantAvatar extends StatelessWidget {
                 onTap: onTap,
                 child: _buildAvatar(colorScheme, isMemberAvatar),
               ),
-        if (showDynDecorate && !garbPendantImage.isNullOrEmpty)
-          Positioned(
-            top:
-                -0.375 *
-                (size == 80 ? size - 4 : size), // -(size * 1.75 - size) / 2
-            child: IgnorePointer(
-              child: CachedNetworkImage(
-                width: size * 1.75,
-                height: size * 1.75,
-                imageUrl: ImageUtils.thumbnailUrl(garbPendantImage),
-              ),
-            ),
-          ),
+        ?pendant,
         if (roomId != null)
           Positioned(
             bottom: 0,

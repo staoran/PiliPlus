@@ -19,7 +19,6 @@ class NetworkImgLayer extends StatelessWidget {
     this.quality,
     this.semanticsLabel,
     this.radius,
-    this.imageBuilder,
     this.isLongPic = false,
     this.forceUseCacheWidth = false,
     this.getPlaceHolder,
@@ -35,7 +34,6 @@ class NetworkImgLayer extends StatelessWidget {
   final int? quality;
   final String? semanticsLabel;
   final double? radius;
-  final ImageWidgetBuilder? imageBuilder;
   final bool isLongPic;
   final bool forceUseCacheWidth;
   final Widget Function()? getPlaceHolder;
@@ -93,9 +91,8 @@ class NetworkImgLayer extends StatelessWidget {
       fadeOutDuration: fadeOutDuration ?? const Duration(milliseconds: 120),
       fadeInDuration: fadeInDuration ?? const Duration(milliseconds: 120),
       filterQuality: FilterQuality.low,
-      placeholder: (BuildContext context, String url) =>
+      placeholder: (context, url) =>
           getPlaceHolder?.call() ?? _placeholder(context, noRadius),
-      imageBuilder: imageBuilder,
       errorWidget: (context, url, error) => _placeholder(context, noRadius),
       colorBlendMode: reduce ? BlendMode.modulate : null,
       color: reduce ? reduceLuxColor : null,

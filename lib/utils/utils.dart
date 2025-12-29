@@ -21,6 +21,13 @@ abstract final class Utils {
 
   static const jsonEncoder = JsonEncoder.withIndent('    ');
 
+  static Color index2Color(int index, Color color) => switch (index) {
+    0 => const Color(0xFFfdad13),
+    1 => const Color(0xFF8aace1),
+    2 => const Color(0xFFdfa777),
+    _ => color,
+  };
+
   static String themeUrl(bool isDark) =>
       'native.theme=${isDark ? 2 : 1}&night=${isDark ? 1 : 0}';
 

@@ -205,10 +205,10 @@ class CustomGridView extends StatelessWidget {
             final radius = borderRadius(column, length, index);
             return LayoutId(
               id: index,
-              child: Hero(
-                tag: item.url,
-                child: GestureDetector(
-                  onTap: () => onTap(context, index),
+              child: GestureDetector(
+                onTap: () => onTap(context, index),
+                child: Hero(
+                  tag: item.url,
                   child: Stack(
                     clipBehavior: Clip.none,
                     alignment: Alignment.center,

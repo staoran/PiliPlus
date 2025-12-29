@@ -21,7 +21,7 @@ import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
-import 'package:PiliPlus/utils/extension/string_ext.dart';
+import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
@@ -136,23 +136,25 @@ class ReplyItemGrpc extends StatelessWidget {
                   children: [
                     CachedNetworkImage(
                       height: 38,
-                      imageUrl: replyItem.member.garbCardImage.http2https,
+                      memCacheHeight: 38.cacheSize(context),
+                      imageUrl: ImageUtils.safeThumbnailUrl(
+                        replyItem.member.garbCardImage,
+                      ),
+                      placeholder: (_, _) => const SizedBox.shrink(),
                     ),
                     if (replyItem.member.hasGarbCardNumber())
                       Text(
                         'NO.\n${replyItem.member.garbCardNumber}',
-                        style: replyItem.member.garbCardFanColor.startsWith('#')
-                            ? TextStyle(
-                                fontSize: 8,
-                                fontFamily: 'digital_id_num',
-                                color: Color(
-                                  int.parse(
-                                    replyItem.member.garbCardFanColor
-                                        .replaceFirst('#', '0xFF'),
-                                  ),
-                                ),
-                              )
-                            : null,
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontFamily: 'digital_id_num',
+                          color:
+                              replyItem.member.garbCardFanColor.startsWith('#')
+                              ? Utils.parseColor(
+                                  replyItem.member.garbCardFanColor,
+                                )
+                              : null,
+                        ),
                       ),
                   ],
                 ),
@@ -607,12 +609,11 @@ class ReplyItemGrpc extends StatelessWidget {
         if (!isCv && url.hasPrefixIcon())
           WidgetSpan(
             child: CachedNetworkImage(
-              imageUrl: ImageUtils.thumbnailUrl(url.prefixIcon),
               height: 19,
+              memCacheHeight: 19.cacheSize(context),
               color: theme.colorScheme.primary,
-              placeholder: (context, url) {
-                return const SizedBox.shrink();
-              },
+              imageUrl: ImageUtils.thumbnailUrl(url.prefixIcon),
+              placeholder: (_, _) => const SizedBox.shrink(),
             ),
           ),
         TextSpan(
