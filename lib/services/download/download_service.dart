@@ -366,11 +366,11 @@ class DownloadService extends GetxService {
     // 检查 curDownload 是否为 null，或者状态是否表示下载已结束（>3）
     // 同时确保这是队列中的第一个任务，避免跳过队列
     final currStatus = curDownload.value?.status?.index;
-    final isFirstInQueue =
-        waitDownloadQueue.isNotEmpty &&
-        waitDownloadQueue.first.cid == entry.cid;
-    if (isFirstInQueue && (currStatus == null || currStatus > 3)) {
-      startDownload(entry);
+    // 如果当前没有活跃下载，则启动队列头部任务（保持队列顺序）
+    if (currStatus == null || currStatus > 3) {
+      if (waitDownloadQueue.isNotEmpty) {
+        startDownload(waitDownloadQueue.first);
+      }
     }
   }
 
