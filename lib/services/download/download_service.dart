@@ -362,14 +362,8 @@ class DownloadService extends GetxService {
       ..entryDirPath = entryDir.path
       ..status = DownloadStatus.wait;
     waitDownloadQueue.add(entry);
-    // 只有当前没有任务在下载时才开始新任务
-    // 检查 curDownload 是否为 null，或者状态是否表示下载已结束（>3）
-    // 同时确保这是队列中的第一个任务，避免跳过队列
     final currStatus = curDownload.value?.status?.index;
-    final isFirstInQueue =
-        waitDownloadQueue.isNotEmpty &&
-        waitDownloadQueue.first.cid == entry.cid;
-    if (isFirstInQueue && (currStatus == null || currStatus > 3)) {
+    if (currStatus == null || currStatus > 3) {
       startDownload(entry);
     }
   }
