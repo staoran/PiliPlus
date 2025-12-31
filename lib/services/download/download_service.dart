@@ -355,12 +355,12 @@ class DownloadService extends GetxService {
 
   Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
     final entryDir = await _getDownloadEntryDir(entry);
-    final entryJsonFile = File(path.join(entryDir.path, _entryFile));
-    await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
     entry
       ..pageDirPath = entryDir.parent.path
       ..entryDirPath = entryDir.path
       ..status = DownloadStatus.wait;
+    final entryJsonFile = File(path.join(entryDir.path, _entryFile));
+    await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
     waitDownloadQueue.add(entry);
     final currStatus = curDownload.value?.status?.index;
     if (currStatus == null || currStatus > 3) {
