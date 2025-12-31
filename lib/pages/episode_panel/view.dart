@@ -25,6 +25,7 @@ import 'package:PiliPlus/pages/video/introduction/ugc/widgets/page.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
+import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -520,6 +521,7 @@ class _EpisodePanelState extends State<EpisodePanel>
                       'assets/images/live.png',
                       color: primary,
                       height: 12,
+                      cacheHeight: 12.cacheSize(context),
                       semanticLabel: "正在播放：",
                     ),
                   Expanded(

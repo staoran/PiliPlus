@@ -69,6 +69,7 @@ class HotKeyword extends StatelessWidget {
                               'assets/images/live/live.gif',
                               width: 48,
                               height: 15,
+                              cacheHeight: 15.cacheSize(context),
                             ),
                           )
                         else if (i.recommendReason?.isNotEmpty == true)

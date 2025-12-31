@@ -317,6 +317,9 @@ class _AudioPageState extends State<AudioPage> {
                                                       'assets/images/live.gif',
                                                       width: 16,
                                                       height: 16,
+                                                      cacheWidth: 16.cacheSize(
+                                                        context,
+                                                      ),
                                                       color:
                                                           colorScheme.primary,
                                                     ),
@@ -359,6 +362,9 @@ class _AudioPageState extends State<AudioPage> {
                                                 'assets/images/live.gif',
                                                 width: 16,
                                                 height: 16,
+                                                cacheWidth: 16.cacheSize(
+                                                  context,
+                                                ),
                                                 color: colorScheme.primary,
                                               ),
                                             ),

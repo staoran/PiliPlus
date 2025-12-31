@@ -246,7 +246,9 @@ class _CreateFavPageState extends State<CreateFavPage> {
                           src: _cover,
                           height: 55,
                           width: 88,
-                          radius: 6,
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(6),
+                          ),
                         ),
                       ),
                     Icon(

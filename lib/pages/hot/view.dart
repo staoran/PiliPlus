@@ -43,7 +43,7 @@ class _HotPageState extends CommonPageState<HotPage, HotController>
           NetworkImgLayer(
             width: 35,
             height: 35,
-            radius: 0,
+            type: .emote,
             src: iconUrl,
           ),
           const SizedBox(height: 4),

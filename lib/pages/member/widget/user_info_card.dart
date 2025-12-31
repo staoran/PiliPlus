@@ -140,7 +140,11 @@ class UserInfoCard extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildLeft(ColorScheme colorScheme, bool isLight) => [
+  List<Widget> _buildLeft(
+    BuildContext context,
+    ColorScheme colorScheme,
+    bool isLight,
+  ) => [
     Padding(
       padding: const EdgeInsets.only(left: 20, right: 20),
       child: Wrap(
@@ -169,8 +173,12 @@ class UserInfoCard extends StatelessWidget {
             ),
           ),
           Image.asset(
-            'assets/images/lv/lv${card.levelInfo?.identity == 2 ? '6_s' : card.levelInfo?.currentLevel}.png',
+            Utils.levelName(
+              card.levelInfo!.currentLevel!,
+              isSeniorMember: card.levelInfo?.identity == 2,
+            ),
             height: 11,
+            cacheHeight: 11.cacheSize(context),
             semanticLabel: '等级${card.levelInfo?.currentLevel}',
           ),
           if (card.vip?.status == 1)
@@ -498,7 +506,7 @@ class UserInfoCard extends StatelessWidget {
         ],
       ),
       const SizedBox(height: 5),
-      ..._buildLeft(colorScheme, isLight),
+      ..._buildLeft(context, colorScheme, isLight),
       if (card.prInfo?.content?.isNotEmpty == true)
         buildPrInfo(context, colorScheme, isLight, card.prInfo!),
       const SizedBox(height: 5),
@@ -585,7 +593,7 @@ class UserInfoCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 10),
-                    ..._buildLeft(colorScheme, isLight),
+                    ..._buildLeft(context, colorScheme, isLight),
                     const SizedBox(height: 5),
                   ],
                 ),

@@ -339,7 +339,7 @@ class _VotePanelState extends State<VotePanel> {
                           src: opt.imgUrl,
                           width: constraints.maxWidth,
                           height: constraints.maxHeight,
-                          radius: 0,
+                          type: .emote,
                         ),
                       ),
                     ),

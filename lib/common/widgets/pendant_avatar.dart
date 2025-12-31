@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models/common/avatar_badge_type.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
+import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -50,7 +51,7 @@ class PendantAvatar extends StatelessWidget {
         top: -0.375 * size + (size == 80 ? 2 : 0),
         child: IgnorePointer(
           child: NetworkImgLayer(
-            radius: 0,
+            type: .emote,
             width: pendantSize,
             height: pendantSize,
             src: garbPendantImage,
@@ -105,7 +106,7 @@ class PendantAvatar extends StatelessWidget {
             ),
           )
         else if (_badgeType != BadgeType.none)
-          _buildBadge(colorScheme, isMemberAvatar),
+          _buildBadge(context, colorScheme, isMemberAvatar),
       ],
     );
   }
@@ -137,11 +138,17 @@ class PendantAvatar extends StatelessWidget {
           type: ImageType.avatar,
         );
 
-  Widget _buildBadge(ColorScheme colorScheme, bool isMemberAvatar) {
+  Widget _buildBadge(
+    BuildContext context,
+    ColorScheme colorScheme,
+    bool isMemberAvatar,
+  ) {
     final child = switch (_badgeType) {
       BadgeType.vip => Image.asset(
         'assets/images/big-vip.png',
+        width: badgeSize,
         height: badgeSize,
+        cacheWidth: badgeSize.cacheSize(context),
         semanticLabel: _badgeType.desc,
       ),
       _ => Icon(

@@ -269,7 +269,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     liveRoomController: _liveRoomController,
                     plPlayerController: plPlayerController,
                     isFullScreen: isFullScreen,
-                    isPipMode: isPipMode,
+                    isPipMode: plPlayerController.isDesktopPip || isPipMode,
                   ),
           );
         }
@@ -405,6 +405,9 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                   child = Image.asset(
                     'assets/images/live/default_bg.webp',
                     fit: BoxFit.cover,
+                    width: maxWidth,
+                    height: maxHeight,
+                    cacheWidth: maxWidth.cacheSize(context),
                   );
                 }
                 return Positioned.fill(

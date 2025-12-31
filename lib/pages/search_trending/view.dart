@@ -125,6 +125,7 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                     child: Image.asset(
                       width: width,
                       height: height,
+                      cacheWidth: width.cacheSize(context),
                       'assets/images/trending_banner.png',
                       filterQuality: FilterQuality.low,
                     ),
@@ -212,6 +213,7 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                             'assets/images/live/live.gif',
                             width: 51,
                             height: 16,
+                            cacheHeight: 16.cacheSize(context),
                           ),
                         ],
                       ],

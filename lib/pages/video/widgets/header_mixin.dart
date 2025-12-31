@@ -45,9 +45,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
       icon: const Icon(Icons.refresh),
       onPressed: () {
         onPressed();
-        if (isDanmaku) {
-          // plPlayerController.putDanmakuSettings();
-        } else {
+        if (!isDanmaku) {
           plPlayerController.putSubtitleSettings();
         }
       },
@@ -134,6 +132,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
 
         void updateFontWeight(double val) {
           DanmakuOptions.danmakuFontWeight = val.toInt();
+          setState(() {});
           setOptions();
         }
 
@@ -275,11 +274,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('显示区域 ${DanmakuOptions.danmakuShowArea * 100}%'),
-                      resetBtn(
-                        theme,
-                        '50.0%',
-                        () => updateShowArea(0.5),
-                      ),
+                      resetBtn(theme, '50.0%', () => updateShowArea(0.5)),
                     ],
                   ),
                   Padding(
@@ -305,11 +300,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('不透明度 ${plPlayerController.danmakuOpacity * 100}%'),
-                      resetBtn(
-                        theme,
-                        '100.0%',
-                        () => updateOpacity(1.0),
-                      ),
+                      resetBtn(theme, '100.0%', () => updateOpacity(1.0)),
                     ],
                   ),
                   Padding(
@@ -337,11 +328,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                       Text(
                         '字体粗细 ${DanmakuOptions.danmakuFontWeight + 1}（可能无法精确调节）',
                       ),
-                      resetBtn(
-                        theme,
-                        6,
-                        () => updateFontWeight(5),
-                      ),
+                      resetBtn(theme, 6, () => updateFontWeight(5)),
                     ],
                   ),
                   Padding(
@@ -367,11 +354,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('描边粗细 ${DanmakuOptions.danmakuStrokeWidth}'),
-                      resetBtn(
-                        theme,
-                        1.5,
-                        () => updateStrokeWidth(1.5),
-                      ),
+                      resetBtn(theme, 1.5, () => updateStrokeWidth(1.5)),
                     ],
                   ),
                   Padding(
@@ -400,11 +383,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                       Text(
                         '字体大小 ${(DanmakuOptions.danmakuFontScale * 100).toStringAsFixed(1)}%',
                       ),
-                      resetBtn(
-                        theme,
-                        '100.0%',
-                        () => updateFontSize(1.0),
-                      ),
+                      resetBtn(theme, '100.0%', () => updateFontSize(1.0)),
                     ],
                   ),
                   Padding(
@@ -433,11 +412,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                       Text(
                         '全屏字体大小 ${(DanmakuOptions.danmakuFontScaleFS * 100).toStringAsFixed(1)}%',
                       ),
-                      resetBtn(
-                        theme,
-                        '120.0%',
-                        () => updateFontSizeFS(1.2),
-                      ),
+                      resetBtn(theme, '120.0%', () => updateFontSizeFS(1.2)),
                     ],
                   ),
                   Padding(
@@ -464,11 +439,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('滚动弹幕时长 ${DanmakuOptions.danmakuDuration} 秒'),
-                      resetBtn(
-                        theme,
-                        7.0,
-                        () => updateDuration(7.0),
-                      ),
+                      resetBtn(theme, 7.0, () => updateDuration(7.0)),
                     ],
                   ),
                   Padding(
@@ -494,11 +465,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('静态弹幕时长 ${DanmakuOptions.danmakuStaticDuration} 秒'),
-                      resetBtn(
-                        theme,
-                        4.0,
-                        () => updateStaticDuration(4.0),
-                      ),
+                      resetBtn(theme, 4.0, () => updateStaticDuration(4.0)),
                     ],
                   ),
                   Padding(
@@ -524,11 +491,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('弹幕行高 ${DanmakuOptions.danmakuLineHeight}'),
-                      resetBtn(
-                        theme,
-                        1.6,
-                        () => updateLineHeight(1.6),
-                      ),
+                      resetBtn(theme, 1.6, () => updateLineHeight(1.6)),
                     ],
                   ),
                   Padding(

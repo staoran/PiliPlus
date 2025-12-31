@@ -357,10 +357,12 @@ class OpusContent extends StatelessWidget {
                         spacing: 10,
                         children: [
                           NetworkImgLayer(
-                            radius: 6,
                             width: 104,
                             height: 65,
                             src: element.linkCard!.card!.ugc!.cover,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
                           ),
                           Expanded(
                             child: Column(
@@ -396,10 +398,12 @@ class OpusContent extends StatelessWidget {
                         spacing: 10,
                         children: [
                           NetworkImgLayer(
-                            radius: 6,
                             width: 104,
                             height: 65,
                             src: element.linkCard!.card!.common!.cover,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
                           ),
                           Expanded(
                             child: Column(
@@ -433,10 +437,12 @@ class OpusContent extends StatelessWidget {
                         spacing: 10,
                         children: [
                           NetworkImgLayer(
-                            radius: 6,
                             width: 104,
                             height: 65,
                             src: element.linkCard!.card!.live!.cover,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
                           ),
                           Expanded(
                             child: Column(
@@ -470,10 +476,12 @@ class OpusContent extends StatelessWidget {
                         spacing: 10,
                         children: [
                           NetworkImgLayer(
-                            radius: 6,
                             width: 104,
                             height: 65,
                             src: element.linkCard!.card!.opus!.cover,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
                           ),
                           Expanded(
                             child: Column(
@@ -531,10 +539,12 @@ class OpusContent extends StatelessWidget {
                         spacing: 10,
                         children: [
                           NetworkImgLayer(
-                            radius: 6,
                             width: 104,
                             height: 65,
                             src: element.linkCard!.card!.music!.cover,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
                           ),
                           Expanded(
                             child: Column(
@@ -569,10 +579,12 @@ class OpusContent extends StatelessWidget {
                               spacing: 10,
                               children: [
                                 NetworkImgLayer(
-                                  radius: 6,
                                   width: 104,
                                   height: 65,
                                   src: e.cover,
+                                  borderRadius: const BorderRadius.all(
+                                    Radius.circular(6),
+                                  ),
                                 ),
                                 Expanded(
                                   child: Column(

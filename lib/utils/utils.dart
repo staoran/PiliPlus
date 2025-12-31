@@ -21,6 +21,11 @@ abstract final class Utils {
 
   static const jsonEncoder = JsonEncoder.withIndent('    ');
 
+  static String levelName(
+    Object level, {
+    bool isSeniorMember = false,
+  }) => 'assets/images/lv/lv${isSeniorMember ? '6_s' : level}.png';
+
   static Color index2Color(int index, Color color) => switch (index) {
     0 => const Color(0xFFfdad13),
     1 => const Color(0xFF8aace1),

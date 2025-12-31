@@ -141,7 +141,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
           slivers: img.map((e) {
             return SliverToBoxAdapter(
               child: NetworkImgLayer(
-                radius: 0,
+                type: .emote,
                 src: e.url,
                 width: imgWidth,
                 height: imgWidth * e.aspectRatio,
@@ -168,7 +168,6 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               width: 115,
               height: 153,
               src: item.cover!,
-              semanticsLabel: '封面',
             ),
           ),
         ),

@@ -177,13 +177,11 @@ class CustomGridView extends StatelessWidget {
           context,
         ).colorScheme.onInverseSurface.withValues(alpha: 0.4),
       ),
-      child: Center(
-        child: Image.asset(
-          'assets/images/loading.png',
-          width: imageWidth,
-          height: imageHeight,
-          cacheWidth: imageWidth.cacheSize(context),
-        ),
+      child: Image.asset(
+        'assets/images/loading.png',
+        width: imageWidth,
+        height: imageHeight,
+        cacheWidth: imageWidth.cacheSize(context),
       ),
     );
 
@@ -216,11 +214,11 @@ class CustomGridView extends StatelessWidget {
                       ClipRRect(
                         borderRadius: radius,
                         child: NetworkImgLayer(
-                          radius: 0,
+                          type: .emote,
                           src: item.url,
                           width: imageWidth,
                           height: imageHeight,
-                          isLongPic: item.isLongPic,
+                          alignment: item.isLongPic ? .topCenter : .center,
                           forceUseCacheWidth: item.width <= item.height,
                           getPlaceHolder: () => placeHolder,
                         ),

@@ -227,8 +227,12 @@ class ReplyItemGrpc extends StatelessWidget {
                         ),
                       ),
                       Image.asset(
-                        'assets/images/lv/lv${replyItem.member.isSeniorMember == 1 ? '6_s' : replyItem.member.level}.png',
+                        Utils.levelName(
+                          replyItem.member.level,
+                          isSeniorMember: replyItem.member.isSeniorMember == 1,
+                        ),
                         height: 11,
+                        cacheHeight: 11.cacheSize(context),
                       ),
                       if (replyItem.mid == upMid)
                         const PBadge(

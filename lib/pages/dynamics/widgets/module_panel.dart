@@ -224,10 +224,12 @@ Widget module(
               spacing: 10,
               children: [
                 NetworkImgLayer(
-                  radius: 8,
                   width: 45,
                   height: 45,
                   src: music.cover,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(8),
+                  ),
                 ),
                 Expanded(
                   child: Column(
