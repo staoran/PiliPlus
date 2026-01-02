@@ -5,7 +5,6 @@ import 'dart:ui';
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
-import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/interactiveviewer_gallery/hero_dialog_route.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
@@ -1280,16 +1279,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ),
       if (!videoDetailController.isFileSource)
         PopupMenuItem(
-          onTap: () async {
-            final confirmed = await showConfirmDialog(
-              context: context,
-              title: '确认缓存视频？',
-              content: '将把此视频加入离线下载队列。',
-            );
-            if (confirmed && mounted) {
-              videoDetailController.onDownload(this.context);
-            }
-          },
+          onTap: () => videoDetailController.onDownload(this.context),
           child: const Text('缓存视频'),
         ),
       if (videoDetailController.cover.value.isNotEmpty)
