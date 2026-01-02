@@ -4,6 +4,7 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/fav_order_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/data.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/media.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
@@ -212,7 +213,7 @@ class FavDetailController
   }
 
   /// 批量缓存当前选中的收藏夹条目
-  Future<void> batchDownloadSelected() async {
+  Future<void> batchDownloadSelected({VideoQuality? quality}) async {
     final selected = allChecked.toList();
     if (selected.isEmpty) {
       SmartDialog.showToast('未选择条目');
@@ -238,6 +239,7 @@ class FavDetailController
           cover: item.cover,
           ownerId: item.upper?.mid,
           ownerName: item.upper?.name,
+          quality: quality,
         );
       } catch (_) {}
     }

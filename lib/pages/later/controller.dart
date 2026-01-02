@@ -4,6 +4,7 @@ import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models_new/later/data.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart'
@@ -330,7 +331,7 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
   }
 
   /// 批量缓存当前选中的 "稍后再看" 条目
-  Future<void> batchDownloadSelected() async {
+  Future<void> batchDownloadSelected({VideoQuality? quality}) async {
     final selected = allChecked.toList();
     if (selected.isEmpty) {
       SmartDialog.showToast('未选择条目');
@@ -356,6 +357,7 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
           cover: item.pic,
           ownerId: item.owner?.mid,
           ownerName: item.owner?.name,
+          quality: quality,
         );
       } catch (_) {}
     }

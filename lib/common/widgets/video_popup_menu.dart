@@ -1,7 +1,7 @@
-import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_video.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
@@ -13,6 +13,7 @@ import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -72,40 +73,7 @@ class VideoPopupMenu extends StatelessWidget {
                         _VideoCustomAction(
                           '离线缓存',
                           const Icon(MdiIcons.folderDownloadOutline, size: 16),
-                          () async {
-                            final confirmed = await showConfirmDialog(
-                              context: context,
-                              title: '确认缓存该视频？',
-                              content: '将把此视频加入离线下载队列。',
-                            );
-                            if (!confirmed) {
-                              return;
-                            }
-                            try {
-                              SmartDialog.showLoading(msg: '任务创建中');
-                              if (videoItem.duration <= 0) {
-                                SmartDialog.showToast('视频时长错误');
-                                return;
-                              }
-                              SmartDialog.dismiss();
-                              Get.find<DownloadService>().downloadByIdentifiers(
-                                cid: videoItem.cid!,
-                                bvid: videoItem.bvid!,
-                                totalTimeMilli: videoItem.duration * 1000,
-                                aid: videoItem is BaseVideoItemModel
-                                    ? (videoItem as BaseVideoItemModel).aid
-                                    : null,
-                                title: videoItem.title,
-                                cover: videoItem.cover,
-                                ownerId: videoItem.owner.mid,
-                                ownerName: videoItem.owner.name,
-                              );
-                              SmartDialog.showToast('已加入下载队列');
-                            } catch (e) {
-                              SmartDialog.dismiss();
-                              SmartDialog.showToast(e.toString());
-                            }
-                          },
+                          () => _showDownloadDialog(context),
                         ),
                       if (videoItem.cid != null && Pref.enableAi)
                         _VideoCustomAction(
@@ -440,5 +408,127 @@ class VideoPopupMenu extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showDownloadDialog(BuildContext context) async {
+    VideoQuality quality = VideoQuality.fromCode(Pref.defaultVideoQa);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final theme = Theme.of(context);
+          final textStyle = TextStyle(
+            color: theme.colorScheme.onSurfaceVariant,
+          );
+
+          return AlertDialog(
+            title: const Text('确认缓存该视频？'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('将把此视频加入离线下载队列。'),
+                const SizedBox(height: 16),
+                Row(
+                  spacing: 16,
+                  children: [
+                    Text('最高画质', style: textStyle),
+                    PopupMenuButton<VideoQuality>(
+                      initialValue: quality,
+                      onSelected: (value) {
+                        setState(() => quality = value);
+                      },
+                      itemBuilder: (context) => VideoQuality.values
+                          .map(
+                            (e) => PopupMenuItem(
+                              value: e,
+                              child: Text(e.desc),
+                            ),
+                          )
+                          .toList(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              quality.desc,
+                              style: const TextStyle(height: 1),
+                              strutStyle: const StrutStyle(
+                                height: 1,
+                                leading: 0,
+                              ),
+                            ),
+                            Icon(
+                              size: 18,
+                              Icons.keyboard_arrow_down,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                StreamBuilder(
+                  stream: Connectivity().onConnectivityChanged,
+                  builder: (context, snapshot) {
+                    if (snapshot.data case final data?) {
+                      final network = data.contains(ConnectivityResult.wifi)
+                          ? 'WIFI'
+                          : '数据';
+                      return Text('当前网络：$network', style: textStyle);
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('确认'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      SmartDialog.showLoading(msg: '任务创建中');
+      if (videoItem.duration <= 0) {
+        SmartDialog.showToast('视频时长错误');
+        return;
+      }
+      SmartDialog.dismiss();
+      Get.find<DownloadService>().downloadByIdentifiers(
+        cid: videoItem.cid!,
+        bvid: videoItem.bvid!,
+        totalTimeMilli: videoItem.duration * 1000,
+        aid: videoItem is BaseVideoItemModel
+            ? (videoItem as BaseVideoItemModel).aid
+            : null,
+        title: videoItem.title,
+        cover: videoItem.cover,
+        ownerId: videoItem.owner.mid,
+        ownerName: videoItem.owner.name,
+        quality: quality,
+      );
+      SmartDialog.showToast('已加入下载队列');
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast(e.toString());
+    }
   }
 }

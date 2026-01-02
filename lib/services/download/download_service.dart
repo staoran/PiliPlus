@@ -303,12 +303,13 @@ class DownloadService extends GetxService {
     String? cover,
     int? ownerId,
     String? ownerName,
+    VideoQuality? quality,
   }) async {
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
       return;
     }
     final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final preferQ = VideoQuality.fromCode(Pref.defaultVideoQa);
+    final preferQ = quality ?? VideoQuality.fromCode(Pref.defaultVideoQa);
     final entry = BiliDownloadEntryInfo(
       mediaType: 2,
       hasDashAudio: true,

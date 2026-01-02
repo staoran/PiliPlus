@@ -1,12 +1,12 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
-import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:PiliPlus/common/widgets/select_mask.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models_new/history/list.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
@@ -16,6 +16,7 @@ import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -194,116 +195,222 @@ class HistoryItem extends StatelessWidget {
                     size: 18,
                   ),
                   position: PopupMenuPosition.under,
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        if (item.authorMid != null &&
-                            item.authorName?.isNotEmpty == true)
-                          PopupMenuItem<String>(
-                            onTap: () =>
-                                Get.toNamed('/member?mid=${item.authorMid}'),
-                            height: 35,
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  MdiIcons.accountCircleOutline,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '访问：${item.authorName}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ],
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    if (item.authorMid != null &&
+                        item.authorName?.isNotEmpty == true)
+                      PopupMenuItem<String>(
+                        onTap: () =>
+                            Get.toNamed('/member?mid=${item.authorMid}'),
+                        height: 35,
+                        child: Row(
+                          children: [
+                            const Icon(
+                              MdiIcons.accountCircleOutline,
+                              size: 16,
                             ),
-                          ),
-                        if (business != 'pgc' &&
-                            item.badge != '番剧' &&
-                            item.tagName?.contains('动画') != true &&
-                            business != 'live' &&
-                            business?.contains('article') != true)
-                          PopupMenuItem<String>(
-                            onTap: () async {
-                              final res = await UserHttp.toViewLater(
-                                bvid: item.history.bvid,
-                              );
-                              SmartDialog.showToast(res['msg']);
-                            },
-                            height: 35,
-                            child: const Row(
-                              children: [
-                                Icon(Icons.watch_later_outlined, size: 16),
-                                SizedBox(width: 6),
-                                Text('稍后再看', style: TextStyle(fontSize: 13)),
-                              ],
+                            const SizedBox(width: 6),
+                            Text(
+                              '访问：${item.authorName}',
+                              style: const TextStyle(fontSize: 13),
                             ),
-                          ),
-                        if (Pref.showMoreDownloadButtons)
-                          PopupMenuItem<String>(
-                            onTap: () async {
-                              final confirmed = await showConfirmDialog(
-                                context: context,
-                                title: '确认缓存该视频？',
-                                content: '将把此视频加入离线下载队列。',
-                              );
-                              if (!confirmed) {
-                                return;
-                              }
-                              try {
-                                SmartDialog.showLoading(msg: '任务创建中');
-                                int? cid = await SearchHttp.ab2c(
-                                  aid: aid,
-                                  bvid: bvid,
-                                  part: item.history.page,
-                                );
-                                SmartDialog.dismiss();
-                                if (cid == null) {
-                                  SmartDialog.showToast('无法解析播放分片 cid');
-                                  return;
-                                }
-                                final int totalTimeMilli =
-                                    (item.duration ?? 0) * 1000;
-                                if (totalTimeMilli <= 0) {
-                                  SmartDialog.showToast('视频时长错误');
-                                  return;
-                                }
-                                Get.find<DownloadService>()
-                                    .downloadByIdentifiers(
-                                      cid: cid,
-                                      bvid: bvid,
-                                      totalTimeMilli: totalTimeMilli,
-                                      aid: aid,
-                                      title: item.title,
-                                      cover: item.cover,
-                                      ownerId: item.authorMid,
-                                      ownerName: item.authorName,
-                                    );
-                                SmartDialog.showToast('已加入下载队列');
-                              } catch (e) {
-                                SmartDialog.dismiss();
-                                SmartDialog.showToast(e.toString());
-                              }
-                            },
-                            height: 35,
-                            child: const Row(
-                              children: [
-                                Icon(MdiIcons.folderDownloadOutline, size: 16),
-                                SizedBox(width: 6),
-                                Text('离线缓存', style: TextStyle(fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                        PopupMenuItem<String>(
-                          onTap: () => onDelete(item.kid!, business!),
-                          height: 35,
-                          child: const Row(
-                            children: [
-                              Icon(Icons.close_outlined, size: 16),
-                              SizedBox(width: 6),
-                              Text('删除记录', style: TextStyle(fontSize: 13)),
-                            ],
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
+                    if (business != 'pgc' &&
+                        item.badge != '番剧' &&
+                        item.tagName?.contains('动画') != true &&
+                        business != 'live' &&
+                        business?.contains('article') != true)
+                      PopupMenuItem<String>(
+                        onTap: () async {
+                          final res = await UserHttp.toViewLater(
+                            bvid: item.history.bvid,
+                          );
+                          SmartDialog.showToast(res['msg']);
+                        },
+                        height: 35,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.watch_later_outlined, size: 16),
+                            SizedBox(width: 6),
+                            Text('稍后再看', style: TextStyle(fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    if (Pref.showMoreDownloadButtons)
+                      PopupMenuItem<String>(
+                        onTap: () async {
+                          VideoQuality? quality = VideoQuality.fromCode(
+                            Pref.defaultVideoQa,
+                          );
+
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (dialogContext) => StatefulBuilder(
+                              builder: (context, setState) {
+                                final theme = Theme.of(context);
+                                final textStyle = TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                );
+
+                                return AlertDialog(
+                                  title: const Text('确认缓存该视频？'),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('将把此视频加入离线下载队列。'),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        spacing: 16,
+                                        children: [
+                                          Text('最高画质', style: textStyle),
+                                          PopupMenuButton<VideoQuality>(
+                                            initialValue: quality,
+                                            onSelected: (value) {
+                                              setState(() => quality = value);
+                                            },
+                                            itemBuilder: (context) =>
+                                                VideoQuality.values
+                                                    .map(
+                                                      (e) => PopupMenuItem(
+                                                        value: e,
+                                                        child: Text(e.desc),
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 3,
+                                                  ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    quality!.desc,
+                                                    style: const TextStyle(
+                                                      height: 1,
+                                                    ),
+                                                    strutStyle:
+                                                        const StrutStyle(
+                                                          height: 1,
+                                                          leading: 0,
+                                                        ),
+                                                  ),
+                                                  Icon(
+                                                    size: 18,
+                                                    Icons.keyboard_arrow_down,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      StreamBuilder(
+                                        stream: Connectivity()
+                                            .onConnectivityChanged,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.data case final data?) {
+                                            final network =
+                                                data.contains(
+                                                  ConnectivityResult.wifi,
+                                                )
+                                                ? 'WIFI'
+                                                : '数据';
+                                            return Text(
+                                              '当前网络：$network',
+                                              style: textStyle,
+                                            );
+                                          }
+                                          return const SizedBox.shrink();
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(
+                                        dialogContext,
+                                      ).pop(false),
+                                      child: const Text('取消'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(dialogContext).pop(true),
+                                      child: const Text('确认'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          );
+
+                          if (confirmed != true) {
+                            return;
+                          }
+                          try {
+                            SmartDialog.showLoading(msg: '任务创建中');
+                            int? cid = await SearchHttp.ab2c(
+                              aid: aid,
+                              bvid: bvid,
+                              part: item.history.page,
+                            );
+                            SmartDialog.dismiss();
+                            if (cid == null) {
+                              SmartDialog.showToast('无法解析播放分片 cid');
+                              return;
+                            }
+                            final int totalTimeMilli =
+                                (item.duration ?? 0) * 1000;
+                            if (totalTimeMilli <= 0) {
+                              SmartDialog.showToast('视频时长错误');
+                              return;
+                            }
+                            Get.find<DownloadService>().downloadByIdentifiers(
+                              cid: cid,
+                              bvid: bvid,
+                              totalTimeMilli: totalTimeMilli,
+                              aid: aid,
+                              title: item.title,
+                              cover: item.cover,
+                              ownerId: item.authorMid,
+                              ownerName: item.authorName,
+                              quality: quality,
+                            );
+                            SmartDialog.showToast('已加入下载队列');
+                          } catch (e) {
+                            SmartDialog.dismiss();
+                            SmartDialog.showToast(e.toString());
+                          }
+                        },
+                        height: 35,
+                        child: const Row(
+                          children: [
+                            Icon(MdiIcons.folderDownloadOutline, size: 16),
+                            SizedBox(width: 6),
+                            Text('离线缓存', style: TextStyle(fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    PopupMenuItem<String>(
+                      onTap: () => onDelete(item.kid!, business!),
+                      height: 35,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.close_outlined, size: 16),
+                          SizedBox(width: 6),
+                          Text('删除记录', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

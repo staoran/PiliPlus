@@ -1,8 +1,8 @@
 import 'package:PiliPlus/common/widgets/appbar/appbar.dart';
-import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models_new/later/data.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
 import 'package:PiliPlus/pages/fav_detail/view.dart';
@@ -13,6 +13,7 @@ import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -209,14 +210,107 @@ class _LaterPageState extends State<LaterPage>
               visualDensity: VisualDensity.compact,
             ),
             onPressed: () async {
-              final confirmed = await showConfirmDialog(
-                context: context,
-                title: '确认缓存选中项？',
-                content: '将把选中的视频加入离线下载队列。',
+              VideoQuality? quality = VideoQuality.fromCode(
+                Pref.defaultVideoQa,
               );
-              if (confirmed) {
+
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => StatefulBuilder(
+                  builder: (context, setState) {
+                    final theme = Theme.of(context);
+                    final textStyle = TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    );
+
+                    return AlertDialog(
+                      title: const Text('确认缓存选中项？'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('将把选中的视频加入离线下载队列。'),
+                          const SizedBox(height: 16),
+                          Row(
+                            spacing: 16,
+                            children: [
+                              Text('最高画质', style: textStyle),
+                              PopupMenuButton<VideoQuality>(
+                                initialValue: quality,
+                                onSelected: (value) {
+                                  setState(() => quality = value);
+                                },
+                                itemBuilder: (context) => VideoQuality.values
+                                    .map(
+                                      (e) => PopupMenuItem(
+                                        value: e,
+                                        child: Text(e.desc),
+                                      ),
+                                    )
+                                    .toList(),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 3,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        quality!.desc,
+                                        style: const TextStyle(height: 1),
+                                        strutStyle: const StrutStyle(
+                                          height: 1,
+                                          leading: 0,
+                                        ),
+                                      ),
+                                      Icon(
+                                        size: 18,
+                                        Icons.keyboard_arrow_down,
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          StreamBuilder(
+                            stream: Connectivity().onConnectivityChanged,
+                            builder: (context, snapshot) {
+                              if (snapshot.data case final data?) {
+                                final network =
+                                    data.contains(ConnectivityResult.wifi)
+                                    ? 'WIFI'
+                                    : '数据';
+                                return Text('当前网络：$network', style: textStyle);
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('取消'),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
+                          child: const Text('确认'),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              );
+
+              if (confirmed == true) {
                 final ctr = currCtr();
-                await ctr.batchDownloadSelected();
+                await ctr.batchDownloadSelected(quality: quality);
               }
             },
             child: Text(
