@@ -1575,9 +1575,7 @@ class VideoDetailController extends GetxController
         } catch (_) {}
       }
 
-      if (localEntry == null) {
-        localEntry = await _findLocalCompletedEntryByCid(cid.value);
-      }
+      localEntry ??= await _findLocalCompletedEntryByCid(cid.value);
     }
     // 保存找到的本地缓存条目，以便从其他页面返回时能继续使用
     currentLocalEntry = localEntry;
@@ -1680,7 +1678,16 @@ class VideoDetailController extends GetxController
       final curHighestVideoQa = videoList.first.quality.code;
       // 预设的画质为null，则当前可用的最高质量
       int targetVideoQa = curHighestVideoQa;
-      if (data.acceptQuality?.isNotEmpty == true &&
+
+      // 如果使用本地缓存播放，优先使用缓存的清晰度
+      if (localEntry != null) {
+        targetVideoQa = localEntry.preferedVideoQuality;
+        if (kDebugMode) {
+          debugPrint(
+            '使用本地缓存播放，清晰度: ${VideoQuality.fromCode(targetVideoQa).desc}',
+          );
+        }
+      } else if (data.acceptQuality?.isNotEmpty == true &&
           plPlayerController.cacheVideoQa! <= curHighestVideoQa) {
         // 如果预设的画质低于当前最高
         targetVideoQa = data.acceptQuality!.findClosestTarget(
