@@ -385,6 +385,26 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       // 退出播放时清理媒体服务
       videoPlayerServiceHandler?.clear(force: true);
     }
+
+    // 明确删除所有控制器，确保资源被正确释放
+    if (videoDetailController.showReply) {
+      Get.delete<VideoReplyController>(tag: heroTag);
+    }
+
+    // 删除介绍控制器
+    if (!videoDetailController.isFileSource) {
+      if (videoDetailController.isUgc) {
+        Get.delete<UgcIntroController>(tag: heroTag);
+      } else {
+        Get.delete<PgcIntroController>(tag: heroTag);
+      }
+    } else {
+      Get.delete<LocalIntroController>(tag: heroTag);
+    }
+
+    // 最后删除主控制器
+    Get.delete<VideoDetailController>(tag: heroTag);
+
     super.dispose();
   }
 
@@ -445,8 +465,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     introController
       ..startTimer()
-
-    // 恢复媒体通知列表控制模式（从听视频页返回时需要）
+      // 恢复媒体通知列表控制模式（从听视频页返回时需要）
       ..restoreListControlMode();
 
     if (mounted &&
@@ -731,29 +750,29 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                                           ),
                                           if (!PlayerWindowService
                                               .isPlayerWindow)
-                                          SizedBox(
-                                            width: 42,
-                                            height: 34,
-                                            child: IconButton(
-                                              tooltip: '返回主页',
-                                              icon: Icon(
-                                                FontAwesomeIcons.house,
-                                                size: 15,
-                                                color: themeData
-                                                    .colorScheme
-                                                    .onSurface,
+                                            SizedBox(
+                                              width: 42,
+                                              height: 34,
+                                              child: IconButton(
+                                                tooltip: '返回主页',
+                                                icon: Icon(
+                                                  FontAwesomeIcons.house,
+                                                  size: 15,
+                                                  color: themeData
+                                                      .colorScheme
+                                                      .onSurface,
+                                                ),
+                                                onPressed: () {
+                                                  videoDetailController
+                                                      .plPlayerController
+                                                    ..isCloseAll = true
+                                                    ..dispose();
+                                                  Get.until(
+                                                    (route) => route.isFirst,
+                                                  );
+                                                },
                                               ),
-                                              onPressed: () {
-                                                videoDetailController
-                                                    .plPlayerController
-                                                  ..isCloseAll = true
-                                                  ..dispose();
-                                                Get.until(
-                                                  (route) => route.isFirst,
-                                                );
-                                              },
                                             ),
-                                          ),
                                         ],
                                       ),
                                     ),
