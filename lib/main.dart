@@ -36,7 +36,6 @@ import 'package:PiliPlus/window/player_entry.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flex_seed_scheme/flex_seed_scheme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
@@ -371,7 +370,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final dynamicColor = Pref.dynamicColor && _light != null && _dark != null;
     late final brandColor = colorThemeTypes[Pref.customColor].color;
-    late final variant = FlexSchemeVariant.values[Pref.schemeVariant];
+    late final variant = Pref.schemeVariant;
     return GetMaterialApp(
       title: Constants.appName,
       theme: ThemeUtils.getThemeData(
@@ -400,7 +399,7 @@ class MyApp extends StatelessWidget {
       getPages: Routes.getPages,
       defaultTransition: Pref.pageTransition,
       builder: FlutterSmartDialog.init(
-        toastBuilder: (String msg) => CustomToast(msg: msg),
+        toastBuilder: (msg) => CustomToast(msg: msg),
         loadingBuilder: (msg) => LoadingWidget(msg: msg),
         builder: (context, child) {
           // Register channel handler once to accept openInMain requests from player window
@@ -454,12 +453,40 @@ class MyApp extends StatelessWidget {
               _playerChannelInited = true;
             } catch (_) {}
           }
-          child = MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(Pref.defaultTextScale),
-            ),
-            child: child!,
-          );
+          final uiScale = Pref.uiScale;
+          final mediaQuery = MediaQuery.of(context);
+          final textScaler = TextScaler.linear(Pref.defaultTextScale);
+          if (uiScale != 1.0) {
+            // Apply full UI scaling for desktop
+            final actualSize = mediaQuery.size;
+            final scaledSize = actualSize / uiScale;
+            child = MediaQuery(
+              data: mediaQuery.copyWith(
+                // Tell child the logical size it should layout to
+                size: scaledSize,
+                textScaler: textScaler,
+                padding: mediaQuery.padding / uiScale,
+                viewPadding: mediaQuery.viewPadding / uiScale,
+                viewInsets: mediaQuery.viewInsets / uiScale,
+              ),
+              // Use OverflowBox to let child layout to scaledSize,
+              // then FittedBox scales it to fit actualSize
+              child: FittedBox(
+                fit: BoxFit.fill,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: scaledSize.width,
+                  height: scaledSize.height,
+                  child: child,
+                ),
+              ),
+            );
+          } else {
+            child = MediaQuery(
+              data: mediaQuery.copyWith(textScaler: textScaler),
+              child: child!,
+            );
+          }
           if (PlatformUtils.isDesktop) {
             return Focus(
               canRequestFocus: false,
@@ -526,7 +553,7 @@ class MyApp extends StatelessWidget {
         if (kDebugMode) {
           debugPrint('dynamic_color: Accent color detected.');
         }
-        final variant = FlexSchemeVariant.values[Pref.schemeVariant];
+        final variant = Pref.schemeVariant;
         _light = accentColor.asColorSchemeSeed(variant, .light);
         _dark = accentColor.asColorSchemeSeed(variant, .dark);
         return true;

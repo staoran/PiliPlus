@@ -147,7 +147,9 @@ abstract final class SettingBoxKey {
       enableTapDm = 'enableTapDm',
       setSystemBrightness = 'setSystemBrightness',
       downloadPath = 'downloadPath',
-      followOrderType = 'followOrderType';
+      followOrderType = 'followOrderType',
+      enableImgMenu = 'enableImgMenu',
+      showDynDispute = 'showDynDispute';
 
   static const String minimizeOnExit = 'minimizeOnExit',
       windowSize = 'windowSize',
@@ -156,6 +158,7 @@ abstract final class SettingBoxKey {
       showWindowTitleBar = 'showWindowTitleBar',
       desktopVolume = 'desktopVolume',
       showTrayIcon = 'showTrayIcon',
+      uiScale = 'uiScale',
       usePlayerWindow = 'usePlayerWindow',
       playerWindowSize = 'playerWindowSize',
       playerWindowPosition = 'playerWindowPosition',

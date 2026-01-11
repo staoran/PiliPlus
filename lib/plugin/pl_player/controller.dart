@@ -19,7 +19,6 @@ import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/double_tap_type.dart';
@@ -410,8 +409,7 @@ class PlPlayerController {
   late final bool enableHA = Pref.enableHA;
   late final String hwdec = Pref.hardwareDecoding;
 
-  late final progressType =
-      BtmProgressBehavior.values[Pref.btmProgressBehavior];
+  late final progressType = Pref.btmProgressBehavior;
   late final enableQuickDouble = Pref.enableQuickDouble;
   late final fullScreenGestureReverse = Pref.fullScreenGestureReverse;
 
@@ -424,7 +422,7 @@ class PlPlayerController {
       isRelative ? duration.value.inMilliseconds * offset : offset;
 
   // 播放顺序相关
-  late PlayRepeat playRepeat = PlayRepeat.values[Pref.playRepeat];
+  late PlayRepeat playRepeat = Pref.playRepeat;
 
   TextStyle get subTitleStyle => TextStyle(
     height: 1.5,
@@ -507,13 +505,13 @@ class PlPlayerController {
     return _instance != null;
   }
 
-  static void setPlayCallBack(Function? playCallBack) {
+  static void setPlayCallBack(VoidCallback? playCallBack) {
     _playCallBack = playCallBack;
   }
 
-  static Function? _playCallBack;
+  static VoidCallback? _playCallBack;
 
-  static void playIfExists({bool repeat = false, bool hideControls = true}) {
+  static void playIfExists() {
     // await _instance?.play(repeat: repeat, hideControls: hideControls);
     _playCallBack?.call();
   }
@@ -1584,7 +1582,7 @@ class PlPlayerController {
   }
 
   late bool isManualFS = true;
-  late final FullScreenMode mode = FullScreenMode.values[Pref.fullScreenMode];
+  late final FullScreenMode mode = Pref.fullScreenMode;
   late final horizontalScreen = Pref.horizontalScreen;
 
   // 全屏

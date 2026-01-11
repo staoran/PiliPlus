@@ -170,7 +170,7 @@ class ItemModulesModel {
   ModuleBlocked? moduleBlocked;
   ModuleFold? moduleFold;
 
-  static bool showArgueMsg = Pref.showArgueMsg;
+  static bool showDynDispute = Pref.showDynDispute;
   static bool showDynInteraction = Pref.showDynInteraction;
 
   ItemModulesModel.fromJson(Map<String, dynamic> json) {
@@ -194,7 +194,7 @@ class ItemModulesModel {
           ? ModuleInteraction.fromJson(json['module_interaction'])
           : null;
     }
-    if (showArgueMsg) {
+    if (showDynDispute) {
       moduleDispute = json['module_dispute'] != null
           ? ModuleDispute.fromJson(json['module_dispute'])
           : null;

@@ -249,7 +249,7 @@ class DynamicPanel extends StatelessWidget {
   Widget _buildDispute(ThemeData theme, ModuleDispute moduleDispute) {
     final child = Container(
       width: .infinity,
-      margin: const .fromLTRB(12, 0, 12, 6),
+      margin: const .fromLTRB(12, 2, 12, 6),
       padding: const .symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: theme.colorScheme.secondaryContainer.withValues(

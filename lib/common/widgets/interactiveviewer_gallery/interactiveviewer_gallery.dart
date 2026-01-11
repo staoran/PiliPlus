@@ -11,6 +11,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -336,6 +337,9 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
             imageUrl: _getActualUrl(item.url),
             placeholderFadeInDuration: Duration.zero,
             placeholder: (context, url) {
+              if (widget.quality == _quality) {
+                return const SizedBox.expand();
+              }
               return CachedNetworkImage(
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
@@ -408,6 +412,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
   }
 
   void onLongPress(SourceModel item) {
+    HapticFeedback.mediumImpact();
     showDialog(
       context: context,
       builder: (context) {
@@ -489,7 +494,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
   void _showDesktopMenu(Offset offset, SourceModel item) {
     showMenu(
       context: context,
-      position: RelativeRect.fromLTRB(offset.dx, offset.dy, offset.dx, 0),
+      position: PageUtils.menuPosition(offset),
       items: [
         PopupMenuItem(
           height: 42,

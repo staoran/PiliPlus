@@ -441,7 +441,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   @override
   // 返回当前页面时
-  Future<void> didPopNext() async {
+  void didPopNext() {
     if (videoDetailController.imageview) {
       videoDetailController.imageview = false;
       return;
@@ -484,23 +484,27 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ScreenBrightnessPlatform.instance.resetApplicationScreenBrightness();
       }
     }
-    super.didPopNext();
-    if (videoDetailController.autoPlay.value) {
-      await videoDetailController.playerInit(
-        autoplay: videoDetailController.playerStatus == PlayerStatus.playing,
-        localEntry: videoDetailController.currentLocalEntry,
-      );
-    } else if (videoDetailController.plPlayerController.preInitPlayer &&
-        !videoDetailController.isQuerying &&
-        videoDetailController.videoState.value is! Error) {
-      await videoDetailController.playerInit(
-        localEntry: videoDetailController.currentLocalEntry,
-      );
-    }
 
-    plPlayerController
-      ?..addStatusLister(playerListener)
-      ..addPositionListener(positionListener);
+    () async {
+      if (videoDetailController.autoPlay.value) {
+        await videoDetailController.playerInit(
+          autoplay: videoDetailController.playerStatus == PlayerStatus.playing,
+        localEntry: videoDetailController.currentLocalEntry,
+        );
+      } else if (videoDetailController.plPlayerController.preInitPlayer &&
+          !videoDetailController.isQuerying &&
+          videoDetailController.videoState.value is! Error) {
+        await videoDetailController.playerInit(
+        localEntry: videoDetailController.currentLocalEntry,
+      );
+      }
+
+      plPlayerController
+        ?..addStatusLister(playerListener)
+        ..addPositionListener(positionListener);
+    }();
+
+    super.didPopNext();
   }
 
   @override

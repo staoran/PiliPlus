@@ -426,12 +426,18 @@ List<SettingsModel> get extraSettings => [
       );
     },
   ),
-  SwitchModel(
+  const SwitchModel(
     title: '显示视频警告/争议信息',
-    leading: const Icon(Icons.warning_amber_rounded),
+    leading: Icon(Icons.warning_amber_rounded),
     setKey: SettingBoxKey.showArgueMsg,
     defaultVal: true,
-    onChanged: (val) => ItemModulesModel.showArgueMsg = val,
+  ),
+  SwitchModel(
+    title: '显示动态警告/争议信息',
+    leading: const Icon(Icons.warning_amber_rounded),
+    setKey: SettingBoxKey.showDynDispute,
+    defaultVal: false,
+    onChanged: (val) => ItemModulesModel.showDynDispute = val,
   ),
   const SwitchModel(
     title: '分P/合集：倒序播放从首集开始播放',
@@ -768,6 +774,13 @@ List<SettingsModel> get extraSettings => [
     onChanged: (value) => ImageUtils.silentDownImg = value,
   ),
   SwitchModel(
+    title: '长按/右键显示图片菜单',
+    leading: const Icon(Icons.menu),
+    setKey: SettingBoxKey.enableImgMenu,
+    defaultVal: false,
+    onChanged: (value) => CustomGridView.enableImgMenu = value,
+  ),
+  SwitchModel(
     setKey: SettingBoxKey.feedBackEnable,
     onChanged: (value) {
       enableFeedback = value;
@@ -950,23 +963,20 @@ List<SettingsModel> get extraSettings => [
   NormalModel(
     title: '评论展示',
     leading: const Icon(Icons.whatshot_outlined),
-    getSubtitle: () =>
-        '当前优先展示「${ReplySortType.values[Pref.replySortType].title}」',
+    getSubtitle: () => '当前优先展示「${Pref.replySortType.title}」',
     onTap: (context, setState) async {
-      final result = await showDialog<int>(
+      final result = await showDialog<ReplySortType>(
         context: context,
         builder: (context) {
-          return SelectDialog<int>(
+          return SelectDialog<ReplySortType>(
             title: '评论展示',
             value: Pref.replySortType,
-            values: ReplySortType.values
-                .map((e) => (e.index, e.title))
-                .toList(),
+            values: ReplySortType.values.map((e) => (e, e.title)).toList(),
           );
         },
       );
       if (result != null) {
-        await GStorage.setting.put(SettingBoxKey.replySortType, result);
+        await GStorage.setting.put(SettingBoxKey.replySortType, result.index);
         setState();
       }
     },
@@ -974,24 +984,26 @@ List<SettingsModel> get extraSettings => [
   NormalModel(
     title: '动态展示',
     leading: const Icon(Icons.dynamic_feed_rounded),
-    getSubtitle: () =>
-        '当前优先展示「${DynamicsTabType.values[Pref.defaultDynamicType].label}」',
+    getSubtitle: () => '当前优先展示「${Pref.defaultDynamicType.label}」',
     onTap: (context, setState) async {
-      final result = await showDialog<int>(
+      final result = await showDialog<DynamicsTabType>(
         context: context,
         builder: (context) {
-          return SelectDialog<int>(
+          return SelectDialog<DynamicsTabType>(
             title: '动态展示',
             value: Pref.defaultDynamicType,
             values: DynamicsTabType.values
                 .take(4)
-                .map((e) => (e.index, e.label))
+                .map((e) => (e, e.label))
                 .toList(),
           );
         },
       );
       if (result != null) {
-        await GStorage.setting.put(SettingBoxKey.defaultDynamicType, result);
+        await GStorage.setting.put(
+          SettingBoxKey.defaultDynamicType,
+          result.index,
+        );
         setState();
       }
     },

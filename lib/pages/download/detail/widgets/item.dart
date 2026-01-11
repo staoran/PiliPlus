@@ -173,7 +173,7 @@ class DetailItem extends StatelessWidget {
             final curDownload = downloadService.curDownload.value;
             if (curDownload != null &&
                 curDownload.cid == cid &&
-                curDownload.status!.index <= 3) {
+                curDownload.status.isDownloading) {
               downloadService.cancelDownload(
                 isDelete: false,
                 downloadNext: false,
@@ -380,7 +380,7 @@ class DetailItem extends StatelessWidget {
                                           ? theme.colorScheme.primary
                                           : theme.colorScheme.outline;
                                       return progressWidget(
-                                        statusMsg: status!.message,
+                                        statusMsg: status.message,
                                         progressStr:
                                             status ==
                                                     DownloadStatus
@@ -413,7 +413,7 @@ class DetailItem extends StatelessWidget {
   }
 
   Widget entryProgress(ThemeData theme) => progressWidget(
-    statusMsg: entry.status?.message ?? '暂停中',
+    statusMsg: entry.status.message,
     progressStr: entry.totalBytes == 0
         ? ''
         : '${CacheManager.formatSize(entry.downloadedBytes)}/${CacheManager.formatSize(entry.totalBytes)}',

@@ -587,7 +587,7 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgTypePic_2(content) {
+  Widget msgTypePic_2(Map content) {
     final url = content['url'];
     return GestureDetector(
       onTap: () => PageUtils.imageView(imgList: [SourceModel(url: url)]),

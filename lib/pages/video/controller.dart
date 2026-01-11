@@ -1991,8 +1991,7 @@ class VideoDetailController extends GetxController
       if (response.subtitle?.subtitles?.isNotEmpty == true) {
         subtitles.value = response.subtitle!.subtitles!;
 
-        final idx = switch (SubtitlePrefType.values[Pref
-            .subtitlePreferenceV2]) {
+        final idx = switch (Pref.subtitlePreferenceV2) {
           SubtitlePrefType.off => 0,
           SubtitlePrefType.on => 1,
           SubtitlePrefType.withoutAi =>
@@ -2570,34 +2569,39 @@ class VideoDetailController extends GetxController
       final index = episodes.indexWhere(
         (e) => e.cid == (seasonCid ?? cid.value),
       );
-      final size = ContextExtensions(context).mediaQuerySize;
-      final maxChildSize = PlatformUtils.isMobile && !size.isPortrait
-          ? 1.0
-          : 0.7;
+
       showModalBottomSheet(
         context: context,
         useSafeArea: true,
         isScrollControlled: true,
-        constraints: BoxConstraints(maxWidth: min(640, size.shortestSide)),
-        builder: (context) => DraggableScrollableSheet(
-          snap: true,
-          expand: false,
-          minChildSize: 0,
-          snapSizes: [maxChildSize],
-          maxChildSize: maxChildSize,
-          initialChildSize: maxChildSize,
-          builder: (context, scrollController) => DownloadPanel(
-            index: index,
-            videoDetail: videoDetail,
-            pgcItem: pgcItem,
-            episodes: episodes!,
-            scrollController: scrollController,
-            videoDetailController: this,
-            heroTag: heroTag,
-            ugcIntroController: ugcIntroController,
-            cidSet: cidSet,
-          ),
+        constraints: BoxConstraints(
+          maxWidth: min(640, context.mediaQueryShortestSide),
         ),
+        builder: (context) {
+          final maxChildSize =
+              PlatformUtils.isMobile && !context.mediaQuerySize.isPortrait
+              ? 1.0
+              : 0.7;
+          return DraggableScrollableSheet(
+            snap: true,
+            expand: false,
+            minChildSize: 0,
+            snapSizes: [maxChildSize],
+            maxChildSize: maxChildSize,
+            initialChildSize: maxChildSize,
+            builder: (context, scrollController) => DownloadPanel(
+              index: index,
+              videoDetail: videoDetail,
+              pgcItem: pgcItem,
+              episodes: episodes!,
+              scrollController: scrollController,
+              videoDetailController: this,
+              heroTag: heroTag,
+              ugcIntroController: ugcIntroController,
+              cidSet: cidSet,
+            ),
+          );
+        },
       );
     }
   }

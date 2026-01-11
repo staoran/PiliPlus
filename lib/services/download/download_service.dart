@@ -367,11 +367,10 @@ class DownloadService extends GetxService {
     // 只有当前没有任务在下载时才开始新任务
     // 检查 curDownload 是否为 null，或者状态是否表示下载已结束（>3）
     // 同时确保这是队列中的第一个任务，避免跳过队列
-    final currStatus = curDownload.value?.status?.index;
     final isFirstInQueue =
         waitDownloadQueue.isNotEmpty &&
         waitDownloadQueue.first.cid == entry.cid;
-    if (isFirstInQueue && (currStatus == null || currStatus > 3)) {
+    if (isFirstInQueue && curDownload.value?.status.isDownloading != true) {
       startDownload(entry);
     }
   }
@@ -409,9 +408,10 @@ class DownloadService extends GetxService {
       await _audioDownloadManager?.cancel(isDelete: false);
       _downloadManager = null;
       _audioDownloadManager = null;
-      final prevStatus = curDownload.value?.status?.index;
-      if (prevStatus != null && prevStatus <= 3) {
-        curDownload.value?.status = DownloadStatus.pause;
+      if (curDownload.value case final curEntry?) {
+        if (curEntry.status.isDownloading) {
+          curEntry.status = DownloadStatus.pause;
+        }
       }
 
       _curCid = entry.cid;
@@ -498,13 +498,12 @@ class DownloadService extends GetxService {
 
       _updateCurStatus(DownloadStatus.getPlayUrl);
 
-      final BiliDownloadMediaInfo mediaFileInfo =
-          await DownloadHttp.getVideoUrl(
-            entry: entry,
-            ep: entry.ep,
-            source: entry.source,
-            pageData: entry.pageData,
-          );
+      final mediaFileInfo = await DownloadHttp.getVideoUrl(
+        entry: entry,
+        ep: entry.ep,
+        source: entry.source,
+        pageData: entry.pageData,
+      );
 
       final videoDir = Directory(path.join(entry.entryDirPath, entry.typeTag));
       if (!videoDir.existsSync()) {
