@@ -247,15 +247,15 @@ class _VideoCardHState extends State<VideoCardH> {
           if (_isInWatchLater) {
             // 取消稍后再看
             var res = await UserHttp.toViewDel(aids: videoItem.aid.toString());
-            SmartDialog.showToast(res['msg']);
-            if (res['status'] == true) {
+            res.toast();
+            if (res.isSuccess) {
               setState(() => _isInWatchLater = false);
             }
           } else {
             // 添加稍后再看
             var res = await UserHttp.toViewLater(bvid: videoItem.bvid);
-            SmartDialog.showToast(res['msg']);
-            if (res['status'] == true) {
+            res.toast();
+            if (res.isSuccess) {
               setState(() => _isInWatchLater = true);
             }
           }

@@ -152,7 +152,7 @@ abstract final class MsgHttp {
     }
   }
 
-  static Future uploadImage({
+  static Future<LoadingState<Map>> uploadImage({
     required dynamic path,
     required String bucket,
     required String dir,
@@ -167,15 +167,9 @@ abstract final class MsgHttp {
       }),
     );
     if (res.data['code'] == 0) {
-      return {
-        'status': true,
-        'data': res.data['data'],
-      };
+      return Success(res.data['data']);
     } else {
-      return {
-        'status': false,
-        'msg': res.data['message'],
-      };
+      return Error(res.data['message']);
     }
   }
 

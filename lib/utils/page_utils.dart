@@ -48,10 +48,7 @@ abstract final class PageUtils {
       RouteObserver<PageRoute>();
 
   static RelativeRect menuPosition(Offset offset) {
-    final uiScale = Pref.uiScale;
-    final dx = offset.dx / uiScale;
-    final dy = offset.dy / uiScale;
-    return .fromLTRB(dx, dy, dx, 0);
+    return .fromLTRB(offset.dx, offset.dy, offset.dx, 0);
   }
 
   static Future<void> imageView({

@@ -211,7 +211,7 @@ class ChatItem extends StatelessWidget {
             },
             child: NetworkImgLayer(
               width: 220,
-              height: 220 * 9 / 16,
+              height: 123.75,
               src: content['cover'],
             ),
           ),
@@ -259,7 +259,7 @@ class ChatItem extends StatelessWidget {
               for (final i in content['image_urls'])
                 NetworkImgLayer(
                   width: 130,
-                  height: 130 * 9 / 16,
+                  height: 73.125,
                   src: i,
                 ),
             ],
@@ -348,7 +348,7 @@ class ChatItem extends StatelessWidget {
                   children: [
                     NetworkImgLayer(
                       width: 130,
-                      height: 130 * 9 / 16,
+                      height: 73.125,
                       src: i['cover_url'],
                     ),
                     Expanded(
@@ -544,7 +544,7 @@ class ChatItem extends StatelessWidget {
           onTap: onTap,
           child: NetworkImgLayer(
             width: 220,
-            height: 220 * 9 / 16,
+            height: 123.75,
             src: content['thumb'],
           ),
         ),

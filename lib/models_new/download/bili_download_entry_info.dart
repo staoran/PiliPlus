@@ -36,7 +36,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
 
   late String pageDirPath;
   late String entryDirPath;
-  DownloadStatus status = .wait;
+  late DownloadStatus status = .wait;
 
   int get cid => source?.cid ?? pageData!.cid;
 

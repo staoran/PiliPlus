@@ -327,9 +327,9 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
       child: Hero(
         tag: item.url,
         child: switch (item.sourceType) {
-          SourceType.fileImage => Image(
+          SourceType.fileImage => Image.file(
+            File(item.url),
             filterQuality: FilterQuality.low,
-            image: FileImage(File(item.url)),
           ),
           SourceType.networkImage => CachedNetworkImage(
             fadeInDuration: Duration.zero,

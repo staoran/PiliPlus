@@ -664,10 +664,8 @@ abstract final class Pref {
   static double get defaultTextScale =>
       _setting.get(SettingBoxKey.defaultTextScale, defaultValue: 1.0);
 
-  static double uiScale = _setting.get(
-    SettingBoxKey.uiScale,
-    defaultValue: 1.0,
-  );
+  static double get uiScale =>
+      _setting.get(SettingBoxKey.uiScale, defaultValue: 1.0);
 
   static bool get dynamicsWaterfallFlow =>
       _setting.get(SettingBoxKey.dynamicsWaterfallFlow, defaultValue: true);
@@ -803,7 +801,7 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.expandBuffer, defaultValue: false);
 
   static bool get useOpenSLES =>
-      _setting.get(SettingBoxKey.useOpenSLES, defaultValue: true);
+      _setting.get(SettingBoxKey.useOpenSLES, defaultValue: false);
 
   static bool get enableAi =>
       _setting.get(SettingBoxKey.enableAi, defaultValue: false);

@@ -128,7 +128,7 @@ abstract final class ImageUtils {
               },
             );
         if (success) {
-          SmartDialog.showToast(' Live Photo 已保存 ');
+          SmartDialog.showToast(' 已保存 ');
         } else {
           SmartDialog.showToast('保存失败');
           return false;
@@ -198,6 +198,7 @@ abstract final class ImageUtils {
         }
       });
       final result = await Future.wait(futures, eagerError: true);
+      bool success = true;
       if (PlatformUtils.isMobile) {
         final delList = <String>[];
         final saveList = <SaveFileData>[];
@@ -211,6 +212,8 @@ abstract final class ImageUtils {
                 androidRelativePath: _androidRelativePath,
               ),
             );
+          } else {
+            success = false;
           }
         }
         await SaverGallery.saveFiles(saveList, skipIfExists: false);
@@ -225,6 +228,8 @@ abstract final class ImageUtils {
               fileName: res.name,
               del: res.del,
             );
+          } else {
+            success = false;
           }
         }
       }
@@ -232,9 +237,9 @@ abstract final class ImageUtils {
         SmartDialog.showToast('已取消下载');
         return false;
       } else {
-        SmartDialog.showToast('图片已保存');
+        SmartDialog.showToast(success ? ' 已保存 ' : '保存失败');
       }
-      return true;
+      return success;
     } catch (e) {
       if (cancelToken?.isCancelled == true) {
         SmartDialog.showToast('已取消下载');

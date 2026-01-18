@@ -19,19 +19,20 @@ import 'package:PiliPlus/utils/app_sign.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class UserHttp {
-  static Future<dynamic> userStat({required int mid}) async {
-    final res = await Request().get(
-      Api.userStat,
-      queryParameters: {'vmid': mid},
-    );
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {'status': false};
-    }
-  }
+  // static Future<dynamic> userStat({required int mid}) async {
+  //   final res = await Request().get(
+  //     Api.userStat,
+  //     queryParameters: {'vmid': mid},
+  //   );
+  //   if (res.data['code'] == 0) {
+  //     return {'status': true, 'data': res.data['data']};
+  //   } else {
+  //     return {'status': false};
+  //   }
+  // }
 
   static Future<LoadingState<UserInfoData>> userInfo() async {
     final res = await Request().get(Api.userInfo);
@@ -164,7 +165,7 @@ abstract final class UserHttp {
   }
 
   // 稍后再看
-  static Future toViewLater({
+  static Future<LoadingState<Null>> toViewLater({
     String? bvid,
     Object? aid,
   }) async {
@@ -179,14 +180,16 @@ abstract final class UserHttp {
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'msg': 'yeah！稍后再看'};
+      SmartDialog.showToast('yeah！稍后再看');
+      return const Success(null);
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      SmartDialog.showToast(res.data['message'].toString());
+      return const Error(null);
     }
   }
 
   // 移除已观看
-  static Future toViewDel({required String aids}) async {
+  static Future<LoadingState<Null>> toViewDel({required String aids}) async {
     final Map<String, dynamic> params = {
       'csrf': Accounts.main.csrf,
       'resources': aids,
@@ -197,9 +200,11 @@ abstract final class UserHttp {
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'msg': 'yeah！成功移除'};
+      SmartDialog.showToast('yeah！成功移除');
+      return const Success(null);
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      SmartDialog.showToast(res.data['message'].toString());
+      return const Error(null);
     }
   }
 
@@ -264,7 +269,7 @@ abstract final class UserHttp {
     }
   }
 
-  static Future hasFollow(int mid) async {
+  static Future<LoadingState<Map>> hasFollow(int mid) async {
     final res = await Request().get(
       Api.relation,
       queryParameters: {
@@ -272,9 +277,9 @@ abstract final class UserHttp {
       },
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
+      return Success(res.data['data']);
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      return Error(res.data['message']);
     }
   }
 

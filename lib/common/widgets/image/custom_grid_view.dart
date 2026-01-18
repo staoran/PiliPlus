@@ -281,7 +281,7 @@ class CustomGridView extends StatelessWidget {
                           width: imageWidth,
                           height: imageHeight,
                           alignment: item.isLongPic ? .topCenter : .center,
-                          forceUseCacheWidth: item.width <= item.height,
+                          cacheWidth: item.width <= item.height,
                           getPlaceHolder: () => placeHolder,
                         ),
                       ),

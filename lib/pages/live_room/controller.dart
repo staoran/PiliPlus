@@ -331,15 +331,11 @@ class LiveRoomController extends GetxController {
 
   @pragma('vm:notify-debugger-on-exception')
   Future<void> prefetch() async {
-    final res = await LiveHttp.liveRoomDanmaPrefetch(roomId: roomId);
-    if (res['status']) {
-      if (res['data'] case List list) {
-        try {
-          messages.addAll(
-            list.cast<Map<String, dynamic>>().map(DanmakuMsg.fromPrefetch),
-          );
-          scrollToBottom();
-        } catch (_) {}
+    final res = await LiveHttp.liveRoomDmPrefetch(roomId: roomId);
+    if (res case Success(:final response)) {
+      if (response != null && response.isNotEmpty) {
+        messages.addAll(response);
+        scrollToBottom();
       }
     }
   }

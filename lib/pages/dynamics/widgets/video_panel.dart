@@ -9,7 +9,6 @@ import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 Widget videoSeasonWidget(
   BuildContext context, {
@@ -228,16 +227,16 @@ class _VideoSeasonWidgetState extends State<_VideoSeasonWidget> {
             // 取消稍后再看
             if (aid != null) {
               var res = await UserHttp.toViewDel(aids: aid.toString());
-              SmartDialog.showToast(res['msg']);
-              if (res['status'] == true) {
+              res.toast();
+              if (res.isSuccess) {
                 setState(() => _isInWatchLater = false);
               }
             }
           } else {
             // 添加稍后再看
             var res = await UserHttp.toViewLater(bvid: bvid);
-            SmartDialog.showToast(res['msg']);
-            if (res['status'] == true) {
+            res.toast();
+            if (res.isSuccess) {
               setState(() => _isInWatchLater = true);
             }
           }

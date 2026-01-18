@@ -609,10 +609,9 @@ class VideoDetailController extends GetxController
                   final res = await UserHttp.toViewDel(
                     aids: item.aid.toString(),
                   );
-                  if (res['status']) {
+                  if (res.isSuccess) {
                     mediaList.removeAt(index);
                   }
-                  SmartDialog.showToast(res['msg']);
                 } else {
                   final res = await FavHttp.favVideo(
                     resources: '${item.aid}:${item.type}',

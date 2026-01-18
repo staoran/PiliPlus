@@ -410,6 +410,8 @@ class ModuleAuthorModel extends Avatar {
   int? pubTs;
   String? type;
   Decorate? decorate;
+  bool? isTop;
+  String? badgeText;
 
   ModuleAuthorModel.fromJson(Map<String, dynamic> json) : super.fromJson(json) {
     if (json['official'] != null) {
@@ -426,6 +428,8 @@ class ModuleAuthorModel extends Avatar {
     } else {
       pendant = null;
     }
+    isTop = json['is_top'];
+    badgeText = _parseString(json['icon_badge']?['text']);
   }
 }
 
@@ -1186,12 +1190,23 @@ class DynamicNoneModel {
   }
 }
 
-class OpusPicModel {
+sealed class PicModel {}
+
+class FilePicModel extends PicModel {
+  String path;
+
+  FilePicModel({
+    required this.path,
+  });
+}
+
+class OpusPicModel extends PicModel {
   OpusPicModel({
     this.width,
     this.height,
     this.src,
     this.url,
+    this.size,
   });
 
   int? width;
@@ -1199,6 +1214,7 @@ class OpusPicModel {
   String? src;
   String? url;
   String? liveUrl;
+  num? size;
 
   OpusPicModel.fromJson(Map<String, dynamic> json) {
     width = Utils.safeToInt(json['width']);
@@ -1206,7 +1222,15 @@ class OpusPicModel {
     src = json['src'];
     url = json['url'];
     liveUrl = json['live_url'];
+    size = json['size'];
   }
+
+  Map<String, dynamic> toJson() => {
+    'img_width': width,
+    'img_height': height,
+    'img_size': size,
+    'img_src': url,
+  };
 }
 
 class DynamicLiveModel {
@@ -1269,7 +1293,7 @@ class ModuleTag {
   String? text;
 
   ModuleTag.fromJson(Map<String, dynamic> json) {
-    text = json['text'];
+    text = _parseString(json['text']);
   }
 }
 

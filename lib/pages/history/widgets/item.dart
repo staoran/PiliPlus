@@ -221,12 +221,8 @@ class HistoryItem extends StatelessWidget {
                         business != 'live' &&
                         business?.contains('article') != true)
                       PopupMenuItem<String>(
-                        onTap: () async {
-                          final res = await UserHttp.toViewLater(
-                            bvid: item.history.bvid,
-                          );
-                          SmartDialog.showToast(res['msg']);
-                        },
+                        onTap: () =>
+                            UserHttp.toViewLater(bvid: item.history.bvid),
                         height: 38,
                         child: const Row(
                           children: [

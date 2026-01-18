@@ -328,6 +328,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     } else {
       await videoDetailController.playerInit(autoplay: true);
     }
+    if (!mounted || !isShowing) return;
     plPlayerController!
       ..addStatusLister(playerListener)
       ..addPositionListener(positionListener);
@@ -409,7 +410,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   @override
   // 离开当前页面时
-  Future<void> didPushNext() async {
+  void didPushNext() {
     if (Get.routing.route is HeroDialogRoute) {
       videoDetailController.imageview = true;
       return;
@@ -498,7 +499,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         localEntry: videoDetailController.currentLocalEntry,
       );
       }
-
+      if (!mounted || !isShowing) return;
       plPlayerController
         ?..addStatusLister(playerListener)
         ..addPositionListener(positionListener);
@@ -1576,7 +1577,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       src: videoDetailController.cover.value,
                       width: width,
                       height: height,
-                      forceUseCacheWidth: true,
+                      cacheWidth: true,
                       getPlaceHolder: () => Center(
                         child: Image.asset('assets/images/loading.png'),
                       ),

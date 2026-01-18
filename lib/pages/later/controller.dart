@@ -80,7 +80,7 @@ mixin BaseLaterController
                     final res = await UserHttp.toViewDel(
                       aids: removeList.map((item) => item.aid).join(','),
                     );
-                    if (res['status']) {
+                    if (res.isSuccess) {
                       // 如果勾选了删除缓存，删除所有有离线缓存的视频
                       if (deleteCache && Get.isRegistered<DownloadService>()) {
                         final downloadService = Get.find<DownloadService>();
@@ -109,13 +109,13 @@ mixin BaseLaterController
                         }
                       } else {
                         SmartDialog.dismiss();
-                        SmartDialog.showToast(res['msg']);
+                        res.toast();
                       }
                       updateCount?.call(removeList.length);
                       afterDelete(removeList);
                     } else {
                       SmartDialog.dismiss();
-                      SmartDialog.showToast(res['msg']);
+                      res.toast();
                     }
                   },
                   child: const Text('确认删除'),
@@ -180,7 +180,7 @@ mixin BaseLaterController
                   onPressed: () async {
                     Get.back();
                     final res = await UserHttp.toViewDel(aids: aid.toString());
-                    if (res['status']) {
+                    if (res.isSuccess) {
                       // 如果勾选了删除缓存，同时删除离线缓存
                       if (deleteCache &&
                           item.cid != null &&
@@ -203,7 +203,7 @@ mixin BaseLaterController
                       updateCount?.call(1);
                     }
                     if (!deleteCache || !hasCache) {
-                      SmartDialog.showToast(res['msg']);
+                      res.toast();
                     }
                   },
                   child: const Text('确认移除'),
