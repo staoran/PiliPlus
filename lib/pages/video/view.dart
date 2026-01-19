@@ -17,6 +17,7 @@ import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/models_new/video/video_detail/ugc_season.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
+import 'package:PiliPlus/pages/audio/controller.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/danmaku/view.dart';
 import 'package:PiliPlus/pages/episode_panel/view.dart';
@@ -53,6 +54,7 @@ import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -468,6 +470,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       // 恢复媒体通知列表控制模式（从听视频页返回时需要）
       ..restoreListControlMode();
 
+    // 同步听视频返回时的状态
+    _syncAudioPageState();
+
     if (mounted &&
         Platform.isAndroid &&
         !videoDetailController.setSystemBrightness) {
@@ -506,6 +511,60 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }();
 
     super.didPopNext();
+  }
+
+  /// 同步听视频页面的状态
+  void _syncAudioPageState() {
+    try {
+      // 检查是否有 AudioController 实例
+      if (!Get.isRegistered<AudioController>(tag: heroTag)) {
+        return;
+      }
+
+      final audioController = Get.find<AudioController>(tag: heroTag);
+
+      // 如果听视频切换了视频，需要同步到视频页
+      final audioOid = audioController.oid;
+      final currentBvid = IdUtils.av2bv(audioOid.toInt());
+
+      if (currentBvid != videoDetailController.bvid) {
+        if (kDebugMode) {
+          debugPrint(
+            '🔄 从听视频返回，检测到视频切换: $currentBvid (当前: ${videoDetailController.bvid})',
+          );
+        }
+
+        // 触发视频切换
+        if (videoDetailController.isUgc) {
+          // 从播放列表中找到对应的视频并切换
+          final targetIndex = videoDetailController.mediaList.indexWhere(
+            (item) => item.bvid == currentBvid,
+          );
+          if (targetIndex != -1) {
+            final targetItem = videoDetailController.mediaList[targetIndex];
+            // 触发切换逻辑
+            ugcIntroController.onChangeEpisode(targetItem);
+          }
+        }
+      } else {
+        // 同一个视频，只需同步进度
+        final audioPosition = audioController.position.value;
+        if (audioPosition > Duration.zero) {
+          videoDetailController.playedTime = audioPosition;
+          videoDetailController.defaultST = audioPosition;
+
+          if (kDebugMode) {
+            debugPrint(
+              '🔄 从听视频返回，同步进度: ${audioPosition.inSeconds}s',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('同步听视频状态失败: $e');
+      }
+    }
   }
 
   @override
