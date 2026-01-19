@@ -28,6 +28,37 @@ mixin BaseLaterController
         DeleteItemMixin<LaterData, LaterItemModel> {
   ValueChanged<int>? updateCount;
 
+  /// 检查列表中的视频是否有离线缓存
+  Future<void> checkOfflineCache() async {
+    if (!Get.isRegistered<DownloadService>()) return;
+
+    final downloadService = Get.find<DownloadService>();
+    // 等待 DownloadService 初始化完成
+    await downloadService.waitForInitialization;
+
+    // 检查当前列表中的每个视频是否有离线缓存
+    if (loadingState.value case Success(:final response)) {
+      if (response != null) {
+        bool hasChanges = false;
+        for (var item in response) {
+          if (item.cid != null) {
+            final hasCache = downloadService.downloadList.any(
+              (e) => e.cid == item.cid,
+            );
+            if (item.hasOfflineCache != hasCache) {
+              item.hasOfflineCache = hasCache;
+              hasChanges = true;
+            }
+          }
+        }
+        // 如果有变化，刷新UI
+        if (hasChanges) {
+          loadingState.refresh();
+        }
+      }
+    }
+  }
+
   @override
   void onRemove() {
     final removeList = allChecked.toSet();
@@ -248,20 +279,18 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
   }
 
   @override
+  Future<void> queryData([bool isRefresh = true]) async {
+    await super.queryData(isRefresh);
+    // 数据加载完成后，检查离线缓存状态
+    await checkOfflineCache();
+  }
+
+  @override
   List<LaterItemModel>? getDataList(response) {
     baseCtr.counts[laterViewType.index] = response.count ?? 0;
     final list = response.list;
-    // 检查每个视频是否有离线缓存
-    if (list != null && Get.isRegistered<DownloadService>()) {
-      final downloadService = Get.find<DownloadService>();
-      for (var item in list) {
-        if (item.cid != null) {
-          item.hasOfflineCache = downloadService.downloadList.any(
-            (e) => e.cid == item.cid,
-          );
-        }
-      }
-    }
+    // 注意：这里不立即检查缓存，因为 DownloadService 可能还在初始化
+    // 缓存检查将在 checkOfflineCache 中异步执行
     return list;
   }
 
