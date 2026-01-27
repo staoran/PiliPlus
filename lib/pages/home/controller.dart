@@ -20,11 +20,10 @@ class HomeController extends GetxController
   late TabController tabController;
 
 
-  RxBool? searchBar;
+  RxBool? showSearchBar;
   // 搜索栏滚动比例，1.0 = 完全显示，0.0 = 完全隐藏
   final RxDouble searchBarRatio = 1.0.obs;
-  final bool hideSearchBar = Pref.hideSearchBar;
-  final bool useSideBar = Pref.useSideBar;
+  final bool hideSearchBar = Pref.hideTopBar;
 
   bool enableSearchWord = Pref.enableSearchWord;
   late final RxString defaultSearch = ''.obs;
@@ -46,8 +45,8 @@ class HomeController extends GetxController
   void onInit() {
     super.onInit();
 
-    if (Pref.hideSearchBar) {
-      searchBar = true.obs;
+    if (!Pref.useSideBar && Pref.hideTopBar) {
+      showSearchBar = true.obs;
     }
 
     if (enableSearchWord) {

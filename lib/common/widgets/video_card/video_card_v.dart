@@ -150,8 +150,9 @@ class _VideoCardVState extends State<VideoCardV> {
           Positioned(
             right: -5,
             bottom: -2,
+            width: 29,
+            height: 29,
             child: VideoPopupMenu(
-              size: 29,
               iconSize: 17,
               videoItem: videoItem,
               onRemove: onRemove,

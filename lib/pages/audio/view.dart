@@ -3,6 +3,7 @@ import 'dart:math' show min;
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
@@ -25,7 +26,6 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart' hide DraggableScrollableSheet;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
@@ -771,16 +771,8 @@ class _AudioPageState extends State<AudioPage> {
           return Positioned(
             left: 0,
             right: 12, // thumbRadius * 2
-            child: IgnorePointer(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  key: const Key('audioSegmentList'),
-                  size: const Size(double.infinity, 3.5),
-                  painter: SegmentProgressBar(
-                    segmentColors: _controller.segmentProgressList,
-                  ),
-                ),
-              ),
+            child: SegmentProgressBar(
+              segments: _controller.segmentProgressList,
             ),
           );
         }),
@@ -898,6 +890,7 @@ class _AudioPageState extends State<AudioPage> {
                             src: cover,
                             width: 170,
                             height: 170,
+                            cacheWidth: false,
                           ),
                         ),
                       ),
@@ -955,7 +948,7 @@ class _AudioPageState extends State<AudioPage> {
                               TextSpan(
                                 text: audioItem.arc.displayedOid,
                                 style: TextStyle(color: colorScheme.secondary),
-                                recognizer: TapGestureRecognizer()
+                                recognizer: NoDeadlineTapGestureRecognizer()
                                   ..onTap = () => Utils.copyText(
                                     audioItem.arc.displayedOid,
                                   ),

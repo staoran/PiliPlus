@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:PiliPlus/build_config.dart';
 import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/widgets/back_detector.dart';
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
-import 'package:PiliPlus/common/widgets/mouse_back.dart';
 import 'package:PiliPlus/common/widgets/scale_app.dart';
+import 'package:PiliPlus/common/widgets/scroll_behavior.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
@@ -38,7 +38,6 @@ import 'package:catcher_2/catcher_2.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
@@ -53,9 +52,47 @@ import 'package:window_manager/window_manager.dart' hide calcWindowPosition;
 
 WebViewEnvironment? webViewEnvironment;
 
+Future<void> _initDownPath() async {
+  if (PlatformUtils.isDesktop) {
+    final customDownPath = Pref.downloadPath;
+    if (customDownPath != null && customDownPath.isNotEmpty) {
+      try {
+        final dir = Directory(customDownPath);
+        if (!dir.existsSync()) {
+          await dir.create(recursive: true);
+        }
+        downloadPath = customDownPath;
+      } catch (e) {
+        downloadPath = defDownloadPath;
+        await GStorage.setting.delete(SettingBoxKey.downloadPath);
+        if (kDebugMode) {
+          debugPrint('download path error: $e');
+        }
+      }
+    } else {
+      downloadPath = defDownloadPath;
+    }
+  } else if (Platform.isAndroid) {
+    final externalStorageDirPath = (await getExternalStorageDirectory())?.path;
+    downloadPath = externalStorageDirPath != null
+        ? path.join(externalStorageDirPath, PathUtils.downloadDir)
+        : defDownloadPath;
+  } else {
+    downloadPath = defDownloadPath;
+  }
+}
+
+Future<void> _initTmpPath() async {
+  tmpDirPath = (await getTemporaryDirectory()).path;
+}
+
+Future<void> _initAppPath() async {
+  appSupportDirPath = (await getApplicationSupportDirectory()).path;
+}
+
 void main() async {
   ScaledWidgetsFlutterBinding.ensureInitialized();
-  // Determine if this engine was launched for a sub-window (player)
+    // Determine if this engine was launched for a sub-window (player)
   String? startupWindowType;
   Map<String, dynamic>? windowArgs;
   try {
@@ -66,8 +103,7 @@ void main() async {
         final parsed = jsonDecode(raw) as Map<String, dynamic>?;
         // Check for 'businessId' (our format) or 'type' (legacy)
         startupWindowType =
-            parsed?['businessId'] as String? ??
-                           parsed?['type'] as String?;
+            parsed?['businessId'] as String? ?? parsed?['type'] as String?;
         windowArgs = parsed;
       } catch (_) {}
     }
@@ -139,8 +175,7 @@ void main() async {
   }
 
   MediaKit.ensureInitialized();
-  tmpDirPath = (await getTemporaryDirectory()).path;
-  appSupportDirPath = (await getApplicationSupportDirectory()).path;
+  await _initAppPath();
   try {
     await GStorage.init();
   } catch (e) {
@@ -149,34 +184,7 @@ void main() async {
     exit(0);
   }
   ScaledWidgetsFlutterBinding.instance.setScaleFactor(Pref.uiScale);
-
-  if (PlatformUtils.isDesktop) {
-    final customDownPath = Pref.downloadPath;
-    if (customDownPath != null && customDownPath.isNotEmpty) {
-      try {
-        final dir = Directory(customDownPath);
-        if (!dir.existsSync()) {
-          await dir.create(recursive: true);
-        }
-        downloadPath = customDownPath;
-      } catch (e) {
-        downloadPath = defDownloadPath;
-        await GStorage.setting.delete(SettingBoxKey.downloadPath);
-        if (kDebugMode) {
-          debugPrint('download path error: $e');
-        }
-      }
-    } else {
-      downloadPath = defDownloadPath;
-    }
-  } else if (Platform.isAndroid) {
-    final externalStorageDirPath = (await getExternalStorageDirectory())?.path;
-    downloadPath = externalStorageDirPath != null
-        ? path.join(externalStorageDirPath, PathUtils.downloadDir)
-        : defDownloadPath;
-  } else {
-    downloadPath = defDownloadPath;
-  }
+  await Future.wait([_initDownPath(), _initTmpPath()]);
   Get
     ..lazyPut(AccountService.new)
     ..lazyPut(DownloadService.new);
@@ -197,9 +205,7 @@ void main() async {
       ),
       setupServiceLocator(),
     ]);
-  }
-
-  if (Platform.isWindows) {
+  } else if (Platform.isWindows) {
     if (await WebViewEnvironment.getAvailableVersion() != null) {
       webViewEnvironment = await WebViewEnvironment.create(
         settings: WebViewEnvironmentSettings(
@@ -339,33 +345,18 @@ class MyApp extends StatelessWidget {
       return;
     }
 
-    if (Get.routing.route is! GetPageRoute) {
-      Get.back();
-      return;
-    }
-
-    final plCtr = PlPlayerController.instance;
-    if (plCtr != null) {
-      if (plCtr.isFullScreen.value) {
-        plCtr
-          ..triggerFullScreen(status: false)
-          ..controlsLock.value = false
-          ..showControls.value = false;
-        return;
-      }
-
-      if (plCtr.isDesktopPip) {
-        plCtr
-          ..exitDesktopPip().whenComplete(
-            () => plCtr.initialFocalPoint = Offset.zero,
-          )
-          ..controlsLock.value = false
-          ..showControls.value = false;
+    final route = Get.routing.route;
+    if (route is GetPageRoute) {
+      if (route.popDisposition == .doNotPop) {
+        route.onPopInvokedWithResult(false, null);
         return;
       }
     }
 
-    Get.back();
+    final navigator = Get.key.currentState;
+    if (navigator?.canPop() ?? false) {
+      navigator!.pop();
+    }
   }
 
   @override
@@ -403,7 +394,19 @@ class MyApp extends StatelessWidget {
       builder: FlutterSmartDialog.init(
         toastBuilder: (msg) => CustomToast(msg: msg),
         loadingBuilder: (msg) => LoadingWidget(msg: msg),
-        builder: (context, child) {
+        builder: _builder,
+      ),
+      navigatorObservers: [
+        PageUtils.routeObserver,
+        FlutterSmartDialog.observer,
+      ],
+      scrollBehavior: PlatformUtils.isDesktop
+          ? const CustomScrollBehavior(desktopDragDevices)
+          : null,
+    );
+  }
+
+  static Widget _builder(BuildContext context, Widget? child) {
           // Register channel handler once to accept openInMain requests from player window
           // Only on desktop platforms where multi-window is supported
           if (!_playerChannelInited && PlatformUtils.isDesktop) {
@@ -455,63 +458,34 @@ class MyApp extends StatelessWidget {
               _playerChannelInited = true;
             } catch (_) {}
           }
-          final uiScale = Pref.uiScale;
-          final mediaQuery = MediaQuery.of(context);
-          final textScaler = TextScaler.linear(Pref.defaultTextScale);
-          if (uiScale != 1.0) {
-            child = MediaQuery(
-              data: mediaQuery.copyWith(
-                textScaler: textScaler,
-                size: mediaQuery.size / uiScale,
-                padding: mediaQuery.padding / uiScale,
-                viewInsets: mediaQuery.viewInsets / uiScale,
-                viewPadding: mediaQuery.viewPadding / uiScale,
-                devicePixelRatio: mediaQuery.devicePixelRatio * uiScale,
-              ),
-              child: child!,
-            );
-          } else {
-            child = MediaQuery(
-              data: mediaQuery.copyWith(textScaler: textScaler),
-              child: child!,
-            );
-          }
-          if (PlatformUtils.isDesktop) {
-            return Focus(
-              canRequestFocus: false,
-              onKeyEvent: (_, event) {
-                if (event.logicalKey == LogicalKeyboardKey.escape &&
-                    event is KeyDownEvent) {
-                  _onBack();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: MouseBackDetector(
-                onTapDown: _onBack,
-                child: child,
-              ),
-            );
-          }
-          return child;
-        },
-      ),
-      navigatorObservers: [
-        PageUtils.routeObserver,
-        FlutterSmartDialog.observer,
-      ],
-      scrollBehavior: const MaterialScrollBehavior().copyWith(
-        scrollbars: false,
-        dragDevices: {
-          PointerDeviceKind.touch,
-          PointerDeviceKind.stylus,
-          PointerDeviceKind.invertedStylus,
-          PointerDeviceKind.trackpad,
-          PointerDeviceKind.unknown,
-          if (PlatformUtils.isDesktop) PointerDeviceKind.mouse,
-        },
-      ),
-    );
+    final uiScale = Pref.uiScale;
+    final mediaQuery = MediaQuery.of(context);
+    final textScaler = TextScaler.linear(Pref.defaultTextScale);
+    if (uiScale != 1.0) {
+      child = MediaQuery(
+        data: mediaQuery.copyWith(
+          textScaler: textScaler,
+          size: mediaQuery.size / uiScale,
+          padding: mediaQuery.padding / uiScale,
+          viewInsets: mediaQuery.viewInsets / uiScale,
+          viewPadding: mediaQuery.viewPadding / uiScale,
+          devicePixelRatio: mediaQuery.devicePixelRatio * uiScale,
+        ),
+        child: child!,
+      );
+    } else {
+      child = MediaQuery(
+        data: mediaQuery.copyWith(textScaler: textScaler),
+        child: child!,
+      );
+    }
+    if (PlatformUtils.isDesktop) {
+      return BackDetector(
+        onBack: _onBack,
+        child: child,
+      );
+    }
+    return child;
   }
 
   /// from [DynamicColorBuilderState.initPlatformState]
@@ -565,9 +539,10 @@ class _CustomHttpOverrides extends HttpOverrides {
 
   @override
   HttpClient createHttpClient(SecurityContext? context) {
-    final client = super.createHttpClient(context)
-      // ..maxConnectionsPerHost = 32
-      ..idleTimeout = const Duration(seconds: 15);
+    final client = super.createHttpClient(context);
+    // ..maxConnectionsPerHost = 32
+    /// The default value is 15 seconds.
+    //   ..idleTimeout = const Duration(seconds: 15);
     if (badCertificateCallback) {
       client.badCertificateCallback = (cert, host, port) => true;
     }
