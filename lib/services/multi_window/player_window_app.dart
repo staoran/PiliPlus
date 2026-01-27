@@ -1,9 +1,8 @@
 import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/widgets/back_detector.dart';
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
-import 'package:PiliPlus/common/widgets/mouse_back.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/multi_window/window_arguments.dart';
@@ -295,23 +294,10 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
                   return;
                 }
 
-                final plCtr = PlPlayerController.instance;
-                if (plCtr != null) {
-                  if (plCtr.isFullScreen.value) {
-                    plCtr
-                      ..triggerFullScreen(status: false)
-                      ..controlsLock.value = false
-                      ..showControls.value = false;
-                    return;
-                  }
-
-                  if (plCtr.isDesktopPip) {
-                    plCtr
-                      ..exitDesktopPip().whenComplete(
-                        () => plCtr.initialFocalPoint = Offset.zero,
-                      )
-                      ..controlsLock.value = false
-                      ..showControls.value = false;
+                final route = Get.routing.route;
+                if (route is GetPageRoute) {
+                  if (route.popDisposition == .doNotPop) {
+                    route.onPopInvokedWithResult(false, null);
                     return;
                   }
                 }
@@ -320,20 +306,9 @@ class _PlayerWindowAppState extends State<PlayerWindowApp> with WindowListener {
                 windowManager.close();
               }
 
-              return Focus(
-                canRequestFocus: false,
-                onKeyEvent: (_, event) {
-                  if (event.logicalKey == LogicalKeyboardKey.escape &&
-                      event is KeyDownEvent) {
-                    onBack();
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: MouseBackDetector(
-                  onTapDown: onBack,
-                  child: child,
-                ),
+              return BackDetector(
+                onBack: onBack,
+                child: child,
               );
             },
           ),

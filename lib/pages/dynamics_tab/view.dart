@@ -110,9 +110,7 @@ class _DynamicsTabPageState
     super.initState();
     // 如果启用阈值且有 upPanelStream，但父类没有添加监听器，则在此添加
     if (enableScrollThreshold &&
-        _upPanelStream != null &&
-        showBottomBar == null &&
-        showSearchBar == null) {
+        _upPanelStream != null) {
       controller.scrollController.addListener(listener);
     }
     if (widget.dynamicsType == DynamicsTabType.up) {
@@ -137,9 +135,7 @@ class _DynamicsTabPageState
   Widget onBuild(Widget child) {
     // 如果未启用阈值且有 upPanelStream，需要添加 NotificationListener
     if (!enableScrollThreshold &&
-        _upPanelStream != null &&
-        showBottomBar == null &&
-        showSearchBar == null) {
+        _upPanelStream != null) {
       return NotificationListener<UserScrollNotification>(
         onNotification: onNotification,
         child: child,

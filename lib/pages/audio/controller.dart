@@ -284,7 +284,8 @@ class AudioController extends GetxController
   Future<bool> _tryPlayLocalIfAvailable() async {
     // 与视频页保持一致：允许通过参数强制本地播放，或全局开关 Pref.enableLocalPlayInOnlineList
     final bool forceLocalPlay = args['forceLocalPlay'] == true;
-    final bool shouldTryLocal = forceLocalPlay || Pref.enableLocalPlayInOnlineList;
+    final bool shouldTryLocal =
+        forceLocalPlay || Pref.enableLocalPlayInOnlineList;
     if (!shouldTryLocal) return false;
 
     final int? targetCid = subId.firstOrNull?.toInt();
@@ -551,14 +552,19 @@ class AudioController extends GetxController
     final durationMs = duration.value.inMilliseconds;
     if (durationMs <= 0) return;
 
-    segmentProgressList..clear()
-    ..addAll(
-      segmentList.map((e) {
-        double start = (e.segment.first / durationMs).clamp(0.0, 1.0);
-        double end = (e.segment.second / durationMs).clamp(0.0, 1.0);
-        return Segment(start, end, _getColor(e.segmentType));
-      }),
-    );
+    segmentProgressList
+      ..clear()
+      ..addAll(
+        segmentList.map((e) {
+          double start = (e.segment.first / durationMs).clamp(0.0, 1.0);
+          double end = (e.segment.second / durationMs).clamp(0.0, 1.0);
+          return Segment(
+            start: start,
+            end: end,
+            color: _getColor(e.segmentType),
+          );
+        }),
+      );
   }
 
   Color _getColor(SegmentType segment) => blockColor[segment.index];
