@@ -120,10 +120,8 @@ class VideoDetailController extends GetxController
   late String watchLaterTitle;
 
   // 视频切换状态追踪：防止切换过程中退出时保存错误的进度
+  // 当视频切换时设为true，播放器初始化完成后设为false
   bool _isSwitchingVideo = false;
-  int? _lastSavedAid;
-  String? _lastSavedBvid;
-  int? _lastSavedCid;
 
   /// tabs相关配置
   late TabController tabCtr;
@@ -2110,11 +2108,8 @@ class VideoDetailController extends GetxController
         );
       }
 
-      // 标记正在切换视频，并保存当前视频信息
+      // 标记正在切换视频，在 playerInit 完成后会重置
       _isSwitchingVideo = true;
-      _lastSavedAid = currentAid;
-      _lastSavedBvid = currentBvid;
-      _lastSavedCid = currentCid;
 
       _updateListProgressSync(
         progressSeconds,
@@ -2318,24 +2313,23 @@ class VideoDetailController extends GetxController
   @override
   void onClose() {
     // 在关闭前保存最后的进度（主窗口和移动端）
-    if (sourceType != SourceType.normal &&
+    // 注意：如果正在切换视频，跳过保存进度，因为：
+    // 1. 旧视频的进度已经在 saveProgressBeforeChange() 中正确保存了
+    // 2. 新视频还在加载中，播放器位置还是旧视频的值，保存会导致错误
+    if (!_isSwitchingVideo &&
+        sourceType != SourceType.normal &&
         plPlayerController.position.value != Duration.zero &&
         data.timeLength != null) {
       final playedTime = plPlayerController.position.value;
-      final progressSeconds = playedTime.inSeconds;
-
-      // 如果正在切换视频，使用切换前保存的视频信息
-      // 防止将旧视频的进度错误地保存到新视频上
-      final currentAid = _isSwitchingVideo ? (_lastSavedAid ?? aid) : aid;
-      final currentBvid = _isSwitchingVideo ? (_lastSavedBvid ?? bvid) : bvid;
-      final currentCid = _isSwitchingVideo
-          ? (_lastSavedCid ?? cid.value)
-          : cid.value;
+      final currentAid = aid;
+      final currentBvid = bvid;
+      final currentCid = cid.value;
       final currentDuration = data.timeLength ?? 0;
+      final progressSeconds = playedTime.inSeconds;
 
       if (kDebugMode) {
         debugPrint(
-          '🚪 窗口关闭，保存最后的进度: bvid=$currentBvid, progress=${progressSeconds}s${_isSwitchingVideo ? ' (切换中，使用已保存的视频ID)' : ''}',
+          '🚪 窗口关闭，保存最后的进度: bvid=$currentBvid, progress=${progressSeconds}s',
         );
       }
 
@@ -2352,6 +2346,8 @@ class VideoDetailController extends GetxController
           debugPrint('关闭时更新进度失败: $e');
         }
       }
+    } else if (_isSwitchingVideo && kDebugMode) {
+      debugPrint('🚪 窗口关闭，正在切换视频中，跳过保存进度（已在切换前保存）');
     }
 
     cancelSkipTimer();
