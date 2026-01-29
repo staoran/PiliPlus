@@ -415,79 +415,77 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
     HapticFeedback.mediumImpact();
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          clipBehavior: Clip.hardEdge,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (PlatformUtils.isMobile)
-                ListTile(
-                  onTap: () {
-                    Get.back();
-                    ImageUtils.onShareImg(item.url);
-                  },
-                  dense: true,
-                  title: const Text('分享', style: TextStyle(fontSize: 14)),
-                ),
+      builder: (context) => AlertDialog(
+        clipBehavior: Clip.hardEdge,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (PlatformUtils.isMobile)
               ListTile(
                 onTap: () {
                   Get.back();
-                  Utils.copyText(item.url);
+                  ImageUtils.onShareImg(item.url);
                 },
                 dense: true,
-                title: const Text('复制链接', style: TextStyle(fontSize: 14)),
+                title: const Text('分享', style: TextStyle(fontSize: 14)),
               ),
+            ListTile(
+              onTap: () {
+                Get.back();
+                Utils.copyText(item.url);
+              },
+              dense: true,
+              title: const Text('复制链接', style: TextStyle(fontSize: 14)),
+            ),
+            ListTile(
+              onTap: () {
+                Get.back();
+                ImageUtils.downloadImg([item.url]);
+              },
+              dense: true,
+              title: const Text('保存图片', style: TextStyle(fontSize: 14)),
+            ),
+            if (PlatformUtils.isDesktop)
               ListTile(
                 onTap: () {
                   Get.back();
-                  ImageUtils.downloadImg([item.url]);
+                  PageUtils.launchURL(item.url);
                 },
                 dense: true,
-                title: const Text('保存图片', style: TextStyle(fontSize: 14)),
+                title: const Text('网页打开', style: TextStyle(fontSize: 14)),
+              )
+            else if (widget.sources.length > 1)
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  ImageUtils.downloadImg(
+                    widget.sources.map((item) => item.url).toList(),
+                  );
+                },
+                dense: true,
+                title: const Text('保存全部图片', style: TextStyle(fontSize: 14)),
               ),
-              if (PlatformUtils.isDesktop)
-                ListTile(
-                  onTap: () {
-                    Get.back();
-                    PageUtils.launchURL(item.url);
-                  },
-                  dense: true,
-                  title: const Text('网页打开', style: TextStyle(fontSize: 14)),
-                )
-              else if (widget.sources.length > 1)
-                ListTile(
-                  onTap: () {
-                    Get.back();
-                    ImageUtils.downloadImg(
-                      widget.sources.map((item) => item.url).toList(),
-                    );
-                  },
-                  dense: true,
-                  title: const Text('保存全部图片', style: TextStyle(fontSize: 14)),
+            if (item.sourceType == SourceType.livePhoto)
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  ImageUtils.downloadLivePhoto(
+                    url: item.url,
+                    liveUrl: item.liveUrl!,
+                    width: item.width!,
+                    height: item.height!,
+                  );
+                },
+                dense: true,
+                title: Text(
+                  '保存${Platform.isIOS ? ' Live Photo' : '视频'}',
+                  style: const TextStyle(fontSize: 14),
                 ),
-              if (item.sourceType == SourceType.livePhoto)
-                ListTile(
-                  onTap: () {
-                    Get.back();
-                    ImageUtils.downloadLivePhoto(
-                      url: item.url,
-                      liveUrl: item.liveUrl!,
-                      width: item.width!,
-                      height: item.height!,
-                    );
-                  },
-                  dense: true,
-                  title: Text(
-                    '保存${Platform.isIOS ? ' Live Photo' : '视频'}',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
+              ),
+          ],
+        ),
+      ),
     );
   }
 

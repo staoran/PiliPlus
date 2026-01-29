@@ -976,17 +976,15 @@ class ReplyItemGrpc extends StatelessWidget {
               Get.back();
               showDialog(
                 context: context,
-                builder: (context) {
-                  return Dialog(
-                    child: Padding(
-                      padding: const .symmetric(horizontal: 20, vertical: 16),
-                      child: SelectableText(
-                        message,
-                        style: const TextStyle(fontSize: 15, height: 1.7),
-                      ),
+                builder: (context) => Dialog(
+                  child: Padding(
+                    padding: const .symmetric(horizontal: 20, vertical: 16),
+                    child: SelectableText(
+                      message,
+                      style: const TextStyle(fontSize: 15, height: 1.7),
                     ),
-                  );
-                },
+                  ),
+                ),
               );
             },
             minLeadingWidth: 0,

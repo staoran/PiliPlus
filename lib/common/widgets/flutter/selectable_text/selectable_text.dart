@@ -4,7 +4,7 @@
 
 import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
 
-import 'package:PiliPlus/common/widgets/flutter/text_intro/text_selection.dart';
+import 'package:PiliPlus/common/widgets/flutter/selectable_text/text_selection.dart';
 import 'package:flutter/cupertino.dart'
     hide TextSelectionGestureDetectorBuilder;
 import 'package:flutter/gestures.dart';

@@ -4,10 +4,13 @@
 
 import 'dart:math' as math;
 
-import 'package:PiliPlus/common/widgets/flutter/text_intro/tap_and_drag.dart';
+import 'package:PiliPlus/common/widgets/flutter/selectable_text/tap_and_drag.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart'
-    hide BaseTapAndDragGestureRecognizer, TapAndHorizontalDragGestureRecognizer;
+    hide
+        BaseTapAndDragGestureRecognizer,
+        TapAndHorizontalDragGestureRecognizer,
+        TapAndPanGestureRecognizer;
 import 'package:flutter/material.dart';
 
 class CustomTextSelectionGestureDetectorBuilder

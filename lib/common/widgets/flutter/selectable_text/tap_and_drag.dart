@@ -1083,3 +1083,42 @@ class TapAndHorizontalDragGestureRecognizer
   @override
   String get debugDescription => 'tap and horizontal drag';
 }
+
+/// {@template flutter.gestures.selectionrecognizers.TapAndPanGestureRecognizer}
+/// Recognizes taps along with both horizontal and vertical movement.
+///
+/// This recognizer will accept a drag on any axis, regardless if it has won the
+/// arena for the primary pointer being tracked.
+///
+/// See also:
+///
+///  * [BaseTapAndDragGestureRecognizer], for the class that provides the main
+///  implementation details of this recognizer.
+///  * [TapAndHorizontalDragGestureRecognizer], for a similar recognizer that
+///  only accepts horizontal drags before it has won the arena for the primary
+///  pointer being tracked.
+///  * [PanGestureRecognizer], for a similar recognizer that only recognizes
+///  movement.
+/// {@endtemplate}
+class TapAndPanGestureRecognizer extends BaseTapAndDragGestureRecognizer {
+  /// Create a gesture recognizer for interactions on a plane.
+  TapAndPanGestureRecognizer({super.debugOwner, super.supportedDevices});
+
+  @override
+  bool _hasSufficientGlobalDistanceToAccept(
+    PointerDeviceKind pointerDeviceKind,
+  ) {
+    return true;
+    // return _globalDistanceMoved.abs() >
+    //     computePanSlop(pointerDeviceKind, gestureSettings);
+  }
+
+  // @override
+  // Offset _getDeltaForDetails(Offset delta) => delta;
+
+  // @override
+  // double? _getPrimaryValueFromOffset(Offset value) => null;
+
+  @override
+  String get debugDescription => 'tap and pan';
+}
