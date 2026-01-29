@@ -67,9 +67,10 @@ extension _ListOrderExt on ListOrder {
 }
 
 class _AudioPageState extends State<AudioPage> {
-  final _controller = Get.put(
+  late final String? _heroTag = Get.arguments?['heroTag'];
+  late final _controller = Get.put(
     AudioController(),
-    tag: Utils.generateRandomString(8),
+    tag: _heroTag ?? Utils.generateRandomString(8),
   );
 
   @override

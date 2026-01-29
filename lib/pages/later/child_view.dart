@@ -91,7 +91,10 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
                                 'desc': _laterController.asc.value,
                                 'isContinuePlaying': index != 0,
                               }
-                            : null,
+                            : {
+                                // 单独点击也传递 sourceType，确保进度可以同步到稍后再看列表
+                                'sourceType': SourceType.watchLater,
+                              },
                       );
                     },
                   );
