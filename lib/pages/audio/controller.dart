@@ -256,9 +256,16 @@ class AudioController extends GetxController
   Future<bool> _queryPlayUrl() async {
     if (_isLocalPlayback) return true;
 
+    // 切换视频时，立即清空旧的空降助手数据，防止 UI 残留
+    _clearSponsorBlockData();
+
     // 尝试使用本地已缓存的离线音频
     final triedLocal = await _tryPlayLocalIfAvailable();
     if (triedLocal) {
+      // 本地播放也需要查询空降助手（如果有网络）
+      if (enableSponsorBlock && isVideo) {
+        _querySponsorBlock();
+      }
       return true;
     }
 
@@ -469,15 +476,21 @@ class AudioController extends GetxController
     player?.seek(Duration.zero).whenComplete(player!.play);
   }
 
-  // 空降助手：查询跳过片段
-  Future<void> _querySponsorBlock() async {
-    if (!isVideo) return; // 只对视频类型生效
-
+  /// 清空空降助手数据（同步执行，确保切换视频时立即清除旧数据）
+  void _clearSponsorBlockData() {
     _sponsorBlockSubscription?.cancel();
     _sponsorBlockSubscription = null;
     _lastPos = -1;
     segmentList.clear();
     segmentProgressList.clear();
+  }
+
+  // 空降助手：查询跳过片段
+  Future<void> _querySponsorBlock() async {
+    if (!isVideo) return; // 只对视频类型生效
+
+    // 清空旧数据（虽然 _queryPlayUrl 中已经调用过，这里保留以防直接调用）
+    _clearSponsorBlockData();
 
     final bvid = IdUtils.av2bv(oid.toInt());
     final cid = (subId.firstOrNull ?? oid).toInt();
