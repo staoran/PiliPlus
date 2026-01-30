@@ -496,6 +496,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   Future<bool> onChangeEpisode(
     BaseEpisodeItem episode, {
     bool isStein = false,
+    bool fromAudioPage = false, // 从听视频页返回时为true，跳过保存进度
   }) async {
     try {
       final String bvid = episode.bvid ?? this.bvid;
@@ -521,11 +522,16 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         }
       }
 
-      videoDetailCtr
-        ..plPlayerController.pause()
+      videoDetailCtr.plPlayerController.pause();
+
+      // 从听视频页返回时，进度已经在听视频切换时保存过了，不需要再保存
+      if (!fromAudioPage) {
         // 切换前先保存当前视频的进度（特别是新窗口模式）
-        ..saveProgressBeforeChange()
-        ..makeHeartBeat()
+        videoDetailCtr.saveProgressBeforeChange();
+        videoDetailCtr.makeHeartBeat();
+      }
+
+      videoDetailCtr
         ..updateMediaListHistory(aid)
         ..onReset(isStein: isStein)
         ..bvid = bvid

@@ -936,7 +936,7 @@ class AudioController extends GetxController
       if (prev >= 0) {
         // 切换前保存当前视频进度
         _saveCurrentProgress();
-        playIndex(prev);
+        playIndex(prev, skipSaveProgress: true);
         return true;
       }
     }
@@ -950,11 +950,12 @@ class AudioController extends GetxController
           final subId = this.subId.firstOrNull;
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
           if (nextIndex != 0 && nextIndex < parts.length) {
+            // 切换前保存当前视频进度（在更新 oid/subId 之前）
+            _saveCurrentProgress();
+
             final nextPart = parts[nextIndex];
             oid = nextPart.oid;
             this.subId = [nextPart.subId];
-            // 切换前保存当前视频进度
-            _saveCurrentProgress();
             _queryPlayUrl().then((res) {
               if (res) {
                 // 保持与 VideoDetailController 的连接，不再设置为 null
@@ -974,7 +975,7 @@ class AudioController extends GetxController
         }
         // 切换前保存当前视频进度
         _saveCurrentProgress();
-        playIndex(next);
+        playIndex(next, skipSaveProgress: true);
         return true;
       }
     }
@@ -1031,10 +1032,16 @@ class AudioController extends GetxController
     }
   }
 
-  void playIndex(int index, {List<Int64>? subId}) {
+  void playIndex(
+    int index, {
+    List<Int64>? subId,
+    bool skipSaveProgress = false,
+  }) {
     if (index == this.index && subId == null) return;
-    // 切换前保存当前视频进度
-    _saveCurrentProgress();
+    // 切换前保存当前视频进度（如果没有在调用方保存过）
+    if (!skipSaveProgress) {
+      _saveCurrentProgress();
+    }
     this.index = index;
     _isLocalPlayback = false;
     final audioItem = playlist![index];
@@ -1054,6 +1061,7 @@ class AudioController extends GetxController
   }
 
   /// 保存当前视频的播放进度到 VideoDetailController
+  /// 使用听视频当前播放的视频信息，而不是 VideoDetailController 的视频信息
   void _saveCurrentProgress() {
     if (_videoDetailController == null) return;
 
@@ -1061,17 +1069,27 @@ class AudioController extends GetxController
       final currentPosition = position.value;
       if (currentPosition == Duration.zero) return;
 
-      // 更新最后播放时间
-      _videoDetailController!.playedTime = currentPosition;
-
-      // 触发心跳以同步进度到列表页
-      _videoDetailController!.makeHeartBeat();
+      // 获取听视频当前播放的视频信息
+      final currentOid = oid.toInt();
+      final currentCid = (subId.firstOrNull ?? oid).toInt();
+      final currentBvid = IdUtils.av2bv(currentOid);
+      final currentDuration = duration.value.inSeconds;
+      final progressSeconds = currentPosition.inSeconds;
 
       if (kDebugMode) {
         debugPrint(
-          '🎵 AudioController: 保存进度 oid=$oid, position=${currentPosition.inSeconds}s',
+          '🎵 AudioController: 保存进度 bvid=$currentBvid, cid=$currentCid, position=${progressSeconds}s',
         );
       }
+
+      // 使用新的公开方法更新指定视频的进度
+      _videoDetailController!.updateProgressForVideo(
+        videoAid: currentOid,
+        videoBvid: currentBvid,
+        videoCid: currentCid,
+        progressSeconds: progressSeconds,
+        videoDuration: currentDuration,
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('AudioController: 保存进度失败: $e');

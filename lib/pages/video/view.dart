@@ -526,6 +526,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       // 如果听视频切换了视频，需要同步到视频页
       final audioOid = audioController.oid;
       final currentBvid = IdUtils.av2bv(audioOid.toInt());
+      final audioPosition = audioController.position.value;
 
       if (currentBvid != videoDetailController.bvid) {
         if (kDebugMode) {
@@ -542,13 +543,19 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           );
           if (targetIndex != -1) {
             final targetItem = videoDetailController.mediaList[targetIndex];
-            // 触发切换逻辑
-            ugcIntroController.onChangeEpisode(targetItem);
+
+            // 设置目标视频的进度
+            if (audioPosition > Duration.zero) {
+              videoDetailController.playedTime = audioPosition;
+              videoDetailController.defaultST = audioPosition;
+            }
+
+            // 触发切换逻辑（注意：不需要再保存旧视频进度，因为听视频切换时已经保存了）
+            ugcIntroController.onChangeEpisode(targetItem, fromAudioPage: true);
           }
         }
       } else {
         // 同一个视频，只需同步进度
-        final audioPosition = audioController.position.value;
         if (audioPosition > Duration.zero) {
           videoDetailController.playedTime = audioPosition;
           videoDetailController.defaultST = audioPosition;

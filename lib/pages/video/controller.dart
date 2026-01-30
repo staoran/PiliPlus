@@ -2143,6 +2143,32 @@ class VideoDetailController extends GetxController
     );
   }
 
+  /// 公开方法：更新指定视频的进度（供 AudioController 调用）
+  /// 用于听视频切换视频时，保存当前播放视频的进度到列表页
+  void updateProgressForVideo({
+    required int videoAid,
+    required String videoBvid,
+    required int videoCid,
+    required int progressSeconds,
+    required int videoDuration,
+  }) {
+    if (sourceType == SourceType.normal) return;
+
+    if (kDebugMode) {
+      debugPrint(
+        '🎵 外部更新视频进度: bvid=$videoBvid, progress=${progressSeconds}s',
+      );
+    }
+
+    _updateListProgressSync(
+      progressSeconds,
+      videoAid,
+      videoBvid,
+      videoCid,
+      videoDuration,
+    );
+  }
+
   /// 同步更新列表进度（本地执行）
   void _updateListProgressSync(
     int progressSeconds,
