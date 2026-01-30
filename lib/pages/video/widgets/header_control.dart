@@ -1827,6 +1827,11 @@ class HeaderControlState extends State<HeaderControl>
     } else {
       title = const Spacer();
     }
+
+    const btnWidth = 40.0;
+    const btnHeight = 34.0;
+    const btnStyle = ButtonStyle(padding: WidgetStatePropertyAll(.zero));
+
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -1842,10 +1847,11 @@ class HeaderControlState extends State<HeaderControl>
           Row(
             children: [
               SizedBox(
-                width: 42,
-                height: 34,
+                width: btnWidth,
+                height: btnHeight,
                 child: IconButton(
                   tooltip: '返回',
+                  style: btnStyle,
                   icon: const Icon(
                     FontAwesomeIcons.arrowLeft,
                     size: 15,
@@ -1874,10 +1880,11 @@ class HeaderControlState extends State<HeaderControl>
                   (!isFullScreen || !isPortrait) &&
                   !PlayerWindowService.isPlayerWindow)
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: IconButton(
                     tooltip: '返回主页',
+                    style: btnStyle,
                     icon: const Icon(
                       FontAwesomeIcons.house,
                       size: 15,
@@ -1898,13 +1905,11 @@ class HeaderControlState extends State<HeaderControl>
                 Obx(() {
                   final isAlwaysOnTop = plPlayerController.isAlwaysOnTop.value;
                   return SizedBox(
-                    width: 42,
-                    height: 34,
+                    width: btnWidth,
+                    height: btnHeight,
                     child: IconButton(
+                      style: btnStyle,
                       tooltip: '${isAlwaysOnTop ? '取消' : ''}置顶',
-                      style: const ButtonStyle(
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
                       onPressed: () =>
                           plPlayerController.setAlwaysOnTop(!isAlwaysOnTop),
                       icon: isAlwaysOnTop
@@ -1925,13 +1930,11 @@ class HeaderControlState extends State<HeaderControl>
                 if (!isFSOrPip) ...[
                   if (videoDetailCtr.isUgc)
                     SizedBox(
-                      width: 42,
-                      height: 34,
+                      width: btnWidth,
+                      height: btnHeight,
                       child: IconButton(
                         tooltip: '听音频',
-                        style: const ButtonStyle(
-                          padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                        ),
+                        style: btnStyle,
                         onPressed: videoDetailCtr.toAudioPage,
                         icon: const Icon(
                           Icons.headphones_outlined,
@@ -1941,13 +1944,11 @@ class HeaderControlState extends State<HeaderControl>
                       ),
                     ),
                   SizedBox(
-                    width: 42,
-                    height: 34,
+                    width: btnWidth,
+                    height: btnHeight,
                     child: IconButton(
                       tooltip: '投屏',
-                      style: const ButtonStyle(
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
+                      style: btnStyle,
                       onPressed: videoDetailCtr.onCast,
                       icon: const Icon(
                         Icons.cast,
@@ -1959,13 +1960,11 @@ class HeaderControlState extends State<HeaderControl>
                 ],
                 if (plPlayerController.enableSponsorBlock)
                   SizedBox(
-                    width: 42,
-                    height: 34,
+                    width: btnWidth,
+                    height: btnHeight,
                     child: IconButton(
                       tooltip: '提交片段',
-                      style: const ButtonStyle(
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
+                      style: btnStyle,
                       onPressed: () => videoDetailCtr.onBlock(context),
                       icon: const Stack(
                         clipBehavior: Clip.none,
@@ -1988,13 +1987,11 @@ class HeaderControlState extends State<HeaderControl>
                 Obx(
                   () => videoDetailCtr.segmentProgressList.isNotEmpty
                       ? SizedBox(
-                          width: 42,
-                          height: 34,
+                          width: btnWidth,
+                          height: btnHeight,
                           child: IconButton(
                             tooltip: '片段信息',
-                            style: const ButtonStyle(
-                              padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                            ),
+                            style: btnStyle,
                             onPressed: () =>
                                 videoDetailCtr.showSBDetail(context),
                             icon: const Icon(
@@ -2008,35 +2005,30 @@ class HeaderControlState extends State<HeaderControl>
                 ),
               ],
               if (isFullScreen || PlatformUtils.isDesktop) ...[
-                if (!videoDetailCtr.isFileSource)
-                  SizedBox(
-                    width: 42,
-                    height: 34,
-                    child: IconButton(
-                      tooltip: '发弹幕',
-                      style: const ButtonStyle(
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
-                      onPressed: videoDetailCtr.showShootDanmakuSheet,
-                      icon: const Icon(
-                        Icons.comment_outlined,
-                        size: 19,
-                        color: Colors.white,
-                      ),
+                SizedBox(
+                  width: btnWidth,
+                  height: btnHeight,
+                  child: IconButton(
+                    tooltip: '发弹幕',
+                    style: btnStyle,
+                    onPressed: videoDetailCtr.showShootDanmakuSheet,
+                    icon: const Icon(
+                      Icons.comment_outlined,
+                      size: 19,
+                      color: Colors.white,
                     ),
                   ),
+                ),
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: Obx(
                     () {
                       final enableShowDanmaku =
                           plPlayerController.enableShowDanmaku.value;
                       return IconButton(
                         tooltip: "${enableShowDanmaku ? '关闭' : '开启'}弹幕",
-                        style: const ButtonStyle(
-                          padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                        ),
+                        style: btnStyle,
                         onPressed: () {
                           final newVal = !enableShowDanmaku;
                           plPlayerController.enableShowDanmaku.value = newVal;
@@ -2063,16 +2055,28 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
               ],
+              SizedBox(
+                width: btnWidth,
+                height: btnHeight,
+                child: IconButton(
+                  tooltip: '弹幕设置',
+                  style: btnStyle,
+                  onPressed: showSetDanmaku,
+                  icon: const Icon(
+                    size: 20,
+                    CustomIcons.dm_settings,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               if (Platform.isAndroid ||
                   (PlatformUtils.isDesktop && !isFullScreen))
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: IconButton(
                     tooltip: '画中画',
-                    style: const ButtonStyle(
-                      padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                    ),
+                    style: btnStyle,
                     onPressed: () async {
                       if (PlatformUtils.isDesktop) {
                         plPlayerController.toggleDesktopPip();
@@ -2166,13 +2170,11 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
               SizedBox(
-                width: 42,
-                height: 34,
+                width: btnWidth,
+                height: btnHeight,
                 child: IconButton(
                   tooltip: "更多设置",
-                  style: const ButtonStyle(
-                    padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                  ),
+                  style: btnStyle,
                   onPressed: showSettingSheet,
                   icon: const Icon(
                     Icons.more_vert_outlined,
@@ -2189,8 +2191,8 @@ class HeaderControlState extends State<HeaderControl>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: Obx(
                     () => ActionItem(
                       expand: false,
@@ -2219,8 +2221,8 @@ class HeaderControlState extends State<HeaderControl>
                 ),
                 if (introController case final UgcIntroController ugc)
                   SizedBox(
-                    width: 42,
-                    height: 34,
+                    width: btnWidth,
+                    height: btnHeight,
                     child: Obx(
                       () => ActionItem(
                         expand: false,
@@ -2238,8 +2240,8 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                   ),
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: Obx(
                     () => ActionItem(
                       expand: false,
@@ -2256,8 +2258,8 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: Obx(
                     () => ActionItem(
                       expand: false,
@@ -2278,8 +2280,8 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
                 SizedBox(
-                  width: 42,
-                  height: 34,
+                  width: btnWidth,
+                  height: btnHeight,
                   child: ActionItem(
                     expand: false,
                     icon: const Icon(
