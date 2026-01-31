@@ -32,6 +32,51 @@ class PlayerWindowService {
   /// 复用「提前初始化播放器」设置
   static bool get preInitPlayerWindow => usePlayerWindow && Pref.preInitPlayer;
 
+  /// 处理播放器窗口相关设置变更
+  /// 当「新窗口播放」或「提前初始化播放器」设置变更时调用
+  void handlePlayerWindowSettingChanged({
+    bool? usePlayerWindow,
+    bool? preInitPlayer,
+  }) {
+    // 获取当前的设置状态（设置已保存，所以直接读取最新值）
+    final currentUsePlayerWindow = Pref.usePlayerWindow;
+    final currentPreInitPlayer = Pref.preInitPlayer;
+
+    // 判断是否需要预创建播放器窗口
+    final shouldPreCreate = currentUsePlayerWindow && currentPreInitPlayer;
+
+    if (shouldPreCreate) {
+      // 需要预创建播放器窗口
+      preCreatePlayerWindow();
+    } else {
+      // 不需要预创建，关闭已存在的预创建窗口
+      _closePreCreatedWindowIfExists();
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[PlayerWindowService] Setting changed: '
+        'usePlayerWindow=$currentUsePlayerWindow, '
+        'preInitPlayer=$currentPreInitPlayer, '
+        'shouldPreCreate=$shouldPreCreate',
+      );
+    }
+  }
+
+  /// 关闭预创建的窗口（如果存在）
+  Future<void> _closePreCreatedWindowIfExists() async {
+    final preCreated = _preCreatedController;
+    if (preCreated != null) {
+      _preCreatedController = null;
+      try {
+        await preCreated.close();
+        if (kDebugMode) {
+          debugPrint('[PlayerWindowService] Closed pre-created window');
+        }
+      } catch (_) {}
+    }
+  }
+
   /// 预创建播放器窗口（隐藏状态，等待使用）
   /// 应在主窗口启动后调用
   Future<void> preCreatePlayerWindow() async {

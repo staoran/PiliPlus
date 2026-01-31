@@ -10,6 +10,7 @@ import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart'
     show allowRotateScreen;
+import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -123,12 +124,18 @@ List<SettingsModel> get playSettings => [
     onTap: _showSubtitleDialog,
   ),
   if (PlatformUtils.isDesktop) ...[
-    const SwitchModel(
+    SwitchModel(
       title: '新窗口播放',
       subtitle: '在独立窗口中打开播放器',
-      leading: Icon(Icons.open_in_new_outlined),
+      leading: const Icon(Icons.open_in_new_outlined),
       setKey: SettingBoxKey.usePlayerWindow,
       defaultVal: false,
+      onChanged: (value) {
+        // 当切换新窗口播放设置时，处理预创建窗口
+        PlayerWindowService.instance.handlePlayerWindowSettingChanged(
+          usePlayerWindow: value,
+        );
+      },
     ),
     SwitchModel(
       title: '最小化时暂停/还原时播放',

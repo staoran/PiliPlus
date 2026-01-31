@@ -28,6 +28,7 @@ import 'package:PiliPlus/pages/setting/widgets/slide_dialog.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
@@ -319,12 +320,18 @@ List<SettingsModel> get extraSettings => [
         '当前:「${Pref.superResolutionType.title}」\n默认设置对番剧生效, 其他视频默认关闭\n超分辨率需要启用硬件解码, 若启用硬件解码后仍然不生效, 尝试切换硬件解码器为 auto-copy',
     onTap: _showSuperResolutionDialog,
   ),
-  const SwitchModel(
+  SwitchModel(
     title: '提前初始化播放器',
     subtitle: '相对减少手动播放加载时间',
-    leading: Icon(Icons.play_circle_outlined),
+    leading: const Icon(Icons.play_circle_outlined),
     setKey: SettingBoxKey.preInitPlayer,
     defaultVal: false,
+    onChanged: (value) {
+      // 当切换提前初始化播放器设置时，处理预创建窗口
+      PlayerWindowService.instance.handlePlayerWindowSettingChanged(
+        preInitPlayer: value,
+      );
+    },
   ),
   const SwitchModel(
     title: '首页切换页面动画',
