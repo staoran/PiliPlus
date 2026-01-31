@@ -118,6 +118,7 @@ class PlayerWindowService {
         Pref.playerWindowSize.height,
       ],
       'playerWindowPosition': Pref.playerWindowPosition,
+      'playerWindowScaleFactor': Pref.playerWindowScaleFactor,
       'playerWindowAlwaysOnTop': Pref.playerWindowAlwaysOnTop,
       // Export all settings for sub-window in-memory storage
       'allSettings': GStorage.exportAllSettingsAsJson(),

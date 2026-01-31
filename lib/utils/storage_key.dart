@@ -164,6 +164,7 @@ abstract final class SettingBoxKey {
       usePlayerWindow = 'usePlayerWindow',
       playerWindowSize = 'playerWindowSize',
       playerWindowPosition = 'playerWindowPosition',
+      playerWindowScaleFactor = 'playerWindowScaleFactor',
       mainWindowAlwaysOnTop = 'mainWindowAlwaysOnTop',
       playerWindowAlwaysOnTop = 'playerWindowAlwaysOnTop';
 

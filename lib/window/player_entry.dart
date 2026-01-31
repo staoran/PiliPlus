@@ -73,6 +73,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   late final Map<String, dynamic>? _settings;
   late final Size _windowSize;
   late final List<double>? _windowPosition;
+  late final double? _savedScaleFactor; // 保存位置时的显示器缩放比例
   late final bool _showTitleBar;
   late final int _customColor;
   late final bool _dynamicColor;
@@ -130,6 +131,10 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     } else {
       _windowPosition = null;
     }
+
+    // Parse saved scale factor (用于多显示器不同缩放比例时的坐标校正)
+    _savedScaleFactor = (_settings?['playerWindowScaleFactor'] as num?)
+        ?.toDouble();
 
     _showTitleBar = _settings?['showWindowTitleBar'] as bool? ?? true;
     _customColor = _settings?['customColor'] as int? ?? 0;
@@ -244,9 +249,11 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       ..waitUntilReadyToShow(windowOptions, () async {
       final pos = _windowPosition;
       if (pos != null) {
-        await windowManager.setPosition(
-          Offset(pos[0], pos[1]),
-        );
+          // 校正多显示器不同缩放比例导致的位置偏移
+          final correctedPos = await _correctPositionForDpi(
+            Offset(pos[0], pos[1]),
+          );
+          await windowManager.setPosition(correctedPos);
       } else {
         // Calculate center position without using Pref
         final position = await _calcCenterPosition(_windowSize);
@@ -274,6 +281,43 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       );
     } catch (_) {
       return Offset.zero;
+    }
+  }
+
+  /// 校正多显示器不同缩放比例导致的位置偏移
+  ///
+  /// window_manager 的 getBounds() 和 setPosition() 使用 Flutter 的 devicePixelRatio 进行坐标转换，
+  /// 但这个值是当前窗口所在显示器的缩放比例。当窗口在不同缩放比例的显示器上保存和恢复时，
+  /// 坐标会出现偏移。此方法通过保存的缩放比例和当前的 devicePixelRatio 来校正坐标。
+  Future<Offset> _correctPositionForDpi(Offset savedPosition) async {
+    try {
+      // 如果没有保存缩放比例，直接返回原位置
+      final savedScale = _savedScaleFactor;
+      if (savedScale == null) {
+        return savedPosition;
+      }
+
+      // 获取当前的 devicePixelRatio（窗口启动时 Flutter 使用的值）
+      final currentScale = windowManager.getDevicePixelRatio();
+
+      // 如果保存时的缩放比例和当前的相同，无需校正
+      if ((savedScale - currentScale).abs() < 0.01) {
+        return savedPosition;
+      }
+
+      // 计算物理坐标（保存的逻辑坐标 × 保存时的缩放比例）
+      final physicalX = savedPosition.dx * savedScale;
+      final physicalY = savedPosition.dy * savedScale;
+
+      // 将物理坐标转换为当前 devicePixelRatio 下的逻辑坐标
+      // setPosition() 会用当前 devicePixelRatio 乘以这个值来还原物理坐标
+      final correctedX = physicalX / currentScale;
+      final correctedY = physicalY / currentScale;
+
+      return Offset(correctedX, correctedY);
+    } catch (e) {
+      debugPrint('Failed to correct position for DPI: $e');
+      return savedPosition;
     }
   }
 
@@ -481,10 +525,14 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       // 1. 导出所有设置
       final allSettings = GStorage.exportAllSettingsAsJson();
 
-      // 2. 保存窗口尺寸和位置
+      // 2. 保存窗口尺寸和位置，以及当前的 devicePixelRatio
       final bounds = await windowManager.getBounds();
       allSettings['playerWindowSize'] = [bounds.width, bounds.height];
       allSettings['playerWindowPosition'] = [bounds.left, bounds.top];
+      // 保存当前 devicePixelRatio，用于恢复时校正坐标
+      // 这与 window_manager.getBounds() 内部使用的值相同
+      allSettings['playerWindowScaleFactor'] = windowManager
+          .getDevicePixelRatio();
 
       // 3. 发送到主窗口保存
       final mainWindow = await PlayerWindowService.findMainWindow();

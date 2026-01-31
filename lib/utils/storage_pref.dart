@@ -984,6 +984,9 @@ abstract final class Pref {
       (_setting.get(SettingBoxKey.playerWindowPosition) as List?)
           ?.fromCast<double>();
 
+  static double? get playerWindowScaleFactor =>
+      _setting.get(SettingBoxKey.playerWindowScaleFactor) as double?;
+
   static FollowOrderType get followOrderType =>
       FollowOrderType.values[_setting.get(
         SettingBoxKey.followOrderType,
