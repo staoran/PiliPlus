@@ -12,7 +12,6 @@ import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
 import 'package:collection/collection.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -87,9 +86,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   /// 是否是预创建模式（没有视频参数，窗口保持隐藏等待使用）
   late final bool _isPreCreatedMode;
 
-  /// 是否启用了提前初始化播放器
-  late final bool _preInitPlayer;
-
   @override
   void initState() {
     super.initState();
@@ -149,7 +145,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _themeMode = ThemeMode.values[_settings?['themeMode'] as int? ?? 0];
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
-    _preInitPlayer = _settings?['preInitPlayer'] as bool? ?? false;
   }
 
   void _determineInitialRoute() {
@@ -554,29 +549,42 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   Future<void> onWindowClose() async {
     // 同步设置到主窗口
     try {
-      // 1. 导出所有设置
-      final allSettings = GStorage.exportAllSettingsAsJson();
-
-      // 2. 保存窗口尺寸和位置，以及当前的 devicePixelRatio
+      // 只同步播放器窗口特有的设置（尺寸、位置等），避免覆盖主窗口的其他设置
       final bounds = await windowManager.getBounds();
-      allSettings['playerWindowSize'] = [bounds.width, bounds.height];
-      allSettings['playerWindowPosition'] = [bounds.left, bounds.top];
-      // 保存当前 devicePixelRatio，用于恢复时校正坐标
-      // 这与 window_manager.getBounds() 内部使用的值相同
-      allSettings['playerWindowScaleFactor'] = windowManager
-          .getDevicePixelRatio();
+      final playerWindowSettings = <String, dynamic>{
+        'playerWindowSize': [bounds.width, bounds.height],
+        'playerWindowPosition': [bounds.left, bounds.top],
+        // 保存当前 devicePixelRatio，用于恢复时校正坐标
+        'playerWindowScaleFactor': windowManager.getDevicePixelRatio(),
+        'playerWindowAlwaysOnTop': _alwaysOnTop,
+      };
 
-      // 3. 发送到主窗口保存
+      // 发送到主窗口保存
       final mainWindow = await PlayerWindowService.findMainWindow();
       if (mainWindow != null) {
-        await mainWindow.invokeMethod('syncPlayerSettings', allSettings);
+        await mainWindow.invokeMethod(
+          'syncPlayerSettings',
+          playerWindowSettings,
+        );
       }
     } catch (e) {
       debugPrint('Failed to sync player settings: $e');
     }
 
+    // 查询主窗口的最新 preInitPlayer 设置值
+    bool shouldHideInsteadOfClose = false;
+    try {
+      final mainWindow = await PlayerWindowService.findMainWindow();
+      if (mainWindow != null) {
+        final result = await mainWindow.invokeMethod('getPreInitPlayer');
+        shouldHideInsteadOfClose = result == true;
+      }
+    } catch (e) {
+      debugPrint('Failed to query preInitPlayer: $e');
+    }
+
     // 如果启用了提前初始化播放器，则隐藏窗口并重置状态，而非真正关闭
-    if (_preInitPlayer) {
+    if (shouldHideInsteadOfClose) {
       await _resetToPreloadState();
       return;
     }

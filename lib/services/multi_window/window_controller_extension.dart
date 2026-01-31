@@ -1,4 +1,5 @@
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -40,27 +41,28 @@ extension WindowControllerExtension on WindowController {
   /// 初始化主窗口方法处理器
   Future<void> initMainWindowHandler() {
     return setWindowMethodHandler((call) async {
+      dynamic result;
       switch (call.method) {
         case 'window_center':
-          return windowManager.center();
+          await windowManager.center();
         case 'window_close':
-          return windowManager.close();
+          await windowManager.close();
         case 'window_show':
-          return windowManager.show();
+          await windowManager.show();
         case 'window_focus':
-          return windowManager.focus();
+          await windowManager.focus();
         case 'window_hide':
-          return windowManager.hide();
+          await windowManager.hide();
         case 'window_minimize':
-          return windowManager.minimize();
+          await windowManager.minimize();
         case 'window_maximize':
-          return windowManager.maximize();
+          await windowManager.maximize();
         case 'window_restore':
-          return windowManager.restore();
+          await windowManager.restore();
         case 'window_set_always_on_top':
           final args = call.arguments as Map?;
           final isOn = args?['isOn'] as bool? ?? false;
-          return windowManager.setAlwaysOnTop(isOn);
+          await windowManager.setAlwaysOnTop(isOn);
         case 'syncPlayerSettings':
           // 接收并保存来自播放器子窗口的设置
           final args = call.arguments;
@@ -69,12 +71,15 @@ extension WindowControllerExtension on WindowController {
             final settings = Map<String, dynamic>.from(args);
             await _syncPlayerSettingsToMain(settings);
           }
-          return;
+        case 'getPreInitPlayer':
+          // 播放器窗口查询当前的 preInitPlayer 设置值
+          result = Pref.preInitPlayer;
         default:
           throw MissingPluginException(
             'Not implemented method: ${call.method}',
           );
       }
+      return result;
     });
   }
 
