@@ -153,6 +153,8 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Future<void> _onClose() async {
+    // 关闭预创建的播放器窗口（如果有）
+    await PlayerWindowService.instance.closePreCreatedWindow();
     await GStorage.compact();
     await GStorage.close();
     await trayManager.destroy();

@@ -84,6 +84,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   late final String _initialRoute;
   late final dynamic _initialArguments;
 
+  /// 是否是预创建模式（没有视频参数，窗口保持隐藏等待使用）
+  late final bool _isPreCreatedMode;
+
+  /// 是否启用了提前初始化播放器
+  late final bool _preInitPlayer;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +149,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _themeMode = ThemeMode.values[_settings?['themeMode'] as int? ?? 0];
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
+    _preInitPlayer = _settings?['preInitPlayer'] as bool? ?? false;
   }
 
   void _determineInitialRoute() {
@@ -159,10 +166,13 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       _initialRoute = '/videoV';
       _initialArguments = _buildVideoArguments(args);
     } else {
-      // Default placeholder
+      // Default placeholder - 预创建模式
       _initialRoute = '/';
       _initialArguments = null;
     }
+
+    // 如果没有视频参数且启用了提前初始化，则为预创建模式
+    _isPreCreatedMode = _initialRoute == '/';
   }
 
   Map<String, dynamic> _buildVideoArguments(Map args) {
@@ -259,8 +269,11 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         final position = await _calcCenterPosition(_windowSize);
         await windowManager.setBounds(position & _windowSize);
       }
-      await windowManager.show();
-      await windowManager.focus();
+        // 预创建模式下不显示窗口，保持隐藏等待使用
+        if (!_isPreCreatedMode) {
+          await windowManager.show();
+          await windowManager.focus();
+        }
       if (_alwaysOnTop) {
         await windowManager.setAlwaysOnTop(true);
       }
@@ -491,6 +504,25 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
   }
 
+  /// 重置到预加载状态（销毁播放器，返回 placeholder 页面，隐藏窗口）
+  Future<void> _resetToPreloadState() async {
+    // 1. 销毁播放器
+    try {
+      final plCtr = PlPlayerController.instance;
+      if (plCtr != null) {
+        plCtr.isCloseAll = true;
+        await plCtr.dispose();
+      }
+    } catch (_) {}
+
+    // 2. 返回 placeholder 页面
+    Get.offAllNamed('/');
+    windowManager.setTitle('${Constants.appName} - 播放器');
+
+    // 3. 隐藏窗口
+    await windowManager.hide();
+  }
+
   void _navigateToVideo(Map args) {
     // Update window title for video
     windowManager.setTitle('${Constants.appName} - 播放器');
@@ -543,6 +575,13 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       debugPrint('Failed to sync player settings: $e');
     }
 
+    // 如果启用了提前初始化播放器，则隐藏窗口并重置状态，而非真正关闭
+    if (_preInitPlayer) {
+      await _resetToPreloadState();
+      return;
+    }
+
+    // 真正关闭窗口
     // 销毁播放器，确保视频停止播放
     try {
       final plCtr = PlPlayerController.instance;

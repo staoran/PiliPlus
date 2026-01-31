@@ -19,8 +19,62 @@ class PlayerWindowService {
   /// 当前是否在播放器窗口中
   static bool isPlayerWindow = false;
 
+  /// 预创建的窗口控制器（待命状态）
+  WindowController? _preCreatedController;
+
+  /// 是否正在预创建窗口
+  bool _isPreCreating = false;
+
   /// 检查是否启用播放器窗口
   static bool get usePlayerWindow => Pref.usePlayerWindow;
+
+  /// 检查是否启用预创建播放器窗口
+  /// 复用「提前初始化播放器」设置
+  static bool get preInitPlayerWindow => usePlayerWindow && Pref.preInitPlayer;
+
+  /// 预创建播放器窗口（隐藏状态，等待使用）
+  /// 应在主窗口启动后调用
+  Future<void> preCreatePlayerWindow() async {
+    if (!preInitPlayerWindow) return;
+    if (_isPreCreating) return;
+    if (_preCreatedController != null) return;
+
+    // 检查是否已有播放器窗口存在
+    final existing = await findPlayerWindow();
+    if (existing != null) return;
+
+    _isPreCreating = true;
+    try {
+      // 创建带有设置快照但无视频参数的空播放器窗口
+      final preCreateArgs = PlayerWindowArguments(
+        settings: {
+          ..._getSettingsSnapshot(),
+          'businessId': WindowArguments.businessIdPlayer,
+        },
+      );
+
+      final controller = await WindowController.create(
+        WindowConfiguration(
+          hiddenAtLaunch: true, // 保持隐藏
+          arguments: preCreateArgs.toArguments(),
+        ),
+      );
+
+      _preCreatedController = controller;
+
+      if (kDebugMode) {
+        debugPrint(
+          '[PlayerWindowService] Pre-created player window: ${controller.windowId}',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[PlayerWindowService] preCreatePlayerWindow error: $e');
+      }
+    } finally {
+      _isPreCreating = false;
+    }
+  }
 
   /// 检查播放器窗口是否存在
   Future<WindowController?> findPlayerWindow() async {
@@ -58,6 +112,38 @@ class PlayerWindowService {
           if (kDebugMode) {
             debugPrint(
               'Existing player window not responding, creating new one: $e',
+            );
+          }
+        }
+      }
+
+      // 尝试使用预创建的窗口
+      final preCreated = _preCreatedController;
+      if (preCreated != null) {
+        _preCreatedController = null; // 清除引用，窗口已被使用
+        try {
+          // 向预创建的窗口发送视频参数
+          await _sendVideoToPlayer(preCreated, arguments);
+          await preCreated.show();
+          await preCreated.focus();
+
+          if (kDebugMode) {
+            debugPrint(
+              '[PlayerWindowService] Using pre-created window: ${preCreated.windowId}',
+            );
+          }
+
+          // 异步预创建下一个窗口
+          Future.delayed(
+            const Duration(seconds: 2),
+            preCreatePlayerWindow,
+          );
+          return;
+        } catch (e) {
+          // 预创建的窗口可能已失效，继续创建新窗口
+          if (kDebugMode) {
+            debugPrint(
+              '[PlayerWindowService] Pre-created window failed, creating new one: $e',
             );
           }
         }
@@ -120,6 +206,8 @@ class PlayerWindowService {
       'playerWindowPosition': Pref.playerWindowPosition,
       'playerWindowScaleFactor': Pref.playerWindowScaleFactor,
       'playerWindowAlwaysOnTop': Pref.playerWindowAlwaysOnTop,
+      // 传递提前初始化播放器设置，用于子窗口判断关闭时是隐藏还是销毁
+      'preInitPlayer': Pref.preInitPlayer,
       // Export all settings for sub-window in-memory storage
       'allSettings': GStorage.exportAllSettingsAsJson(),
       // Export account data for sub-window
@@ -157,6 +245,16 @@ class PlayerWindowService {
   /// 关闭播放器窗口
   Future<void> closePlayerWindow() async {
     try {
+      // 关闭预创建的窗口
+      final preCreated = _preCreatedController;
+      if (preCreated != null) {
+        _preCreatedController = null;
+        try {
+          await preCreated.close();
+        } catch (_) {}
+      }
+
+      // 关闭正在使用的播放器窗口
       final controller = await findPlayerWindow();
       if (controller != null) {
         await controller.close();
@@ -165,6 +263,17 @@ class PlayerWindowService {
       if (kDebugMode) {
         debugPrint('closePlayerWindow error: $e');
       }
+    }
+  }
+
+  /// 关闭预创建的窗口（程序退出时调用）
+  Future<void> closePreCreatedWindow() async {
+    final preCreated = _preCreatedController;
+    if (preCreated != null) {
+      _preCreatedController = null;
+      try {
+        await preCreated.close();
+      } catch (_) {}
     }
   }
 

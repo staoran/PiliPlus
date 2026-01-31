@@ -14,6 +14,7 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts/account_manager/account_mgr.dart';
@@ -283,6 +284,12 @@ void main() async {
       if (Pref.mainWindowAlwaysOnTop) {
         await windowManager.setAlwaysOnTop(true);
       }
+
+      // 预创建播放器窗口（如果启用）
+      // 延迟执行以确保主窗口完全初始化
+      Future.delayed(const Duration(seconds: 1), () {
+        PlayerWindowService.instance.preCreatePlayerWindow();
+      });
     });
   }
 
