@@ -37,12 +37,7 @@ class _DynamicsTabPageState
 
   DynamicsController dynamicsController = Get.putOrFind(DynamicsController.new);
   @override
-  late final DynamicsTabController controller = Get.putOrFind(
-    () =>
-        DynamicsTabController(dynamicsType: widget.dynamicsType)
-          ..mid = dynamicsController.mid.value,
-    tag: widget.dynamicsType.name,
-  );
+  late final DynamicsTabController controller;
 
   @override
   bool get wantKeepAlive => true;
@@ -107,6 +102,12 @@ class _DynamicsTabPageState
 
   @override
   void initState() {
+    controller = Get.putOrFind(
+      () =>
+          DynamicsTabController(dynamicsType: widget.dynamicsType)
+            ..mid = dynamicsController.mid.value,
+      tag: widget.dynamicsType.name,
+    );
     super.initState();
     // 如果启用阈值且有 upPanelStream，但父类没有添加监听器，则在此添加
     if (enableScrollThreshold &&
