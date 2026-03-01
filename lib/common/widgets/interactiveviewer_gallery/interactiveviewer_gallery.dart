@@ -87,11 +87,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
   late final _tween = Matrix4Tween();
   late final _animatable = _tween.chain(CurveTween(curve: Curves.easeOut));
 
-  late final _horizontalDragGestureRecognizer =
-      ImageHorizontalDragGestureRecognizer(
-        width: 0,
-        transformationController: _transformationController,
-      );
+  late final _horizontalDragGestureRecognizer;
 
   late Offset _doubleTapLocalPosition;
 
@@ -110,6 +106,11 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
     _pageController = PageController(initialPage: widget.initIndex);
 
     _transformationController = TransformationController();
+
+    _horizontalDragGestureRecognizer = ImageHorizontalDragGestureRecognizer(
+      width: 0,
+      transformationController: _transformationController,
+    );
 
     _animationController = AnimationController(
       vsync: this,
@@ -246,7 +247,8 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
                     : _itemBuilder(index, item),
               );
             },
-            horizontalDragGestureRecognizer: _horizontalDragGestureRecognizer,
+            horizontalDragGestureRecognizer: () =>
+                _horizontalDragGestureRecognizer,
           ),
         ),
         Positioned(

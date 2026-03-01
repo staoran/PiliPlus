@@ -737,7 +737,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
               onPageChanged: (value) =>
                   _liveRoomController.pageIndex.value = value,
               horizontalDragGestureRecognizer:
-                  CustomHorizontalDragGestureRecognizer(),
+                  CustomHorizontalDragGestureRecognizer.new,
               children: [
                 KeepAliveWrapper(builder: (context) => chat()),
                 SuperChatPanel(

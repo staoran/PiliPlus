@@ -625,7 +625,7 @@ class HeaderControlState extends State<HeaderControl>
                   leading: const Icon(Icons.repeat, size: 20),
                   title: const Text('播放顺序', style: titleStyle),
                   subtitle: Text(
-                    plPlayerController.playRepeat.desc,
+                    plPlayerController.playRepeat.label,
                     style: subTitleStyle,
                   ),
                 ),
@@ -1696,7 +1696,7 @@ class HeaderControlState extends State<HeaderControl>
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
                       ),
-                      title: Text(i.desc),
+                      title: Text(i.label),
                       trailing: plPlayerController.playRepeat == i
                           ? Icon(
                               Icons.done,
