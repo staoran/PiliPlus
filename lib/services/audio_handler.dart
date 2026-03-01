@@ -38,9 +38,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static final List<MediaItem> _item = [];
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
 
-  Future<void> Function()? onPlay;
-  Future<void> Function()? onPause;
-  Future<void> Function(Duration position)? onSeek;
+  Future<void>? Function()? onPlay;
+  Future<void>? Function()? onPause;
+  Future<void>? Function(Duration position)? onSeek;
 
   // 列表播放相关回调
   Function? onSkipToNext;
@@ -151,8 +151,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     }
 
     final AudioProcessingState processingState;
-    final playing = status == PlayerStatus.playing;
-    if (status == PlayerStatus.completed) {
+    if (status.isCompleted) {
       processingState = AudioProcessingState.completed;
     } else if (isBuffering) {
       processingState = AudioProcessingState.buffering;
@@ -160,6 +159,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       processingState = AudioProcessingState.ready;
     }
 
+    final playing = status.isPlaying;
     playbackState.add(
       playbackState.value.copyWith(
         processingState: isBuffering

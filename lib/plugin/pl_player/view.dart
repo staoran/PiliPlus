@@ -1897,7 +1897,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         Obx(() {
           if (plPlayerController.dataStatus.loading ||
               (plPlayerController.isBuffering.value &&
-                  plPlayerController.playerStatus.playing)) {
+                  plPlayerController.playerStatus.isPlaying)) {
             return Center(
               child: GestureDetector(
                 onTap: plPlayerController.refreshPlayer,
@@ -2108,7 +2108,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       category: SegmentType.sponsor,
       actionType: ActionType.skip,
     );
-    final isPlay = ctr.playerStatus.playing;
+    final isPlay = ctr.playerStatus.isPlaying;
     if (isPlay) ctr.pause();
 
     WebpPreset preset = WebpPreset.def;

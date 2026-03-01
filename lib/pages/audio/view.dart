@@ -13,6 +13,7 @@ import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/pages/audio/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/action_item.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
+import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -29,6 +30,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart' hide DraggableScrollableSheet;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class AudioPage extends StatefulWidget {
   const AudioPage({super.key});
@@ -88,11 +90,21 @@ class _AudioPageState extends State<AudioPage> {
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         actions: [
+          if (_controller.isUgc && _controller.enableSponsorBlock)
+            Obx(() {
+              if (_controller.segmentProgressList.isNotEmpty) {
+                return IconButton(
+                  onPressed: _controller.showSBDetail,
+                  icon: const Icon(MdiIcons.advertisements, size: 22),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
           Builder(
             builder: (context) {
               return PopupMenuButton<ListOrder>(
                 tooltip: '排序',
-                icon: const Icon(Icons.sort),
+                icon: const Icon(Icons.sort, size: 22),
                 initialValue: _controller.order,
                 onSelected: (value) {
                   _controller.onChangeOrder(value);
@@ -104,10 +116,22 @@ class _AudioPageState extends State<AudioPage> {
               );
             },
           ),
-          if (_controller.isVideo)
+          IconButton(
+            tooltip: '定时关闭',
+            onPressed: () => shutdownTimerService
+              ..onPause ??= _controller.onPause
+              ..isPlaying ??= _controller.isPlaying
+              ..showScheduleExitDialog(
+                context,
+                isFullScreen: false,
+              ),
+            icon: const Icon(Icons.schedule, size: 22),
+          ),
+          if (_controller.isUgc)
             IconButton(
+              tooltip: '更多',
               onPressed: _showMore,
-              icon: const Icon(Icons.more_vert),
+              icon: const Icon(Icons.more_vert, size: 22),
             ),
           const SizedBox(width: 5),
         ],
@@ -743,7 +767,7 @@ class _AudioPageState extends State<AudioPage> {
     final baseBarColor = colorScheme.brightness.isDark
         ? const Color(0x33FFFFFF)
         : const Color(0x33999999);
-    final progressBar = Obx(
+    Widget child = Obx(
       () => ProgressBar(
         progress: _controller.position.value,
         total: _controller.duration.value,
@@ -759,26 +783,29 @@ class _AudioPageState extends State<AudioPage> {
         onSeek: _onSeek,
       ),
     );
-    // 使用 Stack 叠加空降助手片段标注
-    final child = Stack(
-      alignment: Alignment.center,
-      children: [
-        progressBar,
-        // 空降助手片段标注
-        Obx(() {
-          if (_controller.segmentProgressList.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          return Positioned(
+    if (_controller.isUgc && _controller.enableSponsorBlock) {
+      child = Stack(
+        children: [
+          child,
+          Positioned(
             left: 0,
-            right: 12, // thumbRadius * 2
-            child: SegmentProgressBar(
-              segments: _controller.segmentProgressList,
+            right: 0,
+            bottom: 3.5,
+            child: Obx(
+              () {
+                if (_controller.segmentProgressList.isNotEmpty) {
+                  return SegmentProgressBar(
+                    height: 5,
+                    segments: _controller.segmentProgressList,
+                  );
+                }
+                return const SizedBox();
+              },
             ),
-          );
-        }),
-      ],
-    );
+          ),
+        ],
+      );
+    }
     if (PlatformUtils.isDesktop) {
       return MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -899,10 +926,8 @@ class _AudioPageState extends State<AudioPage> {
                     const SizedBox(height: 12),
                     SelectableText(
                       audioItem.arc.title,
-                      style: const TextStyle(
-                        height: 1.7,
-                        fontSize: 16,
-                      ),
+                      style: const TextStyle(height: 1.7, fontSize: 16),
+                      scrollPhysics: const NeverScrollableScrollPhysics(),
                     ),
                     const SizedBox(height: 12),
                     if (audioItem.owner.hasName()) ...[

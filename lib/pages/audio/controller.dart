@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/widgets/pair.dart';
-import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/grpc/audio.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pb.dart'
     show
@@ -17,17 +15,13 @@ import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pb.dart'
         ResponseUrl;
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/http/ua_type.dart';
-import 'package:PiliPlus/models/common/sponsor_block/segment_model.dart';
-import 'package:PiliPlus/models/common/sponsor_block/segment_type.dart';
-import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
-import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart'
     show FavMixin;
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/main_reply/view.dart';
+import 'package:PiliPlus/pages/sponsor_block/block_mixin.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart';
 import 'package:PiliPlus/pages/video/pay_coins/view.dart';
@@ -36,6 +30,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
@@ -56,7 +51,12 @@ import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as path;
 
 class AudioController extends GetxController
-    with GetTickerProviderStateMixin, TripleMixin, FavMixin {
+    with
+        GetTickerProviderStateMixin,
+        TripleMixin,
+        FavMixin,
+        BlockConfigMixin,
+        BlockMixin {
   late final Map args;
   late Int64 id;
   late Int64 oid;
@@ -64,10 +64,12 @@ class AudioController extends GetxController
   late int itemType;
   Int64? extraId;
   late final PlaylistSource from;
-  late final isVideo = itemType == 1;
+  @override
+  late final bool isUgc = itemType == 1;
 
   final Rx<DetailItem?> audioItem = Rx<DetailItem?>(null);
 
+  @override
   Player? player;
   late int cacheAudioQa;
 
@@ -97,13 +99,6 @@ class AudioController extends GetxController
 
   ListOrder order = ListOrder.ORDER_NORMAL;
 
-  // 空降助手相关
-  late final bool enableSponsorBlock = Pref.enableSponsorBlock;
-  final List<SegmentModel> segmentList = [];
-  final RxList<Segment> segmentProgressList = <Segment>[].obs;
-  late final List<Color> blockColor = Pref.blockColor;
-  StreamSubscription<Duration>? _sponsorBlockSubscription;
-  int _lastPos = -1;
   bool _fgStartedForCurrent = false;
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
@@ -151,9 +146,7 @@ class AudioController extends GetxController
           );
         }
         // 有 audioUrl 时也需要查询空降助手
-        if (enableSponsorBlock && isVideo) {
-          _querySponsorBlock();
-        }
+        _querySponsorBlock();
       } else {
         _queryPlayUrl();
       }
@@ -167,18 +160,28 @@ class AudioController extends GetxController
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
+
+    if (shutdownTimerService.isActive) {
+      shutdownTimerService
+        ..onPause = onPause
+        ..isPlaying = isPlaying;
+    }
   }
 
-  Future<void> onPlay() async {
-    await player?.play();
+  bool isPlaying() {
+    return player?.state.playing ?? false;
   }
 
-  Future<void> onPause() async {
-    await player?.pause();
+  Future<void>? onPlay() {
+    return player?.play();
   }
 
-  Future<void> onSeek(Duration duration) async {
-    await player?.seek(duration);
+  Future<void>? onPause() async {
+    return player?.pause();
+  }
+
+  Future<void>? onSeek(Duration duration) {
+    return player?.seek(duration);
   }
 
   void _updateCurrItem(DetailItem item) {
@@ -257,22 +260,18 @@ class AudioController extends GetxController
     if (_isLocalPlayback) return true;
 
     // 切换视频时，立即清空旧的空降助手数据，防止 UI 残留
-    _clearSponsorBlockData();
+    resetBlock();
 
     // 尝试使用本地已缓存的离线音频
     final triedLocal = await _tryPlayLocalIfAvailable();
     if (triedLocal) {
       // 本地播放也需要查询空降助手（如果有网络）
-      if (enableSponsorBlock && isVideo) {
-        _querySponsorBlock();
-      }
+      _querySponsorBlock();
       return true;
     }
 
     // 查询空降助手
-    if (enableSponsorBlock && isVideo) {
-      _querySponsorBlock();
-    }
+    _querySponsorBlock();
 
     final res = await AudioGrpc.audioPlayUrl(
       itemType: itemType,
@@ -382,13 +381,7 @@ class AudioController extends GetxController
       ),
     );
     _start = null;
-    // player 已准备好，初始化空降助手跳过监听
-    if (enableSponsorBlock && segmentList.isNotEmpty) {
-      if (kDebugMode) {
-        debugPrint('AudioController: _onOpenMedia 中初始化空降助手');
-      }
-      _initSponsorBlockSkip();
-    }
+    initSkip();
   }
 
   void _initPlayerIfNeeded() {
@@ -405,8 +398,6 @@ class AudioController extends GetxController
       }),
       player!.stream.duration.listen((duration) {
         this.duration.value = duration;
-        // 当 duration 更新且有空降助手片段时，更新进度条片段
-        _updateSegmentProgressList();
       }),
       player!.stream.playing.listen((playing) {
         PlayerStatus playerStatus;
@@ -441,26 +432,30 @@ class AudioController extends GetxController
           _fgStartedForCurrent = false;
           // 不要在这里停止前台服务，让它保护到新媒体开始播放
           // PlaybackForegroundService.stop();
-          switch (playMode.value) {
-            case PlayRepeat.pause:
-              break;
-            case PlayRepeat.listOrder:
-              playNext(nextPart: true);
-              break;
-            case PlayRepeat.singleCycle:
-              _replay();
-              break;
-            case PlayRepeat.listCycle:
-              if (!playNext(nextPart: true)) {
-                if (index != null && index != 0 && playlist != null) {
-                  playIndex(0);
-                } else {
-                  _replay();
+          if (shutdownTimerService.isWaiting) {
+            shutdownTimerService.handleWaiting();
+          } else {
+            switch (playMode.value) {
+              case PlayRepeat.pause:
+                break;
+              case PlayRepeat.listOrder:
+                playNext(nextPart: true);
+                break;
+              case PlayRepeat.singleCycle:
+                _replay();
+                break;
+              case PlayRepeat.listCycle:
+                if (!playNext(nextPart: true)) {
+                  if (index != null && index != 0 && playlist != null) {
+                    playIndex(0);
+                  } else {
+                    _replay();
+                  }
                 }
-              }
-              break;
-            case PlayRepeat.autoPlayRelated:
-              break;
+                break;
+              case PlayRepeat.autoPlayRelated:
+                break;
+            }
           }
         }
       }),
@@ -471,180 +466,15 @@ class AudioController extends GetxController
     player?.seek(Duration.zero).whenComplete(player!.play);
   }
 
-  /// 清空空降助手数据（同步执行，确保切换视频时立即清除旧数据）
-  void _clearSponsorBlockData() {
-    _sponsorBlockSubscription?.cancel();
-    _sponsorBlockSubscription = null;
-    _lastPos = -1;
-    segmentList.clear();
-    segmentProgressList.clear();
-  }
-
-  // 空降助手：查询跳过片段
-  Future<void> _querySponsorBlock() async {
-    if (!isVideo) return; // 只对视频类型生效
-
-    // 清空旧数据（虽然 _queryPlayUrl 中已经调用过，这里保留以防直接调用）
-    _clearSponsorBlockData();
-
-    final bvid = IdUtils.av2bv(oid.toInt());
-    final cid = (subId.firstOrNull ?? oid).toInt();
-
-    final result = await SponsorBlock.getSkipSegments(
-      bvid: bvid,
-      cid: cid,
-    );
-    switch (result) {
-      case Success<List<SegmentItemModel>>(:final response):
-        _handleSBData(response);
-      case Error(:final code) when code != 404:
-        result.toast();
-      default:
-        break;
-    }
-  }
-
-  void _handleSBData(List<SegmentItemModel> list) {
-    if (list.isEmpty) return;
-
-    try {
-      final blockSettings = Pref.blockSettings;
-      final enableList = blockSettings
-          .where((item) => item.second != SkipType.disable)
-          .map((item) => item.first.name)
-          .toSet();
-      final blockLimit = Pref.blockLimit;
-
-      segmentList.addAll(
-        list
-            .where(
-              (item) =>
-                  enableList.contains(item.category) &&
-                  item.segment[1] >= item.segment[0],
-            )
-            .map(
-              (item) {
-                final segmentType = SegmentType.values.byName(item.category);
-                SkipType skipType = blockSettings[segmentType.index].second;
-                if (skipType != SkipType.showOnly) {
-                  if (item.segment[1] == item.segment[0] ||
-                      item.segment[1] - item.segment[0] < blockLimit) {
-                    skipType = SkipType.showOnly;
-                  }
-                }
-
-                return SegmentModel(
-                  UUID: item.uuid,
-                  segmentType: segmentType,
-                  segment: Pair(
-                    first: item.segment[0], // 已经是毫秒
-                    second: item.segment[1], // 已经是毫秒
-                  ),
-                  skipType: skipType,
-                );
-              },
-            ),
-      );
-
-      if (segmentList.isNotEmpty) {
-        _updateSegmentProgressList();
-        _initSponsorBlockSkip();
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('failed to parse sponsorblock: $e');
-    }
-  }
-
-  void _updateSegmentProgressList() {
-    if (segmentList.isEmpty) return;
-    final durationMs = duration.value.inMilliseconds;
-    if (durationMs <= 0) return;
-
-    segmentProgressList
-      ..clear()
-      ..addAll(
-        segmentList.map((e) {
-          double start = (e.segment.first / durationMs).clamp(0.0, 1.0);
-          double end = (e.segment.second / durationMs).clamp(0.0, 1.0);
-          return Segment(
-            start: start,
-            end: end,
-            color: _getColor(e.segmentType),
-          );
-        }),
-      );
-  }
-
-  Color _getColor(SegmentType segment) => blockColor[segment.index];
-
-  void _initSponsorBlockSkip() {
-    if (segmentList.isEmpty) {
-      if (kDebugMode) {
-        debugPrint('AudioController: segmentList 为空，跳过初始化');
-      }
-      return;
-    }
-    if (player == null) {
-      if (kDebugMode) {
-        debugPrint('AudioController: player 为空，跳过初始化');
-      }
-      return;
-    }
-
-    if (kDebugMode) {
-      debugPrint('AudioController: 初始化空降助手跳过监听');
-    }
-
-    _sponsorBlockSubscription?.cancel();
-    _sponsorBlockSubscription = player!.stream.position.listen((position) {
-      int currentPos = position.inSeconds;
-      if (currentPos != _lastPos) {
-        _lastPos = currentPos;
-        final msPos = currentPos * 1000;
-        for (SegmentModel item in segmentList) {
-          if (msPos <= item.segment.first &&
-              item.segment.first <= msPos + 1000) {
-            switch (item.skipType) {
-              case SkipType.alwaysSkip:
-                _onSkip(item);
-                break;
-              case SkipType.skipOnce:
-                if (!item.hasSkipped) {
-                  item.hasSkipped = true;
-                  _onSkip(item);
-                }
-                break;
-              case SkipType.skipManually:
-                // 听视频页不支持手动跳过 UI，直接跳过
-                _onSkip(item);
-                break;
-              default:
-                break;
-            }
-            break;
-          }
-        }
-      }
-    });
-  }
-
-  Future<void> _onSkip(SegmentModel item) async {
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          'AudioController: 跳过片段 ${item.segmentType.shortTitle} 到 ${item.segment.second}ms',
+  @pragma('vm:notify-debugger-on-exception')
+  void _querySponsorBlock() {
+    if (isUgc && blockConfig.enableSponsorBlock) {
+      try {
+        querySponsorBlock(
+          bvid: IdUtils.av2bv(oid.toInt()),
+          cid: (subId.firstOrNull ?? oid).toInt(),
         );
-      }
-      await player?.seek(Duration(milliseconds: item.segment.second));
-      if (Pref.blockToast) {
-        SmartDialog.showToast('已跳过${item.segmentType.shortTitle}片段');
-      }
-      if (Pref.blockTrack) {
-        SponsorBlock.viewedVideoSponsorTime(item.UUID);
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('failed to skip: $e');
-      SmartDialog.showToast('${item.segmentType.shortTitle}片段跳过失败');
+      } catch (_) {}
     }
   }
 
@@ -791,12 +621,12 @@ class AudioController extends GetxController
   void showReply() {
     MainReplyPage.toMainReplyPage(
       oid: oid.toInt(),
-      replyType: isVideo ? 1 : 14,
+      replyType: isUgc ? 1 : 14,
     );
   }
 
   void actionShareVideo(BuildContext context) {
-    final audioUrl = isVideo
+    final audioUrl = isUgc
         ? '${HttpString.baseUrl}/video/${IdUtils.av2bv(oid.toInt())}'
         : '${HttpString.baseUrl}/audio/au$oid';
     showDialog(
@@ -868,7 +698,7 @@ class AudioController extends GetxController
                     useSafeArea: true,
                     builder: (context) => RepostPanel(
                       rid: oid.toInt(),
-                      dynType: isVideo ? 8 : 256,
+                      dynType: isUgc ? 8 : 256,
                       pic: arc.cover,
                       title: arc.title,
                       uname: owner.name,
@@ -877,7 +707,7 @@ class AudioController extends GetxController
                 }
               },
             ),
-            if (isVideo)
+            if (isUgc)
               ListTile(
                 dense: true,
                 title: const Text(
@@ -1142,19 +972,8 @@ class AudioController extends GetxController
     }
   }
 
-  // Timer? _timer;
-
-  // void _cancelTimer() {
-  //   _timer?.cancel();
-  //   _timer = null;
-  // }
-
-  // void showTimerDialog() {
-  //   // TODO
-  // }
-
   @override
-  (Object, int) get getFavRidType => (oid, isVideo ? 2 : 12);
+  (Object, int) get getFavRidType => (oid, isUgc ? 2 : 12);
 
   @override
   void updateFavCount(int count) {
@@ -1192,11 +1011,34 @@ class AudioController extends GetxController
   }
 
   @override
+  BlockConfigMixin get blockConfig => this;
+
+  @override
+  int get currPosInMilliseconds => position.value.inMilliseconds;
+
+  @override
+  Future<void>? seekTo(Duration duration, {required bool isSeek}) =>
+      onSeek(duration);
+
+  @override
+  int? get timeLength => duration.value.inMilliseconds;
+
+  @override
+  bool get autoPlay => true;
+
+  @override
+  bool get preInitPlayer => true;
+
+  @override
   void onClose() {
     // 退出听视频时保存最后的进度
     _saveCurrentProgress();
 
     // _cancelTimer();
+    shutdownTimerService
+      ..onPause = null
+      ..isPlaying = null
+      ..reset();
     videoPlayerServiceHandler
       ?..onPlay = null
       ..onPause = null
@@ -1206,8 +1048,6 @@ class AudioController extends GetxController
     videoPlayerServiceHandler?.onVideoDetailDispose(hashCode.toString());
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions = null;
-    _sponsorBlockSubscription?.cancel();
-    _sponsorBlockSubscription = null;
     PlaybackForegroundService.stop();
     player?.dispose();
     player = null;
