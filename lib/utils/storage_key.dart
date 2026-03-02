@@ -162,6 +162,7 @@ abstract final class SettingBoxKey {
       desktopVolume = 'desktopVolume',
       showTrayIcon = 'showTrayIcon',
       uiScale = 'uiScale',
+      useSSD = 'useSSD',
       usePlayerWindow = 'usePlayerWindow',
       playerWindowSize = 'playerWindowSize',
       playerWindowPosition = 'playerWindowPosition',

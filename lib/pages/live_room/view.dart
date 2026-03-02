@@ -1001,12 +1001,15 @@ class _RenderBorderIndicator extends RenderBox {
     final size = this.size;
     final canvas = context.canvas;
     final width = size.width / 2;
-    if (!_isLeft) {
-      canvas.translate(width, 0);
-    }
+
     BoxBorder.paintNonUniformBorder(
       canvas,
-      Rect.fromLTRB(0, 0, width, size.height),
+      Rect.fromLTWH(
+        offset.dx + (_isLeft ? 0 : width),
+        offset.dy,
+        width,
+        size.height,
+      ),
       borderRadius: BorderRadius.only(
         topLeft: _isLeft ? _radius : .zero,
         topRight: _isLeft ? .zero : _radius,
@@ -1016,9 +1019,6 @@ class _RenderBorderIndicator extends RenderBox {
       color: Colors.white38,
     );
   }
-
-  @override
-  bool get isRepaintBoundary => true;
 }
 
 class LiveDanmaku extends StatefulWidget {

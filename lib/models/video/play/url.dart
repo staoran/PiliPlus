@@ -371,7 +371,10 @@ class Volume {
   String format(Map<String, num> config) {
     final lra = max(config['lra'] ?? 11, measuredLra);
     num i = config['i'] ?? targetI;
-    final tp = min(config['tp'] ?? targetTp, measuredTp).clamp(minTpValue, maxTpValue);
+    final tp = min(
+      config['tp'] ?? targetTp,
+      measuredTp,
+    ).clamp(minTpValue, maxTpValue);
     final offset = config['offset'] ?? targetOffset;
     num measuredI = this.measuredI;
     if (measuredI > 0) {
