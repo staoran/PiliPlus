@@ -1,12 +1,11 @@
-import 'dart:ui' show clampDouble;
-
+﻿import 'package:PiliPlus/common/constants.dart' show StyleString;
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart'
     as custom_refresh;
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -16,22 +15,20 @@ abstract class CommonPageState<
 >
     extends State<T> {
   R get controller;
-  final _mainController = Get.find<MainController>();
+  RxDouble? _barOffset;
+  RxBool? _showTopBar;
   RxBool? _showBottomBar;
   RxBool? _showSearchBar;
+  final _mainController = Get.find<MainController>();
 
   // late double _downScrollCount = 0.0; // 向下滚动计数器
   late double _upScrollCount = 0.0; // 向上滚动计数器
   double? _lastScrollPosition; // 记录上次滚动位置
 
-  // 恢复：子类依赖这些字段
-  final enableScrollThreshold = Pref.enableScrollThreshold;
-  late final double scrollThreshold = Pref.scrollThreshold; // 滚动阈值
-
-  // 新增：平滑过渡范围
-  late final double scrollRange = enableScrollThreshold
-      ? scrollThreshold
-      : 100.0;
+  // 子类依赖这些字段（阈值设置已移除，使用固定默认值）
+  final bool enableScrollThreshold = false;
+  final double scrollThreshold = 80.0; // 滚动阈值
+  final double scrollRange = 100.0; // 平滑过渡范围
 
   late final _scrollController = controller.scrollController;
 
@@ -41,9 +38,10 @@ abstract class CommonPageState<
   @override
   void initState() {
     super.initState();
+    _barOffset = _mainController.barOffset;
     _showBottomBar = _mainController.showBottomBar;
     try {
-      _showSearchBar = Get.find<HomeController>().showSearchBar;
+      _showTopBar = Get.find<HomeController>().showTopBar;
     } catch (_) {}
 
     // 强制添加监听，不再依赖 enableScrollThreshold 配置，以实现跟随手指滑动
@@ -57,28 +55,62 @@ abstract class CommonPageState<
   }
 
   Widget onBuild(Widget child) {
-    if (!enableScrollThreshold &&
-        (_showBottomBar != null || _showSearchBar != null)) {
+    if (_barOffset != null) {
+      return NotificationListener<ScrollNotification>(
+        onNotification: onNotificationType2,
+        child: child,
+      );
+    }
+    if (_showTopBar != null || _showBottomBar != null || _showSearchBar != null) {
       return NotificationListener<UserScrollNotification>(
-        onNotification: onNotification,
+        onNotification: onNotificationType1,
         child: child,
       );
     }
     return child;
   }
 
-  // 恢复：子类覆盖了此方法
-  bool onNotification(UserScrollNotification notification) {
-    if (notification.metrics.axis == .horizontal) return false;
+  bool onNotificationType1(UserScrollNotification notification) {
     if (!_mainController.useBottomNav) return false;
-    final direction = notification.direction;
-    if (direction == .forward) {
-      _showBottomBar?.value = true;
-      _showSearchBar?.value = true;
-    } else if (direction == .reverse) {
-      _showBottomBar?.value = false;
-      _showSearchBar?.value = false;
+    if (notification.metrics.axis == .horizontal) return false;
+    switch (notification.direction) {
+      case .forward:
+        _showTopBar?.value = true;
+        _showBottomBar?.value = true;
+        _showSearchBar?.value = true;
+      case .reverse:
+        _showTopBar?.value = false;
+        _showBottomBar?.value = false;
+        _showSearchBar?.value = false;
+      case _:
     }
+    return false;
+  }
+
+  void _updateOffset(double scrollDelta) {
+    _barOffset!.value = clampDouble(
+      _barOffset!.value + scrollDelta,
+      0.0,
+      StyleString.topBarHeight,
+    );
+  }
+
+  bool onNotificationType2(ScrollNotification notification) {
+    if (!_mainController.useBottomNav) return false;
+
+    if (notification.metrics.axis == .horizontal) return false;
+
+    if (notification is ScrollUpdateNotification) {
+      if (notification.dragDetails == null) return false;
+      _updateOffset(notification.scrollDelta ?? 0.0);
+      return false;
+    }
+
+    if (notification is OverscrollNotification) {
+      _updateOffset(notification.overscroll);
+      return false;
+    }
+
     return false;
   }
 
@@ -209,8 +241,10 @@ abstract class CommonPageState<
 
   @override
   void dispose() {
+    _barOffset = null;
     _showSearchBar = null;
     _showBottomBar = null;
+    _showTopBar = null;
     _scrollController.removeListener(listener);
     super.dispose();
   }

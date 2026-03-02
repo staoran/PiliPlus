@@ -800,7 +800,7 @@ class _AudioPageState extends State<AudioPage> {
                     segments: _controller.segmentProgressList,
                   );
                 }
-                return const SizedBox();
+                return const SizedBox.shrink();
               },
             ),
           ),

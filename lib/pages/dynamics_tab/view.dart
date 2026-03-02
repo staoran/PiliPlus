@@ -49,7 +49,7 @@ class _DynamicsTabPageState
   StreamController<bool>? get _upPanelStream => dynamicsController.upPanelStream;
 
   @override
-  bool onNotification(UserScrollNotification notification) {
+  bool onNotificationType1(UserScrollNotification notification) {
     if (checkPage) {
       return false;
     }
@@ -62,7 +62,7 @@ class _DynamicsTabPageState
         _upPanelStream?.add(false);
       }
     }
-    return super.onNotification(notification);
+    return super.onNotificationType1(notification);
   }
 
   // UP主面板向上滚动计数器
@@ -70,9 +70,9 @@ class _DynamicsTabPageState
   double? _upPanelLastScrollPosition;
 
   @override
-  void listener() {
+  bool onNotificationType2(ScrollNotification notification) {
     if (checkPage) {
-      return;
+      return false;
     }
     // 同时触发 UP 主面板收起（使用与底栏相同的阈值逻辑）
     if (_upPanelStream != null) {
@@ -97,7 +97,7 @@ class _DynamicsTabPageState
 
       _upPanelLastScrollPosition = currentPosition;
     }
-    super.listener();
+    return super.onNotificationType2(notification);
   }
 
   @override
@@ -138,7 +138,7 @@ class _DynamicsTabPageState
     if (!enableScrollThreshold &&
         _upPanelStream != null) {
       return NotificationListener<UserScrollNotification>(
-        onNotification: onNotification,
+        onNotification: onNotificationType1,
         child: child,
       );
     }

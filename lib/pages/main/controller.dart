@@ -30,9 +30,13 @@ class MainController extends GetxController
 
   List<NavigationBarType> navigationBars = <NavigationBarType>[];
 
-    RxBool? showBottomBar;
+    RxDouble? barOffset;
+  RxBool? showBottomBar;
   // 底栏滚动比例，1.0 = 完全显示，0.0 = 完全隐藏
   final RxDouble bottomBarRatio = 1.0.obs;
+  late final bool hideBottomBar;
+  late final barHideType = Pref.barHideType;
+  late double navHeight = 80.0;
   bool useBottomNav = false;
   late dynamic controller;
   final RxInt selectedIndex = 0.obs;
@@ -85,9 +89,17 @@ class MainController extends GetxController
           )
         : PageController(initialPage: selectedIndex.value);
 
-    if (!useSideBar && navigationBars.length > 1 && Pref.hideBottomBar) {
-      showBottomBar = true.obs;
+    hideBottomBar =
+        !useSideBar && navigationBars.length > 1 && Pref.hideBottomBar;
+    if (hideBottomBar) {
+      switch (barHideType) {
+        case .instant:
+          showBottomBar = RxBool(true);
+        case .sync:
+          barOffset ??= RxDouble(0.0);
+      }
     }
+
     dynamicBadgeMode = Pref.dynamicBadgeMode;
 
     hasDyn = navigationBars.contains(NavigationBarType.dynamics);
@@ -321,13 +333,13 @@ class MainController extends GetxController
     bottomBarRatio.value = 1.0;
     if (hasHome) {
       homeController.searchBarRatio.value = 1.0;
-      homeController.showSearchBar?.value = true;
+      homeController.showTopBar?.value = true;
     }
   }
 
   @override
   void onClose() {
-    showBottomBar?.close();
+    barOffset?.close();
     controller.dispose();
     super.onClose();
   }

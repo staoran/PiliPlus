@@ -816,8 +816,6 @@ class PlPlayerController with BlockConfigMixin {
       }
     }
 
-    final Map<String, String> extras = {};
-
     // 音轨
     final String audioUri;
     if (isFileSource) {
@@ -831,7 +829,7 @@ class PlPlayerController with BlockConfigMixin {
     } else {
       audioUri = '';
     }
-    if (audioUri.isNotEmpty) extras['audio-files'] = '"$audioUri"';
+    await pp.setProperty('audio-files', audioUri);
 
     _videoController ??= VideoController(
       player,
@@ -844,7 +842,8 @@ class PlPlayerController with BlockConfigMixin {
 
     player.setPlaylistMode(looping);
 
-    if (kDebugMode || Platform.isAndroid) {
+    final Map<String, String>? filters;
+    if (Platform.isAndroid) {
       String audioNormalization = AudioNormalization.getParamFromConfig(
         Pref.audioNormalization,
       );
@@ -867,9 +866,11 @@ class PlPlayerController with BlockConfigMixin {
           AudioNormalization.getParamFromConfig(Pref.fallbackNormalization),
         );
       }
-      if (audioNormalization.isNotEmpty) {
-        extras['lavfi-complex'] = '"[aid1] $audioNormalization [ao]"';
-      }
+      filters = audioNormalization.isEmpty
+          ? null
+          : {'lavfi-complex': '"[aid1] $audioNormalization [ao]"'};
+    } else {
+      filters = null;
     }
 
     // if (kDebugMode) debugPrint(filters.toString());
@@ -893,7 +894,7 @@ class PlPlayerController with BlockConfigMixin {
         videoUri,
         httpHeaders: dataSource.httpHeaders,
         start: seekTo,
-        extras: extras.isEmpty ? null : extras,
+        extras: filters,
       ),
       play: false,
     );
@@ -913,14 +914,16 @@ class PlPlayerController with BlockConfigMixin {
       SmartDialog.showToast('视频源为空，请重新进入本页面');
       return false;
     }
-    String? audioUri;
     if (!isLive) {
       if (dataSource.audioSource.isNullOrEmpty) {
         SmartDialog.showToast('音频源为空');
       } else {
-        audioUri = Platform.isWindows
-            ? dataSource.audioSource!.replaceAll(';', '\\;')
-            : dataSource.audioSource!.replaceAll(':', '\\:');
+        await (_videoPlayerController!.platform!).setProperty(
+          'audio-files',
+          Platform.isWindows
+              ? dataSource.audioSource!.replaceAll(';', '\\;')
+              : dataSource.audioSource!.replaceAll(':', '\\:'),
+        );
       }
     }
     await _videoPlayerController!.open(
@@ -928,7 +931,6 @@ class PlPlayerController with BlockConfigMixin {
         dataSource.videoSource!,
         httpHeaders: dataSource.httpHeaders,
         start: position,
-        extras: audioUri == null ? null : {'audio-files': '"$audioUri"'},
       ),
       play: true,
     );
@@ -1713,7 +1715,7 @@ class PlPlayerController with BlockConfigMixin {
 
   void setPlayRepeat(PlayRepeat type) {
     playRepeat = type;
-    if (!Pref.tempPlayerConf) video.put(VideoBoxKey.playRepeat, type.index);
+    if (!tempPlayerConf) video.put(VideoBoxKey.playRepeat, type.index);
   }
 
   void putSubtitleSettings() {
