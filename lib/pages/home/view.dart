@@ -72,9 +72,12 @@ class _HomePageState extends State<HomePage>
           customAppBar(theme),
         tabBar,
         Expanded(
-          child: tabBarView(
-            controller: _homeController.tabController,
-            children: _homeController.tabs.map((e) => e.page).toList(),
+          child: _mainController.wrapWithNotifications(
+            tabBarView(
+              controller: _homeController.tabController,
+              children: _homeController.tabs.map((e) => e.page).toList(),
+            ),
+            extraBars: [_homeController.showTopBar],
           ),
         ),
       ],

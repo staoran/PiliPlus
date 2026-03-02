@@ -21,7 +21,7 @@ class RcmdPage extends StatefulWidget {
 class _RcmdPageState extends CommonPageState<RcmdPage, RcmdController>
     with AutomaticKeepAliveClientMixin {
   @override
-  final RcmdController controller = Get.put(RcmdController());
+  late RcmdController controller = Get.put(RcmdController());
 
   @override
   bool get wantKeepAlive => true;
@@ -29,27 +29,25 @@ class _RcmdPageState extends CommonPageState<RcmdPage, RcmdController>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return onBuild(
-      Container(
-        clipBehavior: .hardEdge,
-        margin: const .symmetric(horizontal: StyleString.safeSpace),
-        decoration: const BoxDecoration(borderRadius: StyleString.mdRadius),
-        child: refreshIndicator(
-          key: refreshIndicatorKey,
-          onRefresh: controller.onRefresh,
-          child: CustomScrollView(
-            controller: controller.scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const .only(top: StyleString.cardSpace, bottom: 100),
-                sliver: Obx(() => _buildBody(controller.loadingState.value)),
-              ),
-            ],
-          ),
+    return onBuild(Container(
+      clipBehavior: .hardEdge,
+      margin: const .symmetric(horizontal: StyleString.safeSpace),
+      decoration: const BoxDecoration(borderRadius: StyleString.mdRadius),
+      child: refreshIndicator(
+        key: refreshIndicatorKey,
+        onRefresh: controller.onRefresh,
+        child: CustomScrollView(
+          controller: controller.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const .only(top: StyleString.cardSpace, bottom: 100),
+              sliver: Obx(() => _buildBody(controller.loadingState.value)),
+            ),
+          ],
         ),
       ),
-    );
+    ));
   }
 
   late final gridDelegate = SliverGridDelegateWithExtentAndRatio(

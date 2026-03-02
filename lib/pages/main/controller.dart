@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/constants.dart' show StyleString;
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/grpc/dyn.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -20,6 +21,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
+import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -36,7 +38,6 @@ class MainController extends GetxController
   final RxDouble bottomBarRatio = 1.0.obs;
   late final bool hideBottomBar;
   late final barHideType = Pref.barHideType;
-  late double navHeight = 80.0;
   bool useBottomNav = false;
   late dynamic controller;
   final RxInt selectedIndex = 0.obs;
@@ -326,6 +327,64 @@ class MainController extends GetxController
       }
       _lastSelectTime = now;
     }
+  }
+
+  /// 将 [child] 包裹在对应的 [NotificationListener] 中，以驱动导航栏的显示/隐藏动画。
+  /// [extraBars] 用于传入页面本地的额外 bar 状态（如 HomeController.showTopBar）。
+  Widget wrapWithNotifications(
+    Widget child, {
+    List<RxBool?> extraBars = const [],
+  }) {
+    if (barOffset case final barOffset?) {
+      return NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (!useBottomNav) return false;
+          if (notification.metrics.axis == Axis.horizontal) return false;
+          if (notification is ScrollUpdateNotification) {
+            if (notification.dragDetails == null) return false;
+            barOffset.value = clampDouble(
+              barOffset.value + (notification.scrollDelta ?? 0.0),
+              0.0,
+              StyleString.topBarHeight,
+            );
+            return false;
+          }
+          if (notification is OverscrollNotification) {
+            barOffset.value = clampDouble(
+              barOffset.value + notification.overscroll,
+              0.0,
+              StyleString.topBarHeight,
+            );
+            return false;
+          }
+          return false;
+        },
+        child: child,
+      );
+    }
+    final bars = [showBottomBar, ...extraBars].whereType<RxBool>().toList();
+    if (bars.isNotEmpty) {
+      return NotificationListener<UserScrollNotification>(
+        onNotification: (notification) {
+          if (!useBottomNav) return false;
+          if (notification.metrics.axis == Axis.horizontal) return false;
+          switch (notification.direction) {
+            case .forward:
+              for (final b in bars) {
+                b.value = true;
+              }
+            case .reverse:
+              for (final b in bars) {
+                b.value = false;
+              }
+            default:
+          }
+          return false;
+        },
+        child: child,
+      );
+    }
+    return child;
   }
 
   void setSearchBar() {

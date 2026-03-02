@@ -243,9 +243,9 @@ abstract class CommonPageState<
   void dispose() {
     _barOffset = null;
     _showSearchBar = null;
-    _showBottomBar = null;
-    _showTopBar = null;
     _scrollController.removeListener(listener);
+    _showTopBar = null;
+    _showBottomBar = null;
     super.dispose();
   }
 }

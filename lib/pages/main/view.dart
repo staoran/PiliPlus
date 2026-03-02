@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/tabs.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -60,9 +59,6 @@ class _MainAppState extends PopScopeState<MainApp>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _padding = MediaQuery.viewPaddingOf(context);
-    if (_mainController.hideBottomBar && _mainController.barHideType == .sync) {
-      _mainController.navHeight = 80.0 + _padding.bottom;
-    }
     final brightness = Theme.brightnessOf(context);
     NetworkImgLayer.reduce =
         NetworkImgLayer.reduceLuxColor != null && brightness.isDark;
@@ -390,10 +386,11 @@ class _MainAppState extends PopScopeState<MainApp>
     if (bottomNav != null && _mainController.hideBottomBar) {
       if (_mainController.barOffset case final barOffset?) {
         return Obx(
-          () => CustomHeightWidget(
-            height:
-                _mainController.navHeight *
-                (1 - barOffset.value / StyleString.topBarHeight),
+          () => FractionalTranslation(
+            translation: Offset(
+              0.0,
+              barOffset.value / StyleString.topBarHeight,
+            ),
             child: bottomNav,
           ),
         );

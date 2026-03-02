@@ -28,7 +28,13 @@ jobs:
 
       - name: apply modal barrier patch
         working-directory: ${{ env.FLUTTER_ROOT }}
-        run: git apply $env:GITHUB_WORKSPACE\lib\scripts\modal-barrier-patch.diff || true
+        run: git apply $env:GITHUB_WORKSPACE\lib\scripts\modal_barrier_patch.diff || true
+        shell: pwsh
+        continue-on-error: true
+
+      - name: apply mouse cursor patch
+        working-directory: ${{ env.FLUTTER_ROOT }}
+        run: git apply $env:GITHUB_WORKSPACE\lib\scripts\mouse_cursor_patch.diff || true
         shell: pwsh
         continue-on-error: true
 

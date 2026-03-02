@@ -33,7 +33,7 @@ class LivePage extends StatefulWidget {
 class _LivePageState extends CommonPageState<LivePage, LiveController>
     with AutomaticKeepAliveClientMixin {
   @override
-  LiveController controller = Get.put(LiveController());
+  final LiveController controller = Get.put(LiveController());
 
   @override
   bool get wantKeepAlive => true;
@@ -50,32 +50,30 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
   Widget build(BuildContext context) {
     super.build(context);
     final ThemeData theme = Theme.of(context);
-    return onBuild(
-      Container(
-        clipBehavior: Clip.hardEdge,
-        margin: const EdgeInsets.symmetric(horizontal: StyleString.safeSpace),
-        decoration: const BoxDecoration(borderRadius: StyleString.mdRadius),
-        child: refreshIndicator(
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      margin: const EdgeInsets.symmetric(horizontal: StyleString.safeSpace),
+      decoration: const BoxDecoration(borderRadius: StyleString.mdRadius),
+      child: refreshIndicator(
           key: refreshIndicatorKey,
-          onRefresh: controller.onRefresh,
-          child: CustomScrollView(
-            controller: controller.scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.only(
-                  top: StyleString.cardSpace,
-                  bottom: 100,
-                ),
-                sliver: SliverMainAxisGroup(
-                  slivers: [
-                    Obx(() => _buildTop(theme, controller.topState.value)),
-                    Obx(() => _buildBody(theme, controller.loadingState.value)),
-                  ],
-                ),
+        onRefresh: controller.onRefresh,
+        child: CustomScrollView(
+          controller: controller.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.only(
+                top: StyleString.cardSpace,
+                bottom: 100,
               ),
-            ],
-          ),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  Obx(() => _buildTop(theme, controller.topState.value)),
+                  Obx(() => _buildBody(theme, controller.loadingState.value)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

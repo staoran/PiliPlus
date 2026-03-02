@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -109,11 +109,6 @@ class _DynamicsTabPageState
       tag: widget.dynamicsType.name,
     );
     super.initState();
-    // 如果启用阈值且有 upPanelStream，但父类没有添加监听器，则在此添加
-    if (enableScrollThreshold &&
-        _upPanelStream != null) {
-      controller.scrollController.addListener(listener);
-    }
     if (widget.dynamicsType == DynamicsTabType.up) {
       _listener = dynamicsController.mid.listen((mid) {
         if (mid != -1) {
@@ -130,19 +125,6 @@ class _DynamicsTabPageState
     _listener?.cancel();
     dynamicsController.mid.close();
     super.dispose();
-  }
-
-  @override
-  Widget onBuild(Widget child) {
-    // 如果未启用阈值且有 upPanelStream，需要添加 NotificationListener
-    if (!enableScrollThreshold &&
-        _upPanelStream != null) {
-      return NotificationListener<UserScrollNotification>(
-        onNotification: onNotificationType1,
-        child: child,
-      );
-    }
-    return super.onBuild(child);
   }
 
   @override
