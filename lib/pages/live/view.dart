@@ -298,6 +298,7 @@ class _LivePageState extends CommonPageState<LivePage, LiveController>
         height: 68.0 + textScaler.scale(12),
         child: CustomScrollView(
           scrollDirection: Axis.horizontal,
+          controller: controller.followController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverFixedExtentList.builder(

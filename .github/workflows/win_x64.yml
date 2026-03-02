@@ -80,13 +80,13 @@ jobs:
             PiliPlus-Win-Setup/PiliPlus_windows_*.exe
 
       - name: Upload windows file release
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Windows-file-x64-release
           path: Release
 
       - name: Upload windows setup release
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Windows-setup-x64-release
           path: PiliPlus-Win-Setup

@@ -421,9 +421,7 @@ class _PgcPageState extends CommonPageState<PgcPage, PgcController>
                           ? StyleString.safeSpace
                           : 0,
                     ),
-                    child: PgcCardV(
-                      item: response[index],
-                    ),
+                    child: PgcCardV(item: response[index]),
                   );
                 },
               )

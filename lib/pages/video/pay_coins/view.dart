@@ -335,9 +335,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                         height: 100,
                         child: PageView(
                           key: const PageStorageKey(_PayCoinsPageState),
-                          physics: const CustomTabBarViewScrollPhysics(
-                            parent: ClampingScrollPhysics(),
-                          ),
+                          physics: clampingScrollPhysics,
                           controller: _controller,
                           onPageChanged: (index) {
                             _scale();

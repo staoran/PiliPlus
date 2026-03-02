@@ -73,6 +73,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
       },
       child: refreshIndicator(
         onRefresh: _videoReplyController.onRefresh,
+        isClampingScrollPhysics: widget.isNested,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -80,11 +81,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               controller: widget.isNested
                   ? null
                   : _videoReplyController.scrollController,
-              physics: widget.isNested
-                  ? const AlwaysScrollableScrollPhysics(
-                      parent: ClampingScrollPhysics(),
-                    )
-                  : const AlwaysScrollableScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(),
               key: const PageStorageKey(_VideoReplyPanelState),
               slivers: <Widget>[
                 SliverPersistentHeader(

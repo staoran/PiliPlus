@@ -982,7 +982,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 children: [
                   buildTabBar(onTap: videoDetailController.animToTop),
                   Expanded(
-                    child: videoTabBarView(
+                    child: tabBarView(
                       controller: videoDetailController.tabCtr,
                       children: [
                         videoIntro(
@@ -1010,6 +1010,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     required double width,
     required double height,
     VoidCallback? onTap,
+    bool showIntro = true,
+    String? introText,
+    Widget? introWidget,
   }) {
     return Scaffold(
       key: videoDetailController.childKey,
@@ -1018,15 +1021,21 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          buildTabBar(onTap: onTap),
+          buildTabBar(
+            onTap: onTap,
+            showIntro: showIntro,
+            introText: introText,
+          ),
           Expanded(
-            child: videoTabBarView(
+            child: tabBarView(
               controller: videoDetailController.tabCtr,
               children: [
-                videoIntro(
-                  width: width,
-                  height: height,
-                ),
+                if (showIntro)
+                  introWidget ??
+                      videoIntro(
+                        width: width,
+                        height: height,
+                      ),
                 if (videoDetailController.showReply) videoReplyPanel(),
                 if (_shouldShowSeasonPanel) seasonPanel,
               ],
@@ -1120,6 +1129,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               child: buildTabContentArea(
                 width: introWidth,
                 height: introHeight,
+                showIntro: false,
               ),
             ),
           ),
@@ -1163,6 +1173,23 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             child: buildTabContentArea(
               width: maxWidth - width - padding.horizontal,
               height: maxHeight - padding.top,
+              introText: '相关视频',
+              showIntro: videoDetailController.showRelatedVideo,
+              introWidget: videoDetailController.isFileSource
+                  ? localIntroPanel()
+                  : KeepAliveWrapper(
+                      builder: (context) => CustomScrollView(
+                        key: const PageStorageKey(CommonIntroController),
+                        controller:
+                            videoDetailController.effectiveIntroScrollCtr,
+                        slivers: [
+                          RelatedVideoPanel(
+                            key: videoRelatedKey,
+                            heroTag: heroTag,
+                          ),
+                        ],
+                      ),
+                    ),
             ),
           ),
         ),

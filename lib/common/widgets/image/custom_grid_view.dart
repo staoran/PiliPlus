@@ -415,7 +415,7 @@ class RenderImageGrid extends RenderBox
     while (child != null) {
       final childParentData = child.parentData as MultiChildLayoutParentData;
       final index = childParentData.id as int;
-      child.layout(itemConstraints, parentUsesSize: true);
+      child.layout(itemConstraints);
       childParentData.offset = Offset(
         (space + width) * (index % column),
         (space + height) * (index ~/ column),

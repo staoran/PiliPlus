@@ -57,7 +57,7 @@ class RenderCustomHeightWidget extends RenderProxyBox {
 
   @override
   void performLayout() {
-    child!.layout(constraints, parentUsesSize: true);
+    child!.layout(constraints);
     size = constraints.constrainDimensions(constraints.maxWidth, height);
   }
 

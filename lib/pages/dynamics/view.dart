@@ -130,7 +130,7 @@ class _DynamicsPageState extends State<DynamicsPage>
     Widget? leading;
     List<Widget>? actions;
 
-    Widget child = videoTabBarView(
+    Widget child = tabBarView(
       controller: _dynamicsController.tabController,
       children: DynamicsTabType.values
           .map((e) => DynamicsTabPage(dynamicsType: e))
