@@ -92,8 +92,10 @@ class RenderHeaderWidget extends RenderBox
     final childSize =
         (actions..layout(
               BoxConstraints(
-                maxWidth:
-                    maxWidth - _kActionsLeftPadding - _kActionsRightPadding,
+                maxWidth: math.max(
+                  0.0,
+                  maxWidth - _kActionsLeftPadding - _kActionsRightPadding,
+                ),
               ),
               parentUsesSize: true,
             ))
