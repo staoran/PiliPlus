@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' show min;
 import 'dart:ui';
 
@@ -7,11 +8,9 @@ import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
-import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/ua_type.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/main.dart';
@@ -64,6 +63,7 @@ import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -78,6 +78,7 @@ import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as path;
 import 'package:window_manager/window_manager.dart';
 
 class VideoDetailController extends GetxController
@@ -968,32 +969,47 @@ class VideoDetailController extends GetxController
 
     // 当 playFromLocal=true 时，只替换播放数据源为本地文件，不改变页面的 isFileSource 判定
     // （以避免影响列表播放的在线简介/评论等逻辑）。
-    final DataSourceType dataSourceType = (playFromLocal || isFileSource)
-        ? DataSourceType.file
-        : DataSourceType.network;
+    final bool useFileSource = playFromLocal || isFileSource;
+    late final DataSource source;
+    if (useFileSource) {
+      final String? dirPath = playFromLocal
+          ? effectiveLocalEntry?.entryDirPath
+          : args['dirPath'];
+      final String? typeTag = playFromLocal
+          ? effectiveLocalEntry?.typeTag
+          : entry.typeTag;
+      final int? mediaType = playFromLocal
+          ? effectiveLocalEntry?.mediaType
+          : entry.mediaType;
+      if (dirPath != null && typeTag != null && mediaType != null) {
+        source = FileSource(
+          dir: dirPath,
+          typeTag: typeTag,
+          isMp4: mediaType == 1,
+        );
+      } else {
+        source = NetworkSource(
+          videoSource: onlyPlayAudio
+              ? (audio ?? audioUrl ?? video ?? videoUrl!)
+              : (video ?? videoUrl!),
+          audioSource: onlyPlayAudio ? null : (audio ?? audioUrl),
+        );
+      }
+    } else {
+      source = NetworkSource(
+        videoSource: onlyPlayAudio
+            ? (audio ?? audioUrl ?? video ?? videoUrl!)
+            : (video ?? videoUrl!),
+        audioSource: onlyPlayAudio ? null : (audio ?? audioUrl),
+      );
+    }
 
     Duration? seek = seekToTime ?? defaultST ?? playedTime;
     if (seek == null || seek == Duration.zero) {
       seek = getFirstSegment();
     }
     await plPlayerController.setDataSource(
-      DataSource(
-        videoSource: dataSourceType == DataSourceType.file
-            ? null
-            : onlyPlayAudio
-            ? audio ?? audioUrl
-            : video ?? videoUrl,
-        audioSource: (dataSourceType == DataSourceType.file || onlyPlayAudio)
-            ? null
-            : audio ?? audioUrl,
-        type: dataSourceType,
-        httpHeaders: dataSourceType == DataSourceType.file
-            ? null
-            : {
-                'user-agent': UaType.pc.ua,
-                'referer': HttpString.baseUrl,
-              },
-      ),
+      source,
       seekTo: seek,
       duration:
           duration ??
@@ -1018,7 +1034,7 @@ class VideoDetailController extends GetxController
         setSubtitle(vttSubtitlesIndex.value);
         // 离线视频：监听视频尺寸变化来更新竖屏状态
         // 因为此时视频尺寸可能还未解码完成，所以需要通过流监听
-        if (dataSourceType == DataSourceType.file) {
+        if (source is FileSource) {
           _listenVideoSizeForVerticalState();
         }
       },
@@ -1033,17 +1049,6 @@ class VideoDetailController extends GetxController
                 firstVideo.height)
           : firstVideo.height,
       volume: volume ?? this.volume,
-      dirPath: dataSourceType == DataSourceType.file
-          ? (playFromLocal
-                ? effectiveLocalEntry?.entryDirPath
-                : args['dirPath'])
-          : null,
-      typeTag: dataSourceType == DataSourceType.file
-          ? effectiveLocalEntry?.typeTag
-          : null,
-      mediaType: dataSourceType == DataSourceType.file
-          ? effectiveLocalEntry?.mediaType
-          : null,
     );
 
     if (isClosed) return;
@@ -1404,14 +1409,18 @@ class VideoDetailController extends GetxController
 
     Future<void> setSub(({bool isData, String id}) subtitle) async {
       final sub = subtitles[index - 1];
+
+      String subUri = subtitle.id;
+      File? file;
+      if (subtitle.isData) {
+        subUri = path.join(tmpDirPath, '${cid.value}-${sub.lan}.vtt');
+        file = File(subUri);
+        if (!file.existsSync()) {
+          await file.writeAsString(subtitle.id);
+        }
+      }
       await plPlayerController.videoPlayerController?.setSubtitleTrack(
-        SubtitleTrack(
-          subtitle.id,
-          sub.lanDoc,
-          sub.lan,
-          uri: !subtitle.isData,
-          data: subtitle.isData,
-        ),
+        SubtitleTrack(subUri, sub.lanDoc, sub.lan, uri: true),
       );
       vttSubtitlesIndex.value = index;
     }

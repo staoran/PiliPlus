@@ -2,6 +2,7 @@
 
 import 'dart:developer';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -131,7 +132,7 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> {
 
       _setState();
     } catch (e) {
-      log('CachedNetworkSVGImage: $e');
+      if (kDebugMode) log('CachedNetworkSVGImage: $e');
 
       _isError = true;
       _isLoading = false;

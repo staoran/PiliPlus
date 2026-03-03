@@ -13,9 +13,9 @@ import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pb.dart'
         ListOrder,
         DashItem,
         ResponseUrl;
+import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/ua_type.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart'
     show FavMixin;
@@ -67,8 +67,9 @@ class AudioController extends GetxController
   @override
   late final bool isUgc = itemType == 1;
 
-  final Rx<DetailItem?> audioItem = Rx<DetailItem?>(null);
+  final audioItem = Rxn<DetailItem>();
 
+  bool _hasInit = false;
   @override
   Player? player;
   late int cacheAudioQa;
@@ -79,7 +80,7 @@ class AudioController extends GetxController
 
   late final AnimationController animController;
 
-  Set<StreamSubscription>? _subscriptions;
+  List<StreamSubscription>? _subscriptions;
 
   int? index;
   List<DetailItem>? playlist;
@@ -141,7 +142,7 @@ class AudioController extends GetxController
           // 没有离线资源才使用传入的在线地址
           _onOpenMedia(
             audioUrl,
-            ua: UaType.pc.ua,
+            ua: BrowserUa.pc,
             referer: HttpString.baseUrl,
           );
         }
@@ -176,7 +177,7 @@ class AudioController extends GetxController
     return player?.play();
   }
 
-  Future<void>? onPause() async {
+  Future<void>? onPause() {
     return player?.pause();
   }
 
@@ -358,8 +359,8 @@ class AudioController extends GetxController
 
   void _onOpenMedia(
     String url, {
-    String? referer,
     String ua = Constants.userAgentApp,
+    String? referer,
   }) {
     // 切换媒资时重置本地播放标记
     if (!_isLocalPlayback) {
@@ -385,8 +386,16 @@ class AudioController extends GetxController
   }
 
   void _initPlayerIfNeeded() {
-    player ??= Player();
-    _subscriptions ??= {
+    if (_hasInit) return;
+    _hasInit = true;
+    assert(player == null, _subscriptions = null);
+    player = Player();
+    if (isClosed) {
+      player!.dispose();
+      player = null;
+      return;
+    }
+    _subscriptions = [
       player!.stream.position.listen((position) {
         if (isDragging) return;
         if (position.inSeconds != this.position.value.inSeconds) {
@@ -396,11 +405,9 @@ class AudioController extends GetxController
           _maybeStartPlaybackForeground();
         }
       }),
-      player!.stream.duration.listen((duration) {
-        this.duration.value = duration;
-      }),
+      player!.stream.duration.listen(duration.call),
       player!.stream.playing.listen((playing) {
-        PlayerStatus playerStatus;
+        final PlayerStatus playerStatus;
         if (playing) {
           // 新媒体开始播放时，安全地停止前台服务
           // 此时播放器已经初始化完成，可以安全停止
@@ -442,14 +449,14 @@ class AudioController extends GetxController
                 playNext(nextPart: true);
                 break;
               case PlayRepeat.singleCycle:
-                _replay();
+                onPlay();
                 break;
               case PlayRepeat.listCycle:
                 if (!playNext(nextPart: true)) {
                   if (index != null && index != 0 && playlist != null) {
                     playIndex(0);
                   } else {
-                    _replay();
+                    onPlay();
                   }
                 }
                 break;
@@ -459,11 +466,7 @@ class AudioController extends GetxController
           }
         }
       }),
-    };
-  }
-
-  void _replay() {
-    player?.seek(Duration.zero).whenComplete(player!.play);
+    ];
   }
 
   @pragma('vm:notify-debugger-on-exception')

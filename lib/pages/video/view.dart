@@ -45,7 +45,7 @@ import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
-import 'package:PiliPlus/plugin/pl_player/view.dart';
+import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
@@ -328,15 +328,15 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
     plPlayerController = videoDetailController.plPlayerController;
     videoDetailController.autoPlay = true;
+    plPlayerController!
+      ..addStatusLister(playerListener)
+      ..addPositionListener(positionListener);
     if (videoDetailController.plPlayerController.preInitPlayer) {
       await plPlayerController!.play();
     } else {
       await videoDetailController.playerInit(autoplay: true);
     }
     if (!mounted || !isShowing) return;
-    plPlayerController!
-      ..addStatusLister(playerListener)
-      ..addPositionListener(positionListener);
     await plPlayerController!.autoEnterFullscreen();
   }
 

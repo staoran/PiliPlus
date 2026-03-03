@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/image_viewer/hero.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pb.dart';
@@ -744,7 +745,7 @@ class _AudioPageState extends State<AudioPage> {
 
   void _onSeek(Duration value) {
     _controller
-      ..player?.platform?.seek(value)
+      ..player?.seek(value)
       ..isDragging = false;
   }
 
@@ -900,7 +901,7 @@ class _AudioPageState extends State<AudioPage> {
                         onTap: () => PageUtils.imageView(
                           imgList: [SourceModel(url: cover)],
                         ),
-                        child: Hero(
+                        child: fromHero(
                           tag: cover,
                           child: NetworkImgLayer(
                             src: cover,
