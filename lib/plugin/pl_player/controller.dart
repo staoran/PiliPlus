@@ -266,8 +266,8 @@ class PlPlayerController with BlockConfigMixin {
 
     final Size size;
     final state = videoPlayerController!.state;
-    int width = state.width ?? this.width ?? 16;
-    int height = state.height ?? this.height ?? 9;
+    int width = state.width;
+    int height = state.height;
     if (width == 0) {
       width = this.width ?? 16;
     }
@@ -684,7 +684,7 @@ class PlPlayerController with BlockConfigMixin {
   late final isAnim = _pgcType == 1 || _pgcType == 4;
   late final Rx<SuperResolutionType> superResolutionType =
       (isAnim ? Pref.superResolutionType : SuperResolutionType.disable).obs;
-  Future<void> setShader([SuperResolutionType? type, NativePlayer? pp]) async {
+  Future<void> setShader([SuperResolutionType? type, Player? pp]) async {
     if (type == null) {
       type = superResolutionType.value;
     } else {
@@ -693,7 +693,7 @@ class PlPlayerController with BlockConfigMixin {
         setting.put(SettingBoxKey.superResolutionType, type.index);
       }
     }
-    pp ??= _videoPlayerController?.platform;
+    pp ??= _videoPlayerController;
     if (pp == null) return;
     switch (type) {
       case SuperResolutionType.disable:
@@ -731,6 +731,9 @@ class PlPlayerController with BlockConfigMixin {
     if (Platform.isAndroid) {
       opt['volume-max'] = '100';
       opt['ao'] = Pref.audioOutput;
+      if (hwdec != null) {
+        opt['hwdec'] = hwdec!;
+      }
     } else if (PlatformUtils.isDesktop) {
       opt['volume'] = (volume.value * 100).toString();
     }
@@ -739,7 +742,7 @@ class PlPlayerController with BlockConfigMixin {
       opt['autosync'] = autosync;
     }
 
-    final player = Player(
+    final player = await Player.create(
       configuration: PlayerConfiguration(
         bufferSize: Pref.expandBuffer
             ? (isLive ? 64 * 1024 * 1024 : 32 * 1024 * 1024)
@@ -751,7 +754,7 @@ class PlPlayerController with BlockConfigMixin {
 
     assert(_videoController == null);
 
-    _videoController = VideoController(
+    _videoController = await VideoController.create(
       player,
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration: hwdec != null,
@@ -1803,7 +1806,7 @@ class PlPlayerController with BlockConfigMixin {
 
   void takeScreenshot() {
     SmartDialog.showToast('截图中');
-    videoPlayerController?.screenshot(format: 'image/png').then((value) {
+    videoPlayerController?.screenshot(format: .png).then((value) {
       if (value != null) {
         SmartDialog.showToast('点击弹窗保存截图');
         showDialog(

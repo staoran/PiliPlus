@@ -77,7 +77,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:media_kit/media_kit.dart' hide Subtitle;
 import 'package:path/path.dart' as path;
 import 'package:window_manager/window_manager.dart';
 
@@ -373,17 +373,21 @@ class VideoDetailController extends GetxController
     );
 
     // 监听宽度变化
-    _widthSubscription = player.stream.width.listen((width) {
+    _widthSubscription = player.stream.size.map((size) => size.$1).listen((
+      width,
+    ) {
       debugPrint('[VideoDetailController] width changed: $width');
-      if (width != null && width > 0) {
+      if (width > 0) {
         _updateVerticalStateFromPlayer();
       }
     });
 
     // 监听高度变化
-    _heightSubscription = player.stream.height.listen((height) {
+    _heightSubscription = player.stream.size.map((size) => size.$2).listen((
+      height,
+    ) {
       debugPrint('[VideoDetailController] height changed: $height');
-      if (height != null && height > 0) {
+      if (height > 0) {
         _updateVerticalStateFromPlayer();
       }
     });

@@ -357,11 +357,11 @@ class AudioController extends GetxController
     }
   }
 
-  void _onOpenMedia(
+  Future<void> _onOpenMedia(
     String url, {
     String ua = Constants.userAgentApp,
     String? referer,
-  }) {
+  }) async {
     // 切换媒资时重置本地播放标记
     if (!_isLocalPlayback) {
       // 非本地播放路径，确保标记清空
@@ -370,26 +370,27 @@ class AudioController extends GetxController
     // 重置前台服务标记，但不要立即停止服务
     // 等到新媒体开始播放时再停止，避免切换时的保护窗口期
     _fgStartedForCurrent = false;
-    _initPlayerIfNeeded();
+    await _initPlayerIfNeeded();
+    player!.setMediaHeader(
+      userAgent: ua,
+      // mpv cannot clear referer option
+      headers: {'Referer': ?referer},
+    );
     player!.open(
       Media(
         url,
         start: _start,
-        httpHeaders: {
-          'user-agent': ua,
-          'referer': ?referer,
-        },
       ),
     );
     _start = null;
     initSkip();
   }
 
-  void _initPlayerIfNeeded() {
+  Future<void> _initPlayerIfNeeded() async {
     if (_hasInit) return;
     _hasInit = true;
     assert(player == null, _subscriptions = null);
-    player = Player();
+    player = await Player.create();
     if (isClosed) {
       player!.dispose();
       player = null;

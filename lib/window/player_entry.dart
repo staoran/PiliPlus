@@ -496,7 +496,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       final plCtr = PlPlayerController.instance;
       if (plCtr != null) {
         plCtr.isCloseAll = true;
-        await plCtr.dispose();
+        plCtr.dispose();
       }
     } catch (_) {}
 
@@ -585,7 +585,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       final plCtr = PlPlayerController.instance;
       if (plCtr != null) {
         plCtr.isCloseAll = true; // 确保完全销毁
-        await plCtr.dispose();
+        plCtr.dispose();
       }
     } catch (e) {
       // 忽略销毁错误
