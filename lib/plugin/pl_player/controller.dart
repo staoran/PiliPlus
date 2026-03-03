@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/http/browser_ua.dart';
+import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/video.dart';
@@ -761,6 +762,11 @@ class PlPlayerController with BlockConfigMixin {
         androidAttachSurfaceAfterVideoParameters: false,
         hwdec: hwdec,
       ),
+    );
+
+    player.setMediaHeader(
+      userAgent: BrowserUa.pc,
+      referer: HttpString.baseUrl,
     );
 
     // await player.setAudioTrack(.auto());
