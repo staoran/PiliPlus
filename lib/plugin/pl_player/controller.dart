@@ -573,6 +573,9 @@ class PlPlayerController with BlockConfigMixin {
   bool _processing = false;
   bool get processing => _processing;
 
+  /// true 期间 stream.error 抛出的事件属于媒体切换噪音，应静默丢弃
+  bool _isSwitchingMedia = false;
+
   // offline
   bool get isFileSource => dataSource is FileSource;
 
@@ -846,14 +849,22 @@ class PlPlayerController with BlockConfigMixin {
       }
     }
 
-    await player.open(
-      Media(
-        video,
-        start: seekTo,
-        extras: extras.isEmpty ? null : extras,
-      ),
-      play: false,
-    );
+    _isSwitchingMedia = true;
+    try {
+      await player.open(
+        Media(
+          video,
+          start: seekTo,
+          extras: extras.isEmpty ? null : extras,
+        ),
+        play: false,
+      );
+    } finally {
+      // mpv 在 open 完成后可能还会短暂发出旧 stream 的 error 事件，延迟重置
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _isSwitchingMedia = false;
+      });
+    }
   }
 
   Future<bool> refreshPlayer() async {
@@ -878,14 +889,21 @@ class PlPlayerController with BlockConfigMixin {
             : dataSource.audioSource!.replaceAll(':', '\\:');
       }
     }
-    await _videoPlayerController!.open(
-      Media(
-        dataSource.videoSource,
-        start: position,
-        extras: audioUri == null ? null : {'audio-files': '"$audioUri"'},
-      ),
-      play: true,
-    );
+    _isSwitchingMedia = true;
+    try {
+      await _videoPlayerController!.open(
+        Media(
+          dataSource.videoSource,
+          start: position,
+          extras: audioUri == null ? null : {'audio-files': '"$audioUri"'},
+        ),
+        play: true,
+      );
+    } finally {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _isSwitchingMedia = false;
+      });
+    }
     return true;
     // seekTo(currentPos);
   }
@@ -1081,6 +1099,7 @@ class PlPlayerController with BlockConfigMixin {
           }
         })),
       stream.error.listen((String event) {
+        if (_isSwitchingMedia) return;
         if (dataSource is FileSource &&
             event.startsWith("Failed to open file")) {
           return;
