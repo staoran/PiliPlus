@@ -64,6 +64,8 @@ import 'package:path/path.dart' as path;
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
+typedef PlayCallback = Future<void>? Function();
+
 class PlPlayerController with BlockConfigMixin {
   Player? _videoPlayerController;
   VideoController? _videoController;
@@ -495,11 +497,11 @@ class PlPlayerController with BlockConfigMixin {
     return _instance != null;
   }
 
-  static void setPlayCallBack(Future<void>? Function()? playCallBack) {
+  static void setPlayCallBack(PlayCallback? playCallBack) {
     _playCallBack = playCallBack;
   }
 
-  static Future<void>? Function()? _playCallBack;
+  static PlayCallback? _playCallBack;
 
   static Future<void>? playIfExists() {
     // await _instance?.play(repeat: repeat, hideControls: hideControls);
@@ -639,6 +641,7 @@ class PlPlayerController with BlockConfigMixin {
       await _createVideoController(dataSource, seekTo, volume);
 
       if (_playerCount == 0) {
+        _removeListeners();
         _videoPlayerController?.dispose();
         _videoPlayerController = null;
         _videoController = null;
@@ -654,8 +657,6 @@ class PlPlayerController with BlockConfigMixin {
       // 数据加载完成
       dataStatus.value = DataStatus.loaded;
 
-      // listen the video player events
-      startListeners();
       await _initializePlayer();
       onInit?.call();
     } catch (err, stackTrace) {
@@ -770,6 +771,9 @@ class PlPlayerController with BlockConfigMixin {
     );
 
     // await player.setAudioTrack(.auto());
+
+    _startListeners(player);
+
     return player;
   }
 
@@ -779,8 +783,6 @@ class PlPlayerController with BlockConfigMixin {
     Duration? seekTo,
     Volume? volume,
   ) async {
-    // 每次配置时先移除监听
-    removeListeners();
     isBuffering.value = false;
     buffered.value = Duration.zero;
     _heartDuration = 0;
@@ -793,6 +795,7 @@ class PlPlayerController with BlockConfigMixin {
     if (player == null) {
       player = await _initPlayer();
       if (_playerCount == 0) {
+        _removeListeners();
         player.dispose();
         player = null;
         _videoController = null;
@@ -935,9 +938,9 @@ class PlPlayerController with BlockConfigMixin {
     return null;
   }
 
-  List<StreamSubscription> subscriptions = [];
-  final Set<Function(Duration position)> _positionListeners = {};
-  final Set<Function(PlayerStatus status)> _statusListeners = {};
+  List<StreamSubscription>? _subscriptions;
+  final Set<ValueChanged<Duration>> _positionListeners = {};
+  final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
 
   bool get _hasNextCandidate {
     // 只有在列表播放模式（_looping != none）且播放模式支持切换时才返回 true
@@ -979,10 +982,11 @@ class PlPlayerController with BlockConfigMixin {
   }
 
   /// 播放事件监听
-  void startListeners() {
-    final controllerStream = videoPlayerController!.stream;
-    subscriptions = [
-      controllerStream.playing.listen((event) {
+  void _startListeners(NativePlayer player) {
+    assert(_subscriptions == null);
+    final stream = player.stream;
+    _subscriptions = [
+      stream.playing.listen((event) {
         WakelockPlus.toggle(enable: event);
         if (event) {
           // 新媒体开始播放时，安全地停止前台服务
@@ -1018,7 +1022,7 @@ class PlPlayerController with BlockConfigMixin {
           makeHeartBeat(positionSeconds.value, type: HeartBeatType.status);
         }
       }),
-      controllerStream.completed.listen((event) {
+      stream.completed.listen((event) {
         if (event) {
           if (kDebugMode) {
             debugPrint('PlPlayerController: 播放完成，准备切换下一个');
@@ -1037,7 +1041,7 @@ class PlPlayerController with BlockConfigMixin {
         }
         makeHeartBeat(positionSeconds.value, type: HeartBeatType.completed);
       }),
-      controllerStream.position.listen((event) {
+      stream.position.listen((event) {
         position = event;
         updatePositionSecond();
         if (!isSliderMoving.value) {
@@ -1053,14 +1057,14 @@ class PlPlayerController with BlockConfigMixin {
         }
         makeHeartBeat(event.inSeconds);
       }),
-      controllerStream.duration.listen((Duration event) {
+      stream.duration.listen((Duration event) {
         duration.value = event;
       }),
-      controllerStream.buffer.listen((Duration event) {
+      stream.buffer.listen((Duration event) {
         buffered.value = event;
         updateBufferedSecond();
       }),
-      controllerStream.buffering.listen((bool event) {
+      stream.buffering.listen((bool event) {
         isBuffering.value = event;
         videoPlayerServiceHandler?.onStatusChange(
           playerStatus.value,
@@ -1069,14 +1073,14 @@ class PlPlayerController with BlockConfigMixin {
         );
       }),
       if (kDebugMode)
-        controllerStream.log.listen(((PlayerLog log) {
+        stream.log.listen(((PlayerLog log) {
           if (log.level == 'error' || log.level == 'fatal') {
             Utils.reportError('${log.level}: ${log.prefix}: ${log.text}', null);
           } else {
             debugPrint(log.toString());
           }
         })),
-      controllerStream.error.listen((String event) {
+      stream.error.listen((String event) {
         if (dataSource is FileSource &&
             event.startsWith("Failed to open file")) {
           return;
@@ -1151,8 +1155,10 @@ class PlPlayerController with BlockConfigMixin {
   }
 
   /// 移除事件监听
-  Future<void> removeListeners() {
-    return Future.wait(subscriptions.map((e) => e.cancel()));
+  void _removeListeners() {
+    _subscriptions?.forEach((e) => e.cancel());
+    _subscriptions?.clear();
+    _subscriptions = null;
   }
 
   void _cancelSubForSeek() {
@@ -1569,20 +1575,20 @@ class PlPlayerController with BlockConfigMixin {
     }
   }
 
-  void addPositionListener(Function(Duration position) listener) {
+  void addPositionListener(ValueChanged<Duration> listener) {
     if (_playerCount == 0) return;
     _positionListeners.add(listener);
   }
 
-  void removePositionListener(Function(Duration position) listener) =>
+  void removePositionListener(ValueChanged<Duration> listener) =>
       _positionListeners.remove(listener);
 
-  void addStatusLister(Function(PlayerStatus status) listener) {
+  void addStatusLister(ValueChanged<PlayerStatus> listener) {
     if (_playerCount == 0) return;
     _statusListeners.add(listener);
   }
 
-  void removeStatusLister(Function(PlayerStatus status) listener) =>
+  void removeStatusLister(ValueChanged<PlayerStatus> listener) =>
       _statusListeners.remove(listener);
 
   // 记录播放记录
@@ -1709,8 +1715,7 @@ class PlPlayerController with BlockConfigMixin {
       windowManager.setAlwaysOnTop(false);
     }
 
-    removeListeners();
-    subscriptions.clear();
+    _removeListeners();
     _positionListeners.clear();
     _statusListeners.clear();
     if (playerStatus.isPlaying) {

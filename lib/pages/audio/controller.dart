@@ -396,8 +396,9 @@ class AudioController extends GetxController
       player = null;
       return;
     }
+    final stream = player!.stream;
     _subscriptions = [
-      player!.stream.position.listen((position) {
+      stream.position.listen((position) {
         if (isDragging) return;
         if (position.inSeconds != this.position.value.inSeconds) {
           this.position.value = position;
@@ -406,8 +407,8 @@ class AudioController extends GetxController
           _maybeStartPlaybackForeground();
         }
       }),
-      player!.stream.duration.listen(duration.call),
-      player!.stream.playing.listen((playing) {
+      stream.duration.listen(duration.call),
+      stream.playing.listen((playing) {
         final PlayerStatus playerStatus;
         if (playing) {
           // 新媒体开始播放时，安全地停止前台服务
@@ -426,7 +427,7 @@ class AudioController extends GetxController
         }
         videoPlayerServiceHandler?.onStatusChange(playerStatus, false, false);
       }),
-      player!.stream.completed.listen((completed) {
+      stream.completed.listen((completed) {
         _videoDetailController?.playedTime = duration.value;
         videoPlayerServiceHandler?.onStatusChange(
           PlayerStatus.completed,
@@ -1051,6 +1052,7 @@ class AudioController extends GetxController
     // 从听视频页返回时，播放器页的 didPopNext 会恢复正确的列表控制模式
     videoPlayerServiceHandler?.onVideoDetailDispose(hashCode.toString());
     _subscriptions?.forEach((e) => e.cancel());
+    _subscriptions?.clear();
     _subscriptions = null;
     PlaybackForegroundService.stop();
     player?.dispose();
