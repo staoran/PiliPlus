@@ -1036,7 +1036,8 @@ class PlPlayerController with BlockConfigMixin {
         for (final element in _statusListeners) {
           element(event ? PlayerStatus.playing : PlayerStatus.paused);
         }
-        if (videoPlayerController!.state.position.inSeconds != 0) {
+        if (!_isSwitchingMedia &&
+            videoPlayerController!.state.position.inSeconds != 0) {
           makeHeartBeat(positionSeconds.value, type: HeartBeatType.status);
         }
       }),
@@ -1073,7 +1074,9 @@ class PlPlayerController with BlockConfigMixin {
         for (final element in _positionListeners) {
           element(event);
         }
-        makeHeartBeat(event.inSeconds);
+        if (!_isSwitchingMedia) {
+          makeHeartBeat(event.inSeconds);
+        }
       }),
       stream.duration.listen((Duration event) {
         duration.value = event;
