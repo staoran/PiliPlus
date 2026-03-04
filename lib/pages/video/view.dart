@@ -1173,23 +1173,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             child: buildTabContentArea(
               width: maxWidth - width - padding.horizontal,
               height: maxHeight - padding.top,
-              introText: '相关视频',
-              showIntro: videoDetailController.showRelatedVideo,
-              introWidget: videoDetailController.isFileSource
-                  ? localIntroPanel()
-                  : KeepAliveWrapper(
-                      builder: (context) => CustomScrollView(
-                        key: const PageStorageKey(CommonIntroController),
-                        controller:
-                            videoDetailController.effectiveIntroScrollCtr,
-                        slivers: [
-                          RelatedVideoPanel(
-                            key: videoRelatedKey,
-                            heroTag: heroTag,
-                          ),
-                        ],
-                      ),
-                    ),
             ),
           ),
         ),
