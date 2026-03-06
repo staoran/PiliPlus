@@ -1036,6 +1036,11 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
+    final String? videoHeroTag = args['heroTag'] as String?;
+    final bool shouldPreserveVideoNotification =
+        videoHeroTag != null &&
+        Get.isRegistered<VideoDetailController>(tag: videoHeroTag);
+
     // 退出听视频时保存最后的进度
     _saveCurrentProgress();
 
@@ -1058,9 +1063,10 @@ class AudioController extends GetxController
     player?.dispose();
     player = null;
     animController.dispose();
-    // 强制清理媒体通知卡片，确保退出时卡片被销毁
-    // 这是解决快速返回或网络加载失败时媒体卡片残留的关键
-    if (Platform.isAndroid) {
+    // 从视频页进入听视频再返回时，需要保留原视频页的媒体通知栈，
+    // 否则会把 videoPlayerServiceHandler 内的媒体项清空，导致回到视频页后
+    // 通知卡片的进度与播放时间无法继续同步。
+    if (Platform.isAndroid && !shouldPreserveVideoNotification) {
       videoPlayerServiceHandler?.clear(force: true);
     }
     super.onClose();
