@@ -565,6 +565,34 @@ class PlPlayerController with BlockConfigMixin {
   /// true 期间 stream.error 抛出的事件属于媒体切换噪音，应静默丢弃
   bool _isSwitchingMedia = false;
 
+  bool get _hasPlaybackProgress =>
+      position > Duration.zero || buffered.value > Duration.zero;
+
+  bool get _hasUsableBuffer => buffered.value > position;
+
+  bool _isTransientNetworkError(String event) {
+    final lowerEvent = event.toLowerCase();
+    return lowerEvent.contains('tls') ||
+        lowerEvent.contains('ssl') ||
+        lowerEvent.contains('handshake') ||
+        lowerEvent.contains('ffurl_read returned') ||
+        lowerEvent.contains('failed to open https://') ||
+        lowerEvent.contains('can not open external file https://') ||
+        lowerEvent.contains('connection reset') ||
+        lowerEvent.contains('connection aborted') ||
+        lowerEvent.contains('network is unreachable') ||
+        lowerEvent.contains('timed out');
+  }
+
+  bool _shouldSilenceRecoverableError(String event) {
+    if (!_isTransientNetworkError(event)) {
+      return false;
+    }
+    return playerStatus.isPlaying ||
+        (!isBuffering.value && _hasPlaybackProgress) ||
+        (isBuffering.value && _hasUsableBuffer);
+  }
+
   // offline
   bool get isFileSource => dataSource is FileSource;
 
@@ -1084,6 +1112,12 @@ class PlPlayerController with BlockConfigMixin {
             event.startsWith("Failed to open file")) {
           return;
         }
+        if (_shouldSilenceRecoverableError(event)) {
+          if (kDebugMode) {
+            debugPrint('PlPlayerController: ignore recoverable error: $event');
+          }
+          return;
+        }
         if (isLive) {
           if (event.startsWith('tcp: ffurl_read returned ') ||
               event.startsWith("Failed to open https://") ||
@@ -1127,6 +1161,14 @@ class PlPlayerController with BlockConfigMixin {
               event.startsWith("Failed to open .") ||
               event.startsWith("Cannot open") ||
               event.startsWith("Can not open")) {
+            return;
+          }
+          if (_hasPlaybackProgress && _isTransientNetworkError(event)) {
+            if (kDebugMode) {
+              debugPrint(
+                'PlPlayerController: suppress transient playback toast: $event',
+              );
+            }
             return;
           }
           SmartDialog.showToast('视频加载错误, $event');
