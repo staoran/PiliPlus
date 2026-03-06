@@ -37,6 +37,7 @@ Future<VideoPlayerServiceHandler> initAudioService() {
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static final List<MediaItem> _item = [];
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
+  Future<void>? _clearFuture;
 
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
@@ -340,21 +341,44 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void> clear({bool force = false}) async {
     if (!force && !enableBackgroundPlay) return;
 
-    _item.clear();
-
-    // 清除 mediaItem
-    if (!mediaItem.isClosed) {
-      mediaItem.add(null);
+    if (_clearFuture != null) {
+      return _clearFuture!;
     }
 
-    // 重置列表控制模式
-    _enableListControl = false;
-    onSkipToNext = null;
-    onSkipToPrevious = null;
+    _clearFuture = () async {
+      _item.clear();
 
-    // 调用 stop() 来停止服务
-    // stop() 会设置 processingState 为 idle 并触发 audio_service 停止前台服务
-    await stop();
+      // 清除 mediaItem
+      if (!mediaItem.isClosed) {
+        mediaItem.add(null);
+      }
+
+      // 立即重置播放状态，避免通知卡片在 stop 完成前残留旧进度和按钮
+      playbackState.add(
+        playbackState.value.copyWith(
+          processingState: AudioProcessingState.idle,
+          playing: false,
+          controls: const [],
+          systemActions: const {},
+          updatePosition: Duration.zero,
+        ),
+      );
+
+      // 重置列表控制模式
+      _enableListControl = false;
+      onSkipToNext = null;
+      onSkipToPrevious = null;
+
+      // 调用 stop() 来停止服务
+      // stop() 会设置 processingState 为 idle 并触发 audio_service 停止前台服务
+      await stop();
+    }();
+
+    try {
+      await _clearFuture;
+    } finally {
+      _clearFuture = null;
+    }
   }
 
   void onPositionChange(Duration position) {
