@@ -53,6 +53,7 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:floating/floating.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -945,6 +946,9 @@ class PlPlayerController with BlockConfigMixin {
 
   void _maybeStartPlaybackForeground(Duration pos) {
     if (!PlaybackForegroundService.isSupported) return;
+    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      return;
+    }
 
     // 切换到新媒资时重置标记，但不要立即停止服务
     // 让服务保护到新媒体开始播放

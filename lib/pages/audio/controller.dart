@@ -45,6 +45,7 @@ import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -101,6 +102,7 @@ class AudioController extends GetxController
   ListOrder order = ListOrder.ORDER_NORMAL;
 
   bool _fgStartedForCurrent = false;
+  Timer? _pendingCompletionTimer;
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
@@ -362,6 +364,7 @@ class AudioController extends GetxController
     String ua = Constants.userAgentApp,
     String? referer,
   }) async {
+    _cancelPendingCompletionTimer();
     // 切换媒资时重置本地播放标记
     if (!_isLocalPlayback) {
       // 非本地播放路径，确保标记清空
@@ -409,6 +412,9 @@ class AudioController extends GetxController
       }),
       stream.duration.listen(duration.call),
       stream.playing.listen((playing) {
+        if (playing) {
+          _cancelPendingCompletionTimer();
+        }
         final PlayerStatus playerStatus;
         if (playing) {
           // 新媒体开始播放时，安全地停止前台服务
@@ -428,47 +434,96 @@ class AudioController extends GetxController
         videoPlayerServiceHandler?.onStatusChange(playerStatus, false, false);
       }),
       stream.completed.listen((completed) {
-        _videoDetailController?.playedTime = duration.value;
-        videoPlayerServiceHandler?.onStatusChange(
-          PlayerStatus.completed,
-          false,
-          false,
-        );
-        if (completed) {
-          if (kDebugMode) {
-            debugPrint('AudioController: 播放完成，准备切换下一个');
-          }
-          _fgStartedForCurrent = false;
-          // 不要在这里停止前台服务，让它保护到新媒体开始播放
-          // PlaybackForegroundService.stop();
-          if (shutdownTimerService.isWaiting) {
-            shutdownTimerService.handleWaiting();
-          } else {
-            switch (playMode.value) {
-              case PlayRepeat.pause:
-                break;
-              case PlayRepeat.listOrder:
-                playNext(nextPart: true);
-                break;
-              case PlayRepeat.singleCycle:
-                onPlay();
-                break;
-              case PlayRepeat.listCycle:
-                if (!playNext(nextPart: true)) {
-                  if (index != null && index != 0 && playlist != null) {
-                    playIndex(0);
-                  } else {
-                    onPlay();
-                  }
-                }
-                break;
-              case PlayRepeat.autoPlayRelated:
-                break;
-            }
-          }
+        if (!completed) {
+          _cancelPendingCompletionTimer();
+          return;
         }
+
+        final remaining = _completionRemaining;
+        if (remaining > const Duration(milliseconds: 800)) {
+          _schedulePendingCompletion(remaining);
+          return;
+        }
+
+        _handlePlaybackCompleted();
       }),
     ];
+  }
+
+  Duration get _completionRemaining {
+    final remaining = duration.value - position.value;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  void _cancelPendingCompletionTimer() {
+    _pendingCompletionTimer?.cancel();
+    _pendingCompletionTimer = null;
+  }
+
+  void _schedulePendingCompletion(Duration remaining) {
+    final waitDuration = remaining > const Duration(seconds: 2)
+        ? const Duration(seconds: 2)
+        : remaining;
+    final expectedOid = oid;
+    final expectedSubId = subId.firstOrNull;
+
+    _cancelPendingCompletionTimer();
+    if (kDebugMode) {
+      debugPrint(
+        'AudioController: completed 触发过早，延迟 ${waitDuration.inMilliseconds}ms 再切换，remaining=${remaining.inMilliseconds}ms',
+      );
+    }
+
+    _pendingCompletionTimer = Timer(waitDuration, () {
+      _pendingCompletionTimer = null;
+      if (isClosed ||
+          oid != expectedOid ||
+          subId.firstOrNull != expectedSubId) {
+        return;
+      }
+      _handlePlaybackCompleted();
+    });
+  }
+
+  void _handlePlaybackCompleted() {
+    _cancelPendingCompletionTimer();
+    _videoDetailController?.playedTime = duration.value;
+    videoPlayerServiceHandler?.onStatusChange(
+      PlayerStatus.completed,
+      false,
+      false,
+    );
+    if (kDebugMode) {
+      debugPrint('AudioController: 播放完成，准备切换下一个');
+    }
+    _fgStartedForCurrent = false;
+    // 不要在这里停止前台服务，让它保护到新媒体开始播放
+    // PlaybackForegroundService.stop();
+    if (shutdownTimerService.isWaiting) {
+      shutdownTimerService.handleWaiting();
+    } else {
+      switch (playMode.value) {
+        case PlayRepeat.pause:
+          break;
+        case PlayRepeat.listOrder:
+          playNext(nextPart: true);
+          break;
+        case PlayRepeat.singleCycle:
+          onPlay();
+          break;
+        case PlayRepeat.listCycle:
+          if (!playNext(nextPart: true)) {
+            if (index != null && index != 0 && playlist != null) {
+              playIndex(0);
+            } else {
+              onPlay();
+            }
+          }
+          break;
+        case PlayRepeat.autoPlayRelated:
+          break;
+      }
+    }
   }
 
   @pragma('vm:notify-debugger-on-exception')
@@ -774,6 +829,7 @@ class AudioController extends GetxController
   }
 
   bool playNext({bool nextPart = false}) {
+    _cancelPendingCompletionTimer();
     if (nextPart) {
       if (audioItem.value case DetailItem(:final parts)) {
         if (parts.length > 1) {
@@ -845,6 +901,9 @@ class AudioController extends GetxController
 
   void _maybeStartPlaybackForeground() {
     if (_fgStartedForCurrent || !PlaybackForegroundService.isSupported) return;
+    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      return;
+    }
     final total = duration.value;
     if (total <= Duration.zero || !_hasNextItem) return;
 
@@ -1036,6 +1095,7 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
+    _cancelPendingCompletionTimer();
     final String? videoHeroTag = args['heroTag'] as String?;
     final bool shouldPreserveVideoNotification =
         videoHeroTag != null &&

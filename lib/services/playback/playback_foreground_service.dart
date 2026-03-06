@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -10,7 +11,9 @@ class PlaybackForegroundService {
   static bool _isRunning = false;
   static bool _isInitialized = false;
   static DateTime? _lastUpdate;
+  static Timer? _autoStopTimer;
   static const _throttle = Duration(milliseconds: 500);
+  static const _maxProtectDuration = Duration(seconds: 20);
 
   static bool get isSupported => Platform.isAndroid;
 
@@ -49,7 +52,11 @@ class PlaybackForegroundService {
     required String title,
     String? text,
   }) async {
-    if (!isSupported || _isRunning) return;
+    if (!isSupported) return;
+    if (_isRunning) {
+      _scheduleAutoStop();
+      return;
+    }
     try {
       await _init();
 
@@ -65,6 +72,7 @@ class PlaybackForegroundService {
         callback: _taskCallback,
       );
       _isRunning = true;
+      _scheduleAutoStop();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('PlaybackForegroundService start error: $e');
@@ -109,7 +117,19 @@ class PlaybackForegroundService {
     } finally {
       _isRunning = false;
       _lastUpdate = null;
+      _autoStopTimer?.cancel();
+      _autoStopTimer = null;
     }
+  }
+
+  static void _scheduleAutoStop() {
+    _autoStopTimer?.cancel();
+    _autoStopTimer = Timer(_maxProtectDuration, () {
+      if (kDebugMode) {
+        debugPrint('PlaybackForegroundService auto stop after timeout');
+      }
+      stop();
+    });
   }
 
   static bool get isRunning => _isRunning;
