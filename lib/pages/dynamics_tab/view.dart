@@ -172,7 +172,6 @@ class _DynamicsTabPageState
                             onRemove: (idStr) =>
                                 controller.onRemove(index, idStr),
                             onBlock: () => controller.onBlock(index),
-                            maxWidth: maxWidth,
                             onUnfold: () => controller.onUnfold(item, index),
                           );
                         },
@@ -190,7 +189,6 @@ class _DynamicsTabPageState
                           onRemove: (idStr) =>
                               controller.onRemove(index, idStr),
                           onBlock: () => controller.onBlock(index),
-                          maxWidth: maxWidth,
                           onUnfold: () => controller.onUnfold(item, index),
                         );
                       },

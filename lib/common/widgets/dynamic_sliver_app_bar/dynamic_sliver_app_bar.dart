@@ -135,7 +135,10 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
         automaticallyImplyActions: automaticallyImplyActions,
         flexibleSpace: maxExtent == .infinity
             ? flexibleSpace
-            : FlexibleSpaceBar(background: flexibleSpace),
+            : IgnorePointer(
+                ignoring: isScrolledUnder,
+                child: FlexibleSpaceBar(background: flexibleSpace),
+              ),
         bottom: bottom,
         elevation: isScrolledUnder ? elevation : 0.0,
         scrolledUnderElevation: scrolledUnderElevation,
