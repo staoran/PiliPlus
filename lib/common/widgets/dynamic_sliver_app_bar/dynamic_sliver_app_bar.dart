@@ -17,7 +17,7 @@
 
 import 'dart:math' as math;
 
-import 'package:PiliPlus/common/widgets/dynamic_sliver_app_bar/redering/sliver_persistent_header.dart';
+import 'package:PiliPlus/common/widgets/dynamic_sliver_app_bar/rendering/sliver_persistent_header.dart';
 import 'package:PiliPlus/common/widgets/dynamic_sliver_app_bar/sliver_persistent_header.dart';
 import 'package:PiliPlus/common/widgets/only_layout_widget.dart'
     show LayoutCallback;

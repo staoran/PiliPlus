@@ -933,6 +933,7 @@ class VideoDetailController extends GetxController
 
   Future<void>? _initPlayerIfNeeded({
     BiliDownloadEntryInfo? localEntry,
+    bool autoFullScreenFlag = false,
   }) {
     // 后台播放模式下，无需检查 widget mounted 状态
     final isBackgroundPlayEnabled =
@@ -944,7 +945,10 @@ class VideoDetailController extends GetxController
             (isFileSource
                 ? true
                 : videoPlayerKey.currentState?.mounted == true)) {
-      return playerInit(localEntry: localEntry);
+      return playerInit(
+        localEntry: localEntry,
+        autoFullScreenFlag: autoFullScreenFlag,
+      );
     }
     return null;
   }
@@ -957,6 +961,7 @@ class VideoDetailController extends GetxController
     bool? autoplay,
     Volume? volume,
     BiliDownloadEntryInfo? localEntry,
+    bool autoFullScreenFlag = false,
   }) async {
     final onlyPlayAudio = plPlayerController.onlyPlayAudio.value;
 
@@ -1052,6 +1057,7 @@ class VideoDetailController extends GetxController
                 firstVideo.height)
           : firstVideo.height,
       volume: volume ?? this.volume,
+      autoFullScreenFlag: autoFullScreenFlag,
     );
 
     if (isClosed) return;
@@ -1096,13 +1102,14 @@ class VideoDetailController extends GetxController
   Future<void> queryVideoUrl({
     Duration? defaultST,
     bool fromReset = false,
+    bool autoFullScreenFlag = false,
   }) async {
     if (isFileSource) {
       // 离线播放也支持空降助手（网络不可用时会静默失败）
       if (blockConfig.enableSponsorBlock && isBlock && !fromReset) {
         querySponsorBlock(bvid: bvid, cid: cid.value);
       }
-      return _initPlayerIfNeeded();
+      return _initPlayerIfNeeded(autoFullScreenFlag: autoFullScreenFlag);
     }
 
     if (isQuerying) {
@@ -1205,7 +1212,10 @@ class VideoDetailController extends GetxController
         setVideoHeight();
         currentDecodeFormats = VideoDecodeFormatType.fromString('avc1');
         currentVideoQa.value = videoQuality;
-        await _initPlayerIfNeeded(localEntry: localEntry);
+        await _initPlayerIfNeeded(
+          localEntry: localEntry,
+          autoFullScreenFlag: autoFullScreenFlag,
+        );
         isQuerying = false;
         return;
       }
@@ -1313,12 +1323,18 @@ class VideoDetailController extends GetxController
       } else {
         audioUrl = '';
       }
-      await _initPlayerIfNeeded(localEntry: localEntry);
+      await _initPlayerIfNeeded(
+        localEntry: localEntry,
+        autoFullScreenFlag: autoFullScreenFlag,
+      );
     } else {
       if (forceLocalPlay && localEntry != null) {
         // 在线 playurl 获取失败时，仍允许离线列表使用本地文件播放。
         _autoPlay.value = true;
-        await _initPlayerIfNeeded(localEntry: localEntry);
+        await _initPlayerIfNeeded(
+          localEntry: localEntry,
+          autoFullScreenFlag: autoFullScreenFlag,
+        );
       } else {
         _autoPlay.value = false;
         videoState.value = result..toast();
