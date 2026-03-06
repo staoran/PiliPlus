@@ -127,6 +127,7 @@ class AudioController extends GetxController
         _videoDetailController = Get.find<VideoDetailController>(tag: heroTag);
       } catch (_) {}
     }
+    speed = (args['speed'] as num?)?.toDouble() ?? 1.0;
 
     _queryPlayList(isInit: true);
 
@@ -385,6 +386,7 @@ class AudioController extends GetxController
         start: _start,
       ),
     );
+    player!.setRate(speed);
     _start = null;
     initSkip();
   }
@@ -1033,6 +1035,9 @@ class AudioController extends GetxController
     if (player case final player?) {
       this.speed = speed;
       player.setRate(speed);
+      unawaited(
+        _videoDetailController?.plPlayerController.setPlaybackSpeed(speed),
+      );
     }
   }
 

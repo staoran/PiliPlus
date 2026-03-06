@@ -524,6 +524,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       }
 
       final audioController = Get.find<AudioController>(tag: heroTag);
+      final audioSpeed = audioController.speed;
+      unawaited(
+        videoDetailController.plPlayerController.setPlaybackSpeed(audioSpeed),
+      );
 
       // 如果听视频切换了视频，需要同步到视频页
       final audioOid = audioController.oid;
@@ -563,7 +567,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
           if (kDebugMode) {
             debugPrint(
-              '🔄 从听视频返回，同步进度: ${audioPosition.inSeconds}s',
+              '🔄 从听视频返回，同步进度: ${audioPosition.inSeconds}s, 倍速: ${audioSpeed}x',
             );
           }
         }

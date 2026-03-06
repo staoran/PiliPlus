@@ -47,6 +47,7 @@ class AudioPage extends StatefulWidget {
     required PlaylistSource from,
     String? heroTag,
     Duration? start,
+    double? speed,
     String? audioUrl,
     int? extraId,
   }) => Get.toNamed(
@@ -59,6 +60,7 @@ class AudioPage extends StatefulWidget {
       'itemType': itemType,
       'heroTag': ?heroTag,
       'start': ?start,
+      'speed': ?speed,
       'audioUrl': ?audioUrl,
       'extraId': ?extraId,
     },
