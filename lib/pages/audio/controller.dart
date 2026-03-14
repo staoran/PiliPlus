@@ -28,7 +28,6 @@ import 'package:PiliPlus/pages/video/pay_coins/view.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
-import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -45,7 +44,6 @@ import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -101,7 +99,6 @@ class AudioController extends GetxController
 
   ListOrder order = ListOrder.ORDER_NORMAL;
 
-  bool _fgStartedForCurrent = false;
   Timer? _pendingCompletionTimer;
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
@@ -371,9 +368,6 @@ class AudioController extends GetxController
       // 非本地播放路径，确保标记清空
       _isLocalPlayback = false;
     }
-    // 重置前台服务标记，但不要立即停止服务
-    // 等到新媒体开始播放时再停止，避免切换时的保护窗口期
-    _fgStartedForCurrent = false;
     await _initPlayerIfNeeded();
     player!.setMediaHeader(
       userAgent: ua,
@@ -409,7 +403,6 @@ class AudioController extends GetxController
           this.position.value = position;
           _videoDetailController?.playedTime = position;
           videoPlayerServiceHandler?.onPositionChange(position);
-          _maybeStartPlaybackForeground();
         }
       }),
       stream.duration.listen(duration.call),
@@ -419,14 +412,6 @@ class AudioController extends GetxController
         }
         final PlayerStatus playerStatus;
         if (playing) {
-          // 新媒体开始播放时，安全地停止前台服务
-          // 此时播放器已经初始化完成，可以安全停止
-          if (PlaybackForegroundService.isRunning && !_fgStartedForCurrent) {
-            if (kDebugMode) {
-              debugPrint('AudioController: 新媒体开始播放，停止前台服务');
-            }
-            PlaybackForegroundService.stop();
-          }
           animController.forward();
           playerStatus = PlayerStatus.playing;
         } else {
@@ -498,9 +483,6 @@ class AudioController extends GetxController
     if (kDebugMode) {
       debugPrint('AudioController: 播放完成，准备切换下一个');
     }
-    _fgStartedForCurrent = false;
-    // 不要在这里停止前台服务，让它保护到新媒体开始播放
-    // PlaybackForegroundService.stop();
     if (shutdownTimerService.isWaiting) {
       shutdownTimerService.handleWaiting();
     } else {
@@ -870,59 +852,6 @@ class AudioController extends GetxController
     return false;
   }
 
-  bool get _hasNextItem {
-    if (playMode.value == PlayRepeat.singleCycle ||
-        playMode.value == PlayRepeat.pause) {
-      return false;
-    }
-
-    // 同一条目的分 P
-    if (audioItem.value case final audio?) {
-      final parts = audio.parts;
-      if (parts.length > 1) {
-        final currentSub = subId.firstOrNull;
-        final currentIndex = parts.indexWhere((e) => e.subId == currentSub);
-        if (currentIndex != -1 && currentIndex + 1 < parts.length) {
-          return true;
-        }
-      }
-    }
-
-    if (playlist != null && index != null) {
-      if (index! + 1 < (playlist?.length ?? 0)) {
-        return true;
-      }
-      // 服务器还有下一页
-      if (_next != null) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  void _maybeStartPlaybackForeground() {
-    if (_fgStartedForCurrent || !PlaybackForegroundService.isSupported) return;
-    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-      return;
-    }
-    final total = duration.value;
-    if (total <= Duration.zero || !_hasNextItem) return;
-
-    final remaining = total - position.value;
-    if (remaining <= const Duration(seconds: 6)) {
-      _fgStartedForCurrent = true;
-      final title = audioItem.value?.arc.title ?? Constants.appName;
-      if (kDebugMode) {
-        debugPrint('AudioController: 启动前台服务保护切换，剩余时间: ${remaining.inSeconds}秒');
-      }
-      PlaybackForegroundService.start(
-        title: '即将切换：$title',
-        text: '保持后台播放不中断',
-      );
-    }
-  }
-
   void playIndex(
     int index, {
     List<Int64>? subId,
@@ -1124,7 +1053,6 @@ class AudioController extends GetxController
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions?.clear();
     _subscriptions = null;
-    PlaybackForegroundService.stop();
     player?.dispose();
     player = null;
     animController.dispose();

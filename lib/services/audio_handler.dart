@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File;
 
 import 'package:PiliPlus/common/constants.dart';
@@ -15,6 +16,8 @@ import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:path/path.dart' as path;
 
 Future<VideoPlayerServiceHandler> initAudioService() {
@@ -23,9 +26,8 @@ Future<VideoPlayerServiceHandler> initAudioService() {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.taoran.piliplus.audio',
       androidNotificationChannelName: 'Audio Service ${Constants.appName}',
-      // 暂停时停止前台服务，这样退出页面时媒体卡片会自动消失
-      // 后台播放场景下用户不会退出页面，所以不受影响
-      androidStopForegroundOnPause: true,
+      // 由 handler 根据前后台状态控制暂停后的释放时机。
+      androidStopForegroundOnPause: false,
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
       androidNotificationChannelDescription: 'Media notification channel',
@@ -35,9 +37,11 @@ Future<VideoPlayerServiceHandler> initAudioService() {
 }
 
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
+  static const _backgroundPauseGracePeriod = Duration(minutes: 2);
   static final List<MediaItem> _item = [];
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
   Future<void>? _clearFuture;
+  Timer? _pauseReleaseTimer;
 
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
@@ -84,6 +88,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> play() {
+    _cancelPauseReleaseTimer();
     return onPlay?.call() ??
         PlPlayerController.playIfExists() ??
         Future.syncValue(null);
@@ -98,6 +103,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
+    _cancelPauseReleaseTimer();
     // 检查当前状态，如果已经是 idle，需要先设置为非 idle
     // 这样才能触发 audio_service Android 端的 stop() 逻辑
     // 根据 AudioService.java 源码：
@@ -115,6 +121,41 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       );
     }
     await super.stop();
+  }
+
+  bool get _isAppInForeground =>
+      SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  void _cancelPauseReleaseTimer() {
+    _pauseReleaseTimer?.cancel();
+    _pauseReleaseTimer = null;
+  }
+
+  void _schedulePauseRelease() {
+    _cancelPauseReleaseTimer();
+    final delay = _isAppInForeground
+        ? Duration.zero
+        : _backgroundPauseGracePeriod;
+    if (kDebugMode) {
+      debugPrint(
+        '[AudioService] pause release scheduled in ${delay.inSeconds}s',
+      );
+    }
+    _pauseReleaseTimer = Timer(delay, () {
+      _pauseReleaseTimer = null;
+      final state = playbackState.value;
+      final shouldRelease =
+          !state.playing &&
+          state.processingState != AudioProcessingState.buffering &&
+          state.processingState != AudioProcessingState.completed;
+      if (!shouldRelease || _item.isEmpty) {
+        return;
+      }
+      if (kDebugMode) {
+        debugPrint('[AudioService] pause grace expired, stopping service');
+      }
+      unawaited(stop());
+    });
   }
 
   @override
@@ -211,6 +252,11 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
     if (_item.isEmpty) return;
     setPlaybackState(status, isBuffering, isLive);
+    if (status.isPlaying || isBuffering || status.isCompleted) {
+      _cancelPauseReleaseTimer();
+    } else if (status.isPaused) {
+      _schedulePauseRelease();
+    }
   }
 
   void onVideoDetailChange(
@@ -346,6 +392,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     }
 
     _clearFuture = () async {
+      _cancelPauseReleaseTimer();
       _item.clear();
 
       // 清除 mediaItem

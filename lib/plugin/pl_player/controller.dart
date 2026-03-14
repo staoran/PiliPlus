@@ -29,7 +29,6 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
-import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/asset_utils.dart';
@@ -51,7 +50,6 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:floating/floating.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -146,7 +144,6 @@ class PlPlayerController with BlockConfigMixin {
   ///
   final RxBool isSliderMoving = false.obs;
 
-  final PlaylistMode _looping = PlaylistMode.none;
   bool _autoPlay = false;
 
   // 记录历史记录
@@ -199,8 +196,6 @@ class PlPlayerController with BlockConfigMixin {
   late final RxBool flipY = false.obs;
 
   final RxBool isBuffering = true.obs;
-
-  bool _fgStartedForCurrent = false;
 
   /// 全屏方向
   bool get isVertical => _isVertical;
@@ -940,10 +935,6 @@ class PlPlayerController with BlockConfigMixin {
       }
     }
     _initVideoFit();
-    // if (_looping) {
-    //   await setLooping(_looping);
-    // }
-
     // 跳转播放
     // if (seekTo != Duration.zero) {
     //   await this.seekTo(seekTo);
@@ -960,48 +951,6 @@ class PlPlayerController with BlockConfigMixin {
   final Set<ValueChanged<Duration>> _positionListeners = {};
   final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
 
-  bool get _hasNextCandidate {
-    // 只有在列表播放模式（_looping != none）且播放模式支持切换时才返回 true
-    // 单视频播放时 _looping 为 PlaylistMode.none，因此不会启动前台服务
-    if (_looping == PlaylistMode.none) return false;
-    return switch (playRepeat) {
-      PlayRepeat.singleCycle || PlayRepeat.pause => false,
-      _ => true,
-    };
-  }
-
-  void _maybeStartPlaybackForeground(Duration pos) {
-    if (!PlaybackForegroundService.isSupported) return;
-    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-      return;
-    }
-
-    // 切换到新媒资时重置标记，但不要立即停止服务
-    // 让服务保护到新媒体开始播放
-    if (pos <= const Duration(seconds: 1)) {
-      _fgStartedForCurrent = false;
-      // 不要在这里停止，避免切换时的保护窗口期
-      // PlaybackForegroundService.stop();
-      return;
-    }
-
-    if (_fgStartedForCurrent || !_hasNextCandidate) return;
-    final total = duration.value;
-    if (total <= Duration.zero) return;
-
-    final remaining = total - pos;
-    if (remaining <= const Duration(seconds: 6)) {
-      _fgStartedForCurrent = true;
-      if (kDebugMode) {
-        debugPrint('PlPlayerController: 启动前台服务保护切换，剩余时间: ${remaining.inSeconds}秒');
-      }
-      PlaybackForegroundService.start(
-        title: '${Constants.appName} 播放中',
-        text: '即将切换下一集，保持后台播放不中断',
-      );
-    }
-  }
-
   /// 播放事件监听
   void _startListeners(NativePlayer player) {
     assert(_subscriptions == null);
@@ -1010,13 +959,6 @@ class PlPlayerController with BlockConfigMixin {
       stream.playing.listen((event) {
         WakelockPlus.toggle(enable: event);
         if (event) {
-          // 新媒体开始播放时，安全地停止前台服务
-          if (PlaybackForegroundService.isRunning && !_fgStartedForCurrent) {
-            if (kDebugMode) {
-              debugPrint('PlPlayerController: 新媒体开始播放，停止前台服务');
-            }
-            PlaybackForegroundService.stop();
-          }
           if (_shouldSetPip) {
             if (_isCurrVideoPage) {
               enterPip(isAuto: true);
@@ -1050,9 +992,6 @@ class PlPlayerController with BlockConfigMixin {
             debugPrint('PlPlayerController: 播放完成，准备切换下一个');
           }
           playerStatus.value = PlayerStatus.completed;
-          _fgStartedForCurrent = false;
-          // 不要在这里停止前台服务，让它保护到新媒体开始播放
-          // PlaybackForegroundService.stop();
 
           /// 触发回调事件
           for (final element in _statusListeners) {
@@ -1070,8 +1009,6 @@ class PlPlayerController with BlockConfigMixin {
           sliderPosition = event;
           updateSliderPositionSecond();
         }
-
-        _maybeStartPlaybackForeground(event);
 
         /// 触发回调事件
         for (final element in _positionListeners) {
@@ -1718,7 +1655,6 @@ class PlPlayerController with BlockConfigMixin {
     _timer?.cancel();
     _timerForSeek?.cancel();
     _timerForShowingVolume?.cancel();
-    PlaybackForegroundService.stop();
     // _position.close();
     // _playerEventSubs?.cancel();
     // _sliderPosition.close();
