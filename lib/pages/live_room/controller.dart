@@ -432,16 +432,18 @@ class LiveRoomController extends GetxController {
   }
 
   void addDm(dynamic msg, [DanmakuContentItem<DanmakuExtra>? item]) {
-    messages.add(msg);
-
     if (plPlayerController.showDanmaku) {
       if (item != null) {
         danmakuController?.addDanmaku(item);
       }
       if (autoScroll && !disableAutoScroll.value) {
+        messages.add(msg);
         scrollToBottom();
+        return;
       }
     }
+
+    messages.addOnly(msg);
   }
 
   @pragma('vm:notify-debugger-on-exception')

@@ -12,6 +12,13 @@ import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
 import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart' hide RefreshIndicator;
 
+/// The distance from the child's top or bottom [edgeOffset] where
+/// the refresh indicator will settle. During the drag that exposes the refresh
+/// indicator, its actual displacement may significantly exceed this value.
+///
+/// In most cases, [displacement] distance starts counting from the parent's
+/// edges. However, if [edgeOffset] is larger than zero then the [displacement]
+/// value is calculated from that offset instead of the parent's edge.
 double displacement = Pref.refreshDisplacement;
 
 // The over-scroll distance that moves the indicator to its maximum

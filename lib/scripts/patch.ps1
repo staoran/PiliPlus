@@ -45,6 +45,8 @@ switch ($platform.ToLower()) {
 git config --global user.name "ci"
 git config --global user.email "example@example.com"
 
+git reset --hard HEAD
+
 foreach ($pick in $picks) {
     git stash
     git cherry-pick $pick --no-edit

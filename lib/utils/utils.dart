@@ -43,7 +43,7 @@ abstract final class Utils {
     FileType type = FileType.custom,
   }) async {
     try {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         allowedExtensions: allowedExtensions,
         type: type,
         fileName: name,

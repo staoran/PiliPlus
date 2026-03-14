@@ -1376,7 +1376,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       color: Colors.white,
       fontSize: 12,
     );
-    final isFullScreen = this.isFullScreen;
     final isLive = plPlayerController.isLive;
 
     final child = Stack(

@@ -668,7 +668,7 @@ class HeaderControlState extends State<HeaderControl>
                   onTap: () async {
                     Get.back();
                     try {
-                      final result = await FilePicker.platform.pickFiles();
+                      final result = await FilePicker.pickFiles();
                       if (result != null) {
                         final file = result.files.single;
                         final path = file.path;

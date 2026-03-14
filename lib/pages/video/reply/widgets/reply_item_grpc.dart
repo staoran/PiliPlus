@@ -29,6 +29,7 @@ import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/url_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -38,6 +39,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:protobuf/protobuf.dart';
 
 class ReplyItemGrpc extends StatelessWidget {
   const ReplyItemGrpc({
@@ -839,7 +841,7 @@ class ReplyItemGrpc extends StatelessWidget {
     final ownerMid = Int64(Accounts.main.mid);
     final theme = Theme.of(context);
     final errorColor = theme.colorScheme.error;
-    final style = theme.textTheme.titleSmall;
+    final style = theme.textTheme.titleSmall!;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -865,6 +867,57 @@ class ReplyItemGrpc extends StatelessWidget {
               ),
             ),
           ),
+          if (kDebugMode && GStorage.reply != null) ...[
+            ListTile(
+              onTap: () {
+                Get.back();
+                GStorage.reply!.put(
+                  item.id.toString(),
+                  (item.deepCopy()
+                        ..unknownFields.clear()
+                        ..replies.clear()
+                        ..clearMemberV2()
+                        ..clearTrackInfo())
+                      .writeToBuffer(),
+                );
+              },
+              title: Text(
+                'save to local',
+                style: style.copyWith(color: theme.colorScheme.primary),
+              ),
+            ),
+            ListTile(
+              onTap: () {
+                Get.back();
+                onDelete();
+                GStorage.reply!.delete(item.id.toString());
+              },
+              title: Text(
+                'remove from local',
+                style: style.copyWith(color: theme.colorScheme.primary),
+              ),
+            ),
+            ListTile(
+              onTap: () {
+                Get.back();
+                final oid = item.oid.toInt();
+                final data =
+                    (item.deepCopy()
+                          ..unknownFields.clear()
+                          ..replies.clear()
+                          ..clearMemberV2()
+                          ..clearTrackInfo())
+                        .writeToBuffer();
+                GStorage.reply!.putAll({
+                  for (var i = oid; i < oid + 1000; i++) i.toString(): data,
+                });
+              },
+              title: Text(
+                'save to local (x1000)',
+                style: style.copyWith(color: theme.colorScheme.primary),
+              ),
+            ),
+          ],
           if (ownerMid == upMid || ownerMid == item.member.mid)
             ListTile(
               onTap: () async {
@@ -929,7 +982,7 @@ class ReplyItemGrpc extends StatelessWidget {
               },
               minLeadingWidth: 0,
               leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
-              title: Text('删除', style: style!.copyWith(color: errorColor)),
+              title: Text('删除', style: style.copyWith(color: errorColor)),
             ),
           if (ownerMid != Int64.ZERO)
             ListTile(
@@ -955,7 +1008,7 @@ class ReplyItemGrpc extends StatelessWidget {
               },
               minLeadingWidth: 0,
               leading: Icon(Icons.error_outline, color: errorColor, size: 19),
-              title: Text('举报', style: style!.copyWith(color: errorColor)),
+              title: Text('举报', style: style.copyWith(color: errorColor)),
             ),
           if (replyLevel == 1 && !isSubReply && ownerMid == upMid)
             ListTile(

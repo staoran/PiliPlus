@@ -17,7 +17,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
 # update when release
-version: 2.0.0+1
+version: 2.0.1+1
 
 environment:
   sdk: ">=3.10.0"
@@ -98,7 +98,10 @@ dependencies:
       url: https://github.com/bggRGjQaUbCoE/material_design_icons_flutter.git
       ref: const
   # toast
-  flutter_smart_dialog: ^4.9.8+5
+  flutter_smart_dialog:
+    git:
+      url: https://github.com/bggRGjQaUbCoE/flutter_smart_dialog.git
+      ref: main
   # 下滑关闭
   # dismissible_page: ^1.0.2
   # custom_sliding_segmented_control: ^1.8.4
@@ -219,7 +222,7 @@ dependencies:
   file_picker:
     git:
       url: https://github.com/bggRGjQaUbCoE/flutter_file_picker.git
-      ref: v10.3.10
+      ref: mod
   super_sliver_list:
     git:
       url: https://github.com/bggRGjQaUbCoE/super_sliver_list.git

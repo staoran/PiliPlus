@@ -42,7 +42,7 @@ import 'package:PiliPlus/utils/update.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide RefreshIndicator;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -374,6 +374,13 @@ List<SettingsModel> get extraSettings => [
     leading: Icon(Icons.show_chart),
     setKey: SettingBoxKey.showDmChart,
     defaultVal: false,
+  ),
+  const SwitchModel(
+    title: '记录评论',
+    leading: Icon(Icons.message_outlined),
+    setKey: SettingBoxKey.saveReply,
+    defaultVal: true,
+    needReboot: true,
   ),
   const SwitchModel(
     title: '发评反诈',
@@ -784,7 +791,7 @@ void _showDownPathDialog(BuildContext context, VoidCallback setState) {
           ListTile(
             onTap: () async {
               Get.back();
-              final path = await FilePicker.platform.getDirectoryPath();
+              final path = await FilePicker.getDirectoryPath();
               if (path == null || path == downloadPath) return;
               downloadPath = path;
               setState();
@@ -986,7 +993,7 @@ Future<void> _showRefreshDragDialog(
   if (res != null) {
     kDragContainerExtentPercentage = res;
     await GStorage.setting.put(SettingBoxKey.refreshDragPercentage, res);
-    Get.forceAppUpdate();
+    setState();
   }
 }
 
@@ -1007,7 +1014,19 @@ Future<void> _showRefreshDialog(
   if (res != null) {
     displacement = res;
     await GStorage.setting.put(SettingBoxKey.refreshDisplacement, res);
-    Get.forceAppUpdate();
+    if (WidgetsBinding.instance.rootElement case final context?) {
+      context.visitChildElements(_visitor);
+    }
+    setState();
+  }
+}
+
+void _visitor(Element context) {
+  if (!context.mounted) return;
+  if (context.widget is RefreshIndicator) {
+    context.markNeedsBuild();
+  } else {
+    context.visitChildren(_visitor);
   }
 }
 
@@ -1132,7 +1151,7 @@ Future<void> _showReplySortDialog(
     builder: (context) => SelectDialog<ReplySortType>(
       title: '评论展示',
       value: Pref.replySortType,
-      values: ReplySortType.values.map((e) => (e, e.title)).toList(),
+      values: ReplySortType.values.take(2).map((e) => (e, e.title)).toList(),
     ),
   );
   if (res != null) {
