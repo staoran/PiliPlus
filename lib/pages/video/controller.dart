@@ -76,7 +76,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart' hide Subtitle;
 import 'package:path/path.dart' as path;
 import 'package:window_manager/window_manager.dart';
@@ -947,7 +947,7 @@ class VideoDetailController extends GetxController
                 : videoPlayerKey.currentState?.mounted == true)) {
       return playerInit(
         localEntry: localEntry,
-        autoFullScreenFlag: autoFullScreenFlag,
+        autoFullScreenFlag: autoFullScreenFlag && _autoPlay.value,
       );
     }
     return null;
@@ -994,6 +994,9 @@ class VideoDetailController extends GetxController
           dir: dirPath,
           typeTag: typeTag,
           isMp4: mediaType == 1,
+          hasDashAudio: playFromLocal
+              ? (effectiveLocalEntry?.hasDashAudio ?? false)
+              : entry.hasDashAudio,
         );
       } else {
         source = NetworkSource(

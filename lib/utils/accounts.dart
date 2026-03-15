@@ -3,8 +3,8 @@ import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/login_utils.dart';
-import 'package:flutter/foundation.dart';
-import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:hive_ce/hive.dart';
 
 abstract final class Accounts {
   static late Box<LoginAccount> account;
@@ -103,13 +103,13 @@ abstract final class Accounts {
   //   }
   // }
 
-  static Future<void> refresh() async {
+  static Future<void> refresh() {
     for (final a in account.values) {
       for (final t in a.type) {
         accountMode[t.index] = a;
       }
     }
-    await Future.wait(
+    return Future.wait(
       (accountMode.toSet()..removeWhere((i) => i.activated)).map(
         Request.buvidActive,
       ),
