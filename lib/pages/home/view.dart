@@ -24,7 +24,6 @@ class _HomePageState extends State<HomePage>
   final _homeController = Get.putOrFind(HomeController.new);
   final _mainController = Get.find<MainController>();
 
-  @override
   bool get needsCorrection => _homeController.hideTopBar;
 
   @override

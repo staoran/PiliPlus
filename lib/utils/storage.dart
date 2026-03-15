@@ -91,7 +91,7 @@ abstract final class GStorage {
     isSubWindow = true;
 
     // Initialize Hive with a separate path for sub-window to avoid lock conflicts
-    await Hive.initFlutter(path.join(appSupportPath, 'hive_subwindow'));
+    Hive.init(path.join(appSupportPath, 'hive_subwindow'));
     regAdapter();
 
     // Open boxes (separate Hive instance, no name conflicts)
