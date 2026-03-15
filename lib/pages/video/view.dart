@@ -297,9 +297,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       }
 
-      // 播放完成且不会继续播放时，清理媒体通知卡片
-      if (PlatformUtils.isMobile && exitFlag) {
-        videoPlayerServiceHandler?.clear(force: true);
+      // 播放完成后的清理由 handler 统一决策，避免页面层分叉。
+      if (PlatformUtils.isMobile) {
+        videoPlayerServiceHandler?.onPlaybackCompleted(
+          willAutoContinue: !exitFlag,
+          source: 'video',
+        );
       }
     }
   }
@@ -390,8 +393,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     WidgetsBinding.instance.removeObserver(this);
     if (PlatformUtils.isMobile) {
       showStatusBar();
-      // 退出播放时清理媒体服务
-      videoPlayerServiceHandler?.clear(force: true);
+      // 方案对比说明：
+      // - 旧方案在页面层直接 clear(force: true)
+      // - 新方案统一交给 onVideoDetailDispose -> handler 决策清理
+      // 避免页面生命周期与 handler 定时释放同时触发造成竞态。
     }
 
     // 明确删除所有控制器，确保资源被正确释放
@@ -440,9 +445,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (plPlayerController != null) {
       videoDetailController.makeHeartBeat();
       plPlayerController!
+        ..pause()
         ..removeStatusLister(playerListener)
-        ..removePositionListener(positionListener)
-        ..pause();
+        ..removePositionListener(positionListener);
+      // 状态上报统一由 PlPlayerController 的流监听完成。
+      // 这里不再手动 onStatusChange，避免与底层流回调重复写状态。
     }
     isShowing = false;
     super.didPushNext();
@@ -507,8 +514,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           !videoDetailController.isQuerying &&
           videoDetailController.videoState.value is! Error) {
         await videoDetailController.playerInit(
-        localEntry: videoDetailController.currentLocalEntry,
-      );
+          localEntry: videoDetailController.currentLocalEntry,
+        );
       }
       if (!mounted || !isShowing) return;
       plPlayerController
@@ -1581,14 +1588,15 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                  if (!videoDetailController.isFileSource)
+                    if (!videoDetailController.isFileSource)
                       SizedBox(
                         height: 32,
                         child: TextButton(
                           style: const ButtonStyle(
                             padding: WidgetStatePropertyAll(EdgeInsets.zero),
                           ),
-                          onPressed: videoDetailController.showShootDanmakuSheet,
+                          onPressed:
+                              videoDetailController.showShootDanmakuSheet,
                           child: Text(
                             '发弹幕',
                             style: TextStyle(

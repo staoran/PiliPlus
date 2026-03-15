@@ -480,33 +480,46 @@ class AudioController extends GetxController
       false,
       false,
     );
+    var willAutoContinue = false;
     if (kDebugMode) {
       debugPrint('AudioController: 播放完成，准备切换下一个');
     }
     if (shutdownTimerService.isWaiting) {
+      willAutoContinue = true;
       shutdownTimerService.handleWaiting();
     } else {
       switch (playMode.value) {
         case PlayRepeat.pause:
           break;
         case PlayRepeat.listOrder:
-          playNext(nextPart: true);
+          willAutoContinue = playNext(nextPart: true);
           break;
         case PlayRepeat.singleCycle:
+          willAutoContinue = true;
           onPlay();
           break;
         case PlayRepeat.listCycle:
-          if (!playNext(nextPart: true)) {
-            if (index != null && index != 0 && playlist != null) {
-              playIndex(0);
-            } else {
-              onPlay();
-            }
+          if (playNext(nextPart: true)) {
+            willAutoContinue = true;
+          } else if (index != null && index != 0 && playlist != null) {
+            willAutoContinue = true;
+            playIndex(0);
+          } else {
+            willAutoContinue = true;
+            onPlay();
           }
           break;
         case PlayRepeat.autoPlayRelated:
           break;
       }
+    }
+
+    // 统一由 handler 处理“播放完成是否清理卡片”的最终策略。
+    if (PlatformUtils.isMobile) {
+      videoPlayerServiceHandler?.onPlaybackCompleted(
+        willAutoContinue: willAutoContinue,
+        source: 'audio',
+      );
     }
   }
 
@@ -1030,10 +1043,6 @@ class AudioController extends GetxController
   @override
   void onClose() {
     _cancelPendingCompletionTimer();
-    final String? videoHeroTag = args['heroTag'] as String?;
-    final bool shouldPreserveVideoNotification =
-        videoHeroTag != null &&
-        Get.isRegistered<VideoDetailController>(tag: videoHeroTag);
 
     // 退出听视频时保存最后的进度
     _saveCurrentProgress();
@@ -1056,12 +1065,10 @@ class AudioController extends GetxController
     player?.dispose();
     player = null;
     animController.dispose();
-    // 从视频页进入听视频再返回时，需要保留原视频页的媒体通知栈，
-    // 否则会把 videoPlayerServiceHandler 内的媒体项清空，导致回到视频页后
-    // 通知卡片的进度与播放时间无法继续同步。
-    if (Platform.isAndroid && !shouldPreserveVideoNotification) {
-      videoPlayerServiceHandler?.clear(force: true);
-    }
+    // 方案对比说明：
+    // - 旧方案：这里根据 shouldPreserveVideoNotification 条件 clear。
+    // - 新方案：统一通过 onVideoDetailDispose 由 handler 判定“是否已无 owner”。
+    // 这样不用在页面层复制“是否该清理”的策略，降低多页面维护成本。
     super.onClose();
   }
 

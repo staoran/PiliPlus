@@ -39,7 +39,9 @@ Future<VideoPlayerServiceHandler> initAudioService() {
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static const _backgroundPauseGracePeriod = Duration(minutes: 2);
   static final List<MediaItem> _item = [];
+  static final Set<String> _activeOwners = <String>{};
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
+  bool _lifecycleDebugLogEnabled = kDebugMode && Pref.enableLog;
   Future<void>? _clearFuture;
   Timer? _pauseReleaseTimer;
 
@@ -53,6 +55,21 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   // 是否启用列表控制（上一个/下一个）
   bool _enableListControl = false;
+
+  int get ownerCount => _activeOwners.length;
+
+  /// 现场排障开关：可在运行时打开/关闭媒体卡片生命周期日志。
+  /// 注：日志只在 debug 构建生效。
+  void setLifecycleDebugLogEnabled(bool enabled) {
+    _lifecycleDebugLogEnabled = enabled;
+    _logLifecycle('lifecycle debug log => $enabled');
+  }
+
+  void _logLifecycle(String message) {
+    if (_lifecycleDebugLogEnabled && kDebugMode) {
+      debugPrint('[AudioServiceLifecycle] $message');
+    }
+  }
 
   /// 设置列表控制模式
   /// 注意：控件会在下次播放状态更新时自动刷新，不需要立即刷新
@@ -123,6 +140,12 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     await super.stop();
   }
 
+  @override
+  Future<void> onTaskRemoved() async {
+    // 用户在任务管理器划掉应用时，停止媒体服务并移除通知卡片。
+    await clear(force: true);
+  }
+
   bool get _isAppInForeground =>
       SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
@@ -154,6 +177,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       if (kDebugMode) {
         debugPrint('[AudioService] pause grace expired, stopping service');
       }
+      _logLifecycle(
+        'pause grace expired; owners=$ownerCount, items=${_item.length}',
+      );
       unawaited(stop());
     });
   }
@@ -251,12 +277,35 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (!enableBackgroundPlay) return;
 
     if (_item.isEmpty) return;
+    _logLifecycle(
+      'status=${status.name}, buffering=$isBuffering, owners=$ownerCount, items=${_item.length}',
+    );
     setPlaybackState(status, isBuffering, isLive);
     if (status.isPlaying || isBuffering || status.isCompleted) {
       _cancelPauseReleaseTimer();
     } else if (status.isPaused) {
       _schedulePauseRelease();
     }
+  }
+
+  /// 统一处理“播放完成”后的通知卡片策略。
+  ///
+  /// 方案对比说明：
+  /// - 旧方案：页面自行判断是否 clear(force: true)。
+  /// - 新方案：页面只上报“是否会继续播放”，由 handler 统一决定清理。
+  ///   这样可减少页面分叉逻辑，便于排查残留问题。
+  void onPlaybackCompleted({
+    required bool willAutoContinue,
+    String source = 'unknown',
+  }) {
+    _logLifecycle(
+      'completed from=$source, willAutoContinue=$willAutoContinue, owners=$ownerCount, items=${_item.length}',
+    );
+    if (willAutoContinue) {
+      _cancelPauseReleaseTimer();
+      return;
+    }
+    unawaited(clear(force: true));
   }
 
   void onVideoDetailChange(
@@ -273,6 +322,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (!enableBackgroundPlay) return;
     if (!PlPlayerController.instanceExists()) return;
     if (data == null) return;
+
+    _activeOwners.add(herotag);
+    _logLifecycle('owner attached: $herotag, owners=$ownerCount');
 
     Uri getUri(String? cover) => Uri.parse(ImageUtils.safeThumbnailUrl(cover));
 
@@ -359,27 +411,30 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void onVideoDetailDispose(String herotag) {
+    // 方案说明（用于后续冲突对比）：
+    // - 旧方案：页面层在多个生命周期里手动 clear(force: true)。
+    // - 新方案：统一由 handler 在“owner 释放”时决定是否 clear。
+    // 这样可以避免页面层与 handler 层同时清理导致的竞态和通知残留。
     if (!enableBackgroundPlay) return;
+
+    _activeOwners.remove(herotag);
+    _logLifecycle('owner disposed: $herotag, owners=$ownerCount');
 
     if (_item.isNotEmpty) {
       _item.removeWhere((item) => item.id.endsWith(herotag));
     }
 
-    if (_item.isNotEmpty) {
-      // 还有其他视频在播放，切换到上一个
-      playbackState.add(
-        playbackState.value.copyWith(
-          processingState: AudioProcessingState.idle,
-          playing: false,
-        ),
-      );
-      setMediaItem(_item.last);
-      stop();
-    } else {
-      // 没有其他视频了，但不在这里停止服务
-      // 由页面 dispose 中的 clear(force: true) 负责停止
-      // 这里只需确保状态是 idle，以便后续 clear() 能正确工作
+    if (_item.isEmpty) {
+      // 最后一个 owner 释放时，由 handler 统一关闭通知。
+      // 不再依赖页面层分散 clear，避免“有时清掉/有时残留”的不稳定行为。
+      _logLifecycle('last owner disposed -> clear notification');
+      unawaited(clear(force: true));
+      return;
     }
+
+    // 仍有其他 owner 时，只更新通知展示目标，不主动 stop。
+    // stop 会导致仍在用的会话被提前降级，表现为控制项闪烁或状态错乱。
+    setMediaItem(_item.last);
   }
 
   /// 清理媒体通知，停止前台服务
@@ -394,6 +449,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     _clearFuture = () async {
       _cancelPauseReleaseTimer();
       _item.clear();
+      _activeOwners.clear();
+      _logLifecycle('clear called(force=$force), owners=0, items=0');
 
       // 清除 mediaItem
       if (!mediaItem.isClosed) {
