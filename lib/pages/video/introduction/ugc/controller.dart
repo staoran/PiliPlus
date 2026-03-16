@@ -98,6 +98,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         }
         return;
       }
+      if (isClosed) {
+        return;
+      }
       videoPlayerServiceHandler?.onVideoDetailChange(
         response,
         cid.value,
@@ -608,6 +611,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       } else {
         if (episode is Part) {
           final videoDetail = this.videoDetail.value;
+          if (isClosed) {
+            return true;
+          }
           videoPlayerServiceHandler?.onVideoDetailChange(
             episode,
             cid,

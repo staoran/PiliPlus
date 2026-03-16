@@ -206,6 +206,9 @@ class LocalIntroController extends CommonIntroController {
   }
 
   void onVideoDetailChange(BiliDownloadEntryInfo entry) {
+    if (isClosed) {
+      return;
+    }
     videoPlayerServiceHandler?.onVideoDetailChange(entry, entry.cid, heroTag);
   }
 }

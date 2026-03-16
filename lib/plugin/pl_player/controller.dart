@@ -1683,7 +1683,9 @@ class PlPlayerController with BlockConfigMixin {
     _videoPlayerController = null;
     _videoController = null;
     _instance = null;
-    videoPlayerServiceHandler?.clear();
+    // 页面/窗口销毁后的最后一道保险，强制清理媒体卡片。
+    // 即使上层生命周期分支遗漏，播放器完全销毁后也不应继续保留通知。
+    videoPlayerServiceHandler?.clear(force: true);
   }
 
   static void updatePlayCount() {

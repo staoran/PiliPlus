@@ -259,6 +259,9 @@ class LiveRoomController extends GetxController {
   Future<void> queryLiveInfoH5() async {
     final res = await LiveHttp.liveRoomInfoH5(roomId: roomId);
     if (res case Success(:final response)) {
+      if (isClosed) {
+        return;
+      }
       roomInfoH5.value = response;
       title.value = response.roomInfo?.title ?? '';
       watchedShow.value = response.watchedShow?.textLarge;

@@ -190,6 +190,9 @@ class AudioController extends GetxController
     hasLike.value = item.stat.hasLike_7;
     coinNum.value = item.stat.hasCoin_8 ? 2 : 0;
     hasFav.value = item.stat.hasFav;
+    if (isClosed) {
+      return;
+    }
     videoPlayerServiceHandler?.onVideoDetailChange(
       item,
       (subId.firstOrNull ?? oid).toInt(),

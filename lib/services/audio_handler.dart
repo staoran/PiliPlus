@@ -26,8 +26,11 @@ Future<VideoPlayerServiceHandler> initAudioService() {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.taoran.piliplus.audio',
       androidNotificationChannelName: 'Audio Service ${Constants.appName}',
-      // 由 handler 根据前后台状态控制暂停后的释放时机。
-      androidStopForegroundOnPause: false,
+      // 本项目的视频/听视频页并不依赖 Android 的媒体恢复入口。
+      // 关闭 resume-on-click，避免服务销毁后 SystemUI 继续保留可恢复媒体卡片。
+      androidResumeOnClick: false,
+      // 采用 audio_service 推荐的暂停即退出前台策略，确保系统可以移除通知。
+      androidStopForegroundOnPause: true,
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
       androidNotificationChannelDescription: 'Media notification channel',
@@ -40,6 +43,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static const _backgroundPauseGracePeriod = Duration(minutes: 2);
   static final List<MediaItem> _item = [];
   static final Set<String> _activeOwners = <String>{};
+  static final Set<String> _disposedOwners = <String>{};
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
   bool _lifecycleDebugLogEnabled = kDebugMode && Pref.enableLog;
   Future<void>? _clearFuture;
@@ -323,6 +327,14 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (!PlPlayerController.instanceExists()) return;
     if (data == null) return;
 
+    // 方案说明（用于后续冲突对比）：
+    // - 旧方案默认接受所有晚到的 onVideoDetailChange。
+    // - 新方案会拒绝已释放 owner 的晚到回调，避免页面退出后异步请求把媒体卡片重新挂回系统。
+    if (_disposedOwners.contains(herotag)) {
+      _logLifecycle('ignore stale owner attach: $herotag');
+      return;
+    }
+
     _activeOwners.add(herotag);
     _logLifecycle('owner attached: $herotag, owners=$ownerCount');
 
@@ -417,6 +429,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     // 这样可以避免页面层与 handler 层同时清理导致的竞态和通知残留。
     if (!enableBackgroundPlay) return;
 
+    _disposedOwners.add(herotag);
     _activeOwners.remove(herotag);
     _logLifecycle('owner disposed: $herotag, owners=$ownerCount');
 
@@ -437,6 +450,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     setMediaItem(_item.last);
   }
 
+
   /// 清理媒体通知，停止前台服务
   /// [force] 强制清理，忽略 enableBackgroundPlay 设置
   Future<void> clear({bool force = false}) async {
@@ -450,12 +464,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       _cancelPauseReleaseTimer();
       _item.clear();
       _activeOwners.clear();
+      _disposedOwners.clear();
       _logLifecycle('clear called(force=$force), owners=0, items=0');
-
-      // 清除 mediaItem
-      if (!mediaItem.isClosed) {
-        mediaItem.add(null);
-      }
 
       // 立即重置播放状态，避免通知卡片在 stop 完成前残留旧进度和按钮
       playbackState.add(
@@ -473,8 +483,6 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       onSkipToNext = null;
       onSkipToPrevious = null;
 
-      // 调用 stop() 来停止服务
-      // stop() 会设置 processingState 为 idle 并触发 audio_service 停止前台服务
       await stop();
     }();
 
