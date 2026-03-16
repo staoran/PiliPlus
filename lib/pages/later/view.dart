@@ -5,7 +5,8 @@ import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
-import 'package:PiliPlus/pages/fav_detail/view.dart';
+import 'package:PiliPlus/pages/common/fab_mixin.dart'
+    show NoRightMarginFabLocation;
 import 'package:PiliPlus/pages/later/base_controller.dart';
 import 'package:PiliPlus/pages/later/controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -76,7 +77,7 @@ class _LaterPageState extends State<LaterPage>
           child: Scaffold(
             resizeToAvoidBottomInset: false,
             appBar: _buildAppbar(enableMultiSelect),
-            floatingActionButtonLocation: const CustomFabLocation(),
+            floatingActionButtonLocation: const NoRightMarginFabLocation(),
             floatingActionButton: Padding(
               padding: const .only(right: kFloatingActionButtonMargin),
               child: Obx(

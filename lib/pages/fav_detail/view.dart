@@ -8,6 +8,8 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/fav_order_type.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/media.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
+import 'package:PiliPlus/pages/common/fab_mixin.dart'
+    show NoRightMarginFabLocation;
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/fav_detail/controller.dart';
 import 'package:PiliPlus/pages/fav_detail/widget/fav_video_card.dart';
@@ -60,7 +62,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
           },
           child: Scaffold(
             resizeToAvoidBottomInset: false,
-            floatingActionButtonLocation: const CustomFabLocation(),
+            floatingActionButtonLocation: const NoRightMarginFabLocation(),
             floatingActionButton: Padding(
               padding: const EdgeInsets.only(
                 right: kFloatingActionButtonMargin,
@@ -528,20 +530,5 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
         onReload: _favDetailController.onReload,
       ),
     };
-  }
-}
-
-class CustomFabLocation extends StandardFabLocation with FabFloatOffsetY {
-  const CustomFabLocation();
-
-  @override
-  double getOffsetX(
-    ScaffoldPrelayoutGeometry scaffoldGeometry,
-    double adjustment,
-  ) {
-    return scaffoldGeometry.scaffoldSize.width -
-        scaffoldGeometry.minInsets.right -
-        scaffoldGeometry.floatingActionButtonSize.width +
-        adjustment;
   }
 }
