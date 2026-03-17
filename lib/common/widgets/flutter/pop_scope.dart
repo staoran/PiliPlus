@@ -3,12 +3,11 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart' hide PopScope;
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/src/extension_navigation.dart';
 
 abstract class PopScopeState<T extends StatefulWidget> extends State<T>
     implements PopEntry<Object> {
   ModalRoute<dynamic>? _route;
+  bool _isRegistered = false;
 
   @override
   void onPopInvoked(bool didPop) {}
@@ -22,13 +21,31 @@ abstract class PopScopeState<T extends StatefulWidget> extends State<T>
   void initState() {
     super.initState();
     canPopNotifier = ValueNotifier<bool>(initCanPop);
-    _route = (Get.routing.route as ModalRoute)..registerPopEntry(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (identical(route, _route)) return;
+    if (_isRegistered) {
+      _route?.unregisterPopEntry(this);
+      _isRegistered = false;
+    }
+    _route = route;
+    if (route != null) {
+      route.registerPopEntry(this);
+      _isRegistered = true;
+    }
   }
 
   @override
   void dispose() {
-    _route?.unregisterPopEntry(this);
+    if (_isRegistered) {
+      _route?.unregisterPopEntry(this);
+    }
     _route = null;
+    _isRegistered = false;
     canPopNotifier.dispose();
     super.dispose();
   }
