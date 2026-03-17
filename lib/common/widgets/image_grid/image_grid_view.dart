@@ -108,6 +108,7 @@ class ImageGridView extends StatelessWidget {
     PageUtils.imageView(
       initialPage: index,
       imgList: imgList,
+      tag: hashCode.toString(),
     );
   }
 
@@ -255,7 +256,7 @@ class ImageGridView extends StatelessWidget {
             );
             if (!item.isLongPic) {
               child = Hero(
-                tag: item.url,
+                tag: '${item.url}$hashCode',
                 child: child,
               );
             }

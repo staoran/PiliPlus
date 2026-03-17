@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
+import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -53,7 +54,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
     return Obx(
       () {
         final enableMultiSelect = _favDetailController.enableMultiSelect.value;
-        return PopScope(
+        return popScope(
           canPop: !enableMultiSelect,
           onPopInvokedWithResult: (didPop, result) {
             if (enableMultiSelect) {

@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/back_detector.dart';
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
+import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
@@ -10,7 +11,6 @@ import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:collection/collection.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -690,7 +690,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
           ),
           navigatorObservers: [
             FlutterSmartDialog.observer,
-            PageUtils.routeObserver,
+            routeObserver,
             _PlayerWindowRouteObserver(),
           ],
           scrollBehavior: const MaterialScrollBehavior().copyWith(
