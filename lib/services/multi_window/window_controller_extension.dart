@@ -73,7 +73,11 @@ extension WindowControllerExtension on WindowController {
           }
         case 'getPreInitPlayer':
           // 播放器窗口查询当前的 preInitPlayer 设置值
-          result = Pref.preInitPlayer;
+          try {
+            result = Pref.preInitPlayer;
+          } catch (_) {
+            result = false;
+          }
         default:
           throw MissingPluginException(
             'Not implemented method: ${call.method}',
