@@ -833,7 +833,8 @@ class AudioController extends GetxController
   bool playNext({bool nextPart = false}) {
     _cancelPendingCompletionTimer();
     if (nextPart) {
-      if (audioItem.value case DetailItem(:final parts)) {
+      if (audioItem.value case final currentItem?) {
+        final parts = currentItem.parts;
         if (parts.length > 1) {
           final subId = this.subId.firstOrNull;
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
@@ -846,8 +847,7 @@ class AudioController extends GetxController
             this.subId = [nextPart.subId];
             _queryPlayUrl().then((res) {
               if (res) {
-                // 保持与 VideoDetailController 的连接，不再设置为 null
-                // _videoDetailController = null;
+                _updateCurrItem(currentItem);
               }
             });
             return true;
