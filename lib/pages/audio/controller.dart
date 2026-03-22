@@ -366,6 +366,7 @@ class AudioController extends GetxController
     String? referer,
   }) async {
     _cancelPendingCompletionTimer();
+    position.value = Duration.zero;
     // 切换媒资时重置本地播放标记
     if (!_isLocalPlayback) {
       // 非本地播放路径，确保标记清空
@@ -383,6 +384,7 @@ class AudioController extends GetxController
         start: _start,
       ),
     );
+    await player!.play();
     player!.setRate(speed);
     _start = null;
     initSkip();
