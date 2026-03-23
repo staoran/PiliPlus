@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:PiliPlus/common/constants.dart' show StyleString;
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/grpc/dyn.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -345,7 +346,7 @@ class MainController extends GetxController
             barOffset.value = clampDouble(
               barOffset.value + (notification.scrollDelta ?? 0.0),
               0.0,
-              StyleString.topBarHeight,
+              Style.topBarHeight,
             );
             return false;
           }
@@ -353,7 +354,7 @@ class MainController extends GetxController
             barOffset.value = clampDouble(
               barOffset.value + notification.overscroll,
               0.0,
-              StyleString.topBarHeight,
+              Style.topBarHeight,
             );
             return false;
           }
