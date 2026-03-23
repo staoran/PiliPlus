@@ -566,15 +566,18 @@ class HeaderControlState extends State<HeaderControl>
                             );
                           },
                         ),
-                      Obx(
-                        () => ActionRowLineItem(
-                          iconData: Icons.play_circle_outline,
-                          onTap: plPlayerController.setContinuePlayInBackground,
-                          text: " 后台播放 ",
-                          selectStatus:
-                              plPlayerController.continuePlayInBackground.value,
+                      if (PlatformUtils.isMobile)
+                        Obx(
+                          () => ActionRowLineItem(
+                            iconData: Icons.play_circle_outline,
+                            onTap:
+                                plPlayerController.setContinuePlayInBackground,
+                            text: " 后台播放 ",
+                            selectStatus: plPlayerController
+                                .continuePlayInBackground
+                                .value,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

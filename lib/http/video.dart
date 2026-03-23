@@ -564,7 +564,6 @@ abstract final class VideoHttp {
           replyInfo.id.toString(),
           (replyInfo.deepCopy()
                 ..unknownFields.clear()
-                ..clearMemberV2()
                 ..clearTrackInfo())
               .writeToBuffer(),
         );

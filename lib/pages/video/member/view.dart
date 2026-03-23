@@ -1,5 +1,5 @@
-import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/skeleton/video_card_h.dart';
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -81,7 +81,7 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
 
   Widget _buildUserPage(ThemeData theme, LoadingState userState) {
     return switch (userState) {
-      Loading() => loadingWidget,
+      Loading() => m3eLoading,
       Success(:final response) => Column(
         children: [
           _buildUserInfo(theme, response),
@@ -138,7 +138,7 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
             },
           ),
           TextButton.icon(
-            style: StyleString.buttonStyle,
+            style: Style.buttonStyle,
             onPressed: () => _controller
               ..lastAid = widget.videoDetailController.aid.toString()
               ..queryBySort(),

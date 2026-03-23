@@ -1,5 +1,5 @@
-import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -403,7 +403,7 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
             },
           ),
           TextButton.icon(
-            style: StyleString.buttonStyle,
+            style: Style.buttonStyle,
             onPressed: _controller.queryBySort,
             icon: Icon(
               Icons.sort,

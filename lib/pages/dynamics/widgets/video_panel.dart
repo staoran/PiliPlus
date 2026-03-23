@@ -1,5 +1,6 @@
 // 视频or合集
-import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/assets.dart';
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/flutter/layout_builder.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -107,7 +108,7 @@ class _VideoSeasonWidgetState extends State<_VideoSeasonWidget> {
                     children: [
                       NetworkImgLayer(
                         width: maxWidth,
-                        height: maxWidth / StyleString.aspectRatio,
+                        height: maxWidth / Style.aspectRatio,
                         src: cover,
                         quality: 40,
                       ),
@@ -152,7 +153,7 @@ class _VideoSeasonWidgetState extends State<_VideoSeasonWidget> {
                               ],
                             ),
                             borderRadius: BorderRadius.vertical(
-                              bottom: StyleString.imgRadius,
+                              bottom: Style.imgRadius,
                             ),
                           ),
                           child: DefaultTextStyle.merge(
@@ -187,7 +188,7 @@ class _VideoSeasonWidgetState extends State<_VideoSeasonWidget> {
                                 ],
                                 const Spacer(),
                                 Image.asset(
-                                  'assets/images/play.png',
+                                  Assets.play,
                                   width: 50,
                                   height: 50,
                                   cacheHeight: 50.cacheSize(context),

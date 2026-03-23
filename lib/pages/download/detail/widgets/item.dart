@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/layout_builder.dart';
@@ -186,7 +186,7 @@ class DetailItem extends StatelessWidget {
         onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: StyleString.safeSpace,
+            horizontal: Style.safeSpace,
             vertical: 5,
           ),
           child: Row(
@@ -196,7 +196,7 @@ class DetailItem extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   AspectRatio(
-                    aspectRatio: StyleString.aspectRatio,
+                    aspectRatio: Style.aspectRatio,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final cover = File(
@@ -212,7 +212,7 @@ class DetailItem extends StatelessWidget {
                         }
                         return cover.existsSync()
                             ? ClipRRect(
-                                borderRadius: StyleString.mdRadius,
+                                borderRadius: Style.mdRadius,
                                 child: Image.file(
                                   cover,
                                   width: maxWidth,
@@ -471,7 +471,7 @@ class DetailItem extends StatelessWidget {
           // ignore: deprecated_member_use
           year2023: true,
           minHeight: 2.5,
-          borderRadius: StyleString.mdRadius,
+          borderRadius: Style.mdRadius,
           color: color,
           backgroundColor: highlightColor,
           value: progress,

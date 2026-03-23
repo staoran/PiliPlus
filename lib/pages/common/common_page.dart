@@ -1,4 +1,4 @@
-﻿import 'package:PiliPlus/common/constants.dart' show StyleString;
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart'
     as custom_refresh;
 import 'package:PiliPlus/pages/common/common_controller.dart';
@@ -93,7 +93,7 @@ abstract class CommonPageState<
     _barOffset!.value = clampDouble(
       _barOffset!.value + scrollDelta,
       0.0,
-      StyleString.topBarHeight,
+      Style.topBarHeight,
     );
   }
 
@@ -113,7 +113,7 @@ abstract class CommonPageState<
         final newValue = clampDouble(
           value + scrollDelta,
           0.0,
-          StyleString.topBarHeight,
+          Style.topBarHeight,
         );
         final offset = value - newValue;
         if (offset != 0) {

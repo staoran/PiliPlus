@@ -570,7 +570,7 @@ abstract final class PageUtils {
     if (off) {
       Get.offNamed('/liveRoom', arguments: roomId);
     } else {
-      Get.toNamed('/liveRoom', arguments: roomId);
+      PageUtils.toDupNamed('/liveRoom', arguments: roomId);
     }
   }
 

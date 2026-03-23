@@ -1,4 +1,4 @@
-import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
@@ -201,7 +201,7 @@ class _MemberVideoState extends State<MemberVideo>
                                             : 0,
                                       ),
                                       child: TextButton.icon(
-                                        style: StyleString.buttonStyle,
+                                        style: Style.buttonStyle,
                                         onPressed: _controller.toViewPlayAll,
                                         icon: Icon(
                                           Icons.play_circle_outline_rounded,
@@ -222,7 +222,7 @@ class _MemberVideoState extends State<MemberVideo>
                           ),
                           const Spacer(),
                           TextButton.icon(
-                            style: StyleString.buttonStyle,
+                            style: Style.buttonStyle,
                             onPressed: _controller.queryBySort,
                             icon: Icon(
                               Icons.sort,
