@@ -544,7 +544,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
             onTap: () {
               showConfirmDialog(
                 context: context,
-                title: '确定缓存全部？',
+                title: const Text('确定缓存全部？'),
                 onConfirm: () {
                   for (int i = 0; i < widget.episodes.length; i++) {
                     _onDownload(

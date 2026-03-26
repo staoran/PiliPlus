@@ -163,7 +163,7 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                   Get.back();
                   showConfirmDialog(
                     context: context,
-                    title: '删除短评，同时删除评分？',
+                    title: const Text('删除短评，同时删除评分？'),
                     onConfirm: () => _controller.onDel(index, item.reviewId!),
                   );
                 },

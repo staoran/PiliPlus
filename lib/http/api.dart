@@ -649,14 +649,9 @@ abstract final class Api {
   /// mid
   static const getMemberViewApi = '/x/space/upstat';
 
-  /// 查询某个专栏
-  /// mid
-  /// season_id
-  /// sort_reverse
-  /// page_num
-  /// page_size
-  static const getSeasonDetailApi =
-      '/x/polymer/web-space/seasons_archives_list';
+  static const seasonArchives = '/x/polymer/web-space/seasons_archives_list';
+
+  static const seriesArchives = '/x/series/archives';
 
   /// 获取未读动态数
   static const getUnreadDynamic = '/x/web-interface/dynamic/entrance';

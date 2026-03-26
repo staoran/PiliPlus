@@ -17,12 +17,15 @@ import 'package:PiliPlus/pages/member/controller.dart';
 import 'package:PiliPlus/pages/member/widget/medal_wall.dart';
 import 'package:PiliPlus/pages/member/widget/user_info_card.dart';
 import 'package:PiliPlus/pages/member_cheese/view.dart';
+import 'package:PiliPlus/pages/member_contribute/controller.dart';
 import 'package:PiliPlus/pages/member_contribute/view.dart';
 import 'package:PiliPlus/pages/member_dynamics/view.dart';
 import 'package:PiliPlus/pages/member_favorite/view.dart';
 import 'package:PiliPlus/pages/member_home/view.dart';
 import 'package:PiliPlus/pages/member_pgc/view.dart';
 import 'package:PiliPlus/pages/member_shop/view.dart';
+import 'package:PiliPlus/pages/member_video_web/archive/view.dart';
+import 'package:PiliPlus/pages/member_video_web/season_series/view.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -215,22 +218,35 @@ class _MemberPageState extends State<MemberPage> {
               ],
             ),
           ),
-        PopupMenuItem(
-          onTap: () => Get.toNamed(
-            '/upowerRank',
-            parameters: {
-              'mid': _userController.mid.toString(),
-            },
+        if (_userController.hasCharge)
+          PopupMenuItem(
+            onTap: () => Get.toNamed(
+              '/upowerRank',
+              parameters: {
+                'mid': _userController.mid.toString(),
+              },
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.electric_bolt, size: 19),
+                SizedBox(width: 10),
+                Text('充电排行榜'),
+              ],
+            ),
           ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.electric_bolt, size: 19),
-              SizedBox(width: 10),
-              Text('充电排行榜'),
-            ],
+        if (Get.isRegistered<MemberContributeCtr>(tag: _heroTag))
+          PopupMenuItem(
+            onTap: _toWebArchive,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.extension_outlined, size: 19),
+                SizedBox(width: 10),
+                Text('网页投稿'),
+              ],
+            ),
           ),
-        ),
         if (_userController.account.isLogin)
           if (_userController.mid == _userController.account.mid) ...[
             if ((_userController
@@ -454,6 +470,31 @@ class _MemberPageState extends State<MemberPage> {
       onShow();
     } else {
       res.toast();
+    }
+  }
+
+  void _toWebArchive() {
+    try {
+      final ctr = Get.find<MemberContributeCtr>(tag: _heroTag);
+      final item = ctr.items?[ctr.tabController?.index ?? 0];
+      if (item != null) {
+        final id = item.seasonId ?? item.seriesId;
+        if (id != null) {
+          MemberSSWeb.toMemberSSWeb(
+            type: item.seasonId != null ? .season : .series,
+            id: id,
+            mid: _mid,
+            name: _userController.username ?? '',
+          );
+          return;
+        }
+      }
+      MemberVideoWeb.toMemberVideoWeb(
+        mid: _mid,
+        name: _userController.username ?? '',
+      );
+    } catch (e) {
+      SmartDialog.showToast(e.toString());
     }
   }
 }

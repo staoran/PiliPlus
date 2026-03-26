@@ -213,8 +213,8 @@ Commit Hash: ${BuildConfig.commitHash}''',
               if (cacheSize.value.isNotEmpty) {
                 showConfirmDialog(
                   context: context,
-                  title: '提示',
-                  content: '该操作将清除图片及网络请求缓存数据，确认清除？',
+                  title: const Text('提示'),
+                  content: const Text('该操作将清除图片及网络请求缓存数据，确认清除？'),
                   onConfirm: () async {
                     SmartDialog.showLoading(msg: '正在清除...');
                     try {

@@ -88,7 +88,7 @@ class WhisperSessionItem extends StatelessWidget {
                       Get.back();
                       showConfirmDialog(
                         context: context,
-                        title: '确定删除该对话？',
+                        title: const Text('确定删除该对话？'),
                         onConfirm: () =>
                             onRemove(item.id.privateId.talkerUid.toInt()),
                       );
@@ -122,7 +122,7 @@ class WhisperSessionItem extends StatelessWidget {
                     height: 42,
                     onTap: () => showConfirmDialog(
                       context: context,
-                      title: '确定删除该对话？',
+                      title: const Text('确定删除该对话？'),
                       onConfirm: () =>
                           onRemove(item.id.privateId.talkerUid.toInt()),
                     ),

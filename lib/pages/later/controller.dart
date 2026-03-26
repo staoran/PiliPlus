@@ -310,8 +310,8 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
     };
     showConfirmDialog(
       context: context,
-      title: '确认',
-      content: content,
+      title: const Text('确认'),
+      content: Text(content),
       onConfirm: () async {
         final res = await UserHttp.toViewClear(cleanType);
         if (res.isSuccess) {

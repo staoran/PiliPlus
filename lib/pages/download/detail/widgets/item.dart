@@ -75,7 +75,7 @@ class DetailItem extends StatelessWidget {
                       Get.back();
                       showConfirmDialog(
                         context: context,
-                        title: '确定删除该视频？',
+                        title: const Text('确定删除该视频？'),
                         onConfirm: onDelete,
                       );
                     },

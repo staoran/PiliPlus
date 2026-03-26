@@ -235,6 +235,7 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
   void _handleDoubleTap() {
     if (!mounted) return;
     if (_animationController.isAnimating) return;
+    _stopFling();
     _scaleFrom = _scale;
     _positionFrom = _position;
 
@@ -528,6 +529,7 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
         widget.onChangePage!.call(event.scrollDelta.dy < 0 ? -1 : 1);
         return;
       }
+      _stopFling();
       final double scaleChange = math.exp(-event.scrollDelta.dy / _scaleFactor);
       final Offset local = event.localPosition;
       final Offset focalPointScene = _toScene(local);

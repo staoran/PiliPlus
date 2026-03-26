@@ -248,7 +248,7 @@ class _DownloadPageState extends State<DownloadPage> {
                       Get.back();
                       showConfirmDialog(
                         context: context,
-                        title: '确定删除？',
+                        title: const Text('确定删除？'),
                         onConfirm: () async {
                           await GStorage.watchProgress.deleteAll(
                             pageInfo.entries.map((e) => e.cid.toString()),

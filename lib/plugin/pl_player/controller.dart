@@ -1106,7 +1106,8 @@ class PlPlayerController with BlockConfigMixin {
             }
             return;
           }
-          SmartDialog.showToast('视频加载错误, $event');
+          Utils.reportError(event);
+          // SmartDialog.showToast('视频加载错误, $event');
         }
       }),
       // controllerStream.volume.listen((event) {
