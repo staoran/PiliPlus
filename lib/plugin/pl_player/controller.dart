@@ -567,6 +567,8 @@ class PlPlayerController with BlockConfigMixin {
     return lowerEvent.contains('tls') ||
         lowerEvent.contains('ssl') ||
         lowerEvent.contains('handshake') ||
+        lowerEvent.contains('stream ends prematurely') ||
+        lowerEvent.contains('unexpected end of file') ||
         lowerEvent.contains('ffurl_read returned') ||
         lowerEvent.contains('failed to open https://') ||
         lowerEvent.contains('can not open external file https://') ||
