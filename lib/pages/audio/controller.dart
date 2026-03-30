@@ -100,9 +100,12 @@ class AudioController extends GetxController
   ListOrder order = ListOrder.ORDER_NORMAL;
 
   Timer? _pendingCompletionTimer;
+  Future<void>? _pendingCompletionVerification;
+  Future<void> _switchQueue = Future<void>.value();
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
+  int _switchGeneration = 0;
 
   @override
   void onInit() {
@@ -200,6 +203,50 @@ class AudioController extends GetxController
     );
   }
 
+  DetailItem? _findCurrentDetailItem() {
+    final currentOid = oid;
+    final currentSubId = subId.firstOrNull;
+
+    final currentList = playlist;
+    if (currentList == null) {
+      return null;
+    }
+
+    for (final item in currentList) {
+      if (item.item.oid != currentOid) {
+        continue;
+      }
+      if (currentSubId == null) {
+        return item;
+      }
+      final itemSubIds = item.item.subId;
+      if (itemSubIds.contains(currentSubId) ||
+          item.parts.any((part) => part.subId == currentSubId)) {
+        return item;
+      }
+    }
+    return currentList.firstWhereOrNull((item) => item.item.oid == currentOid);
+  }
+
+  void _updateCurrentItemFromState() {
+    final currentItem = _findCurrentDetailItem();
+    if (currentItem != null) {
+      _updateCurrItem(currentItem);
+    }
+  }
+
+  int _beginSwitch() {
+    _cancelPendingCompletionTimer();
+    return ++_switchGeneration;
+  }
+
+  bool _isStaleSwitch(int generation) =>
+      isClosed || generation != _switchGeneration;
+
+  void _enqueueSwitch(Future<void> Function() action) {
+    _switchQueue = _switchQueue.then((_) => action());
+  }
+
   Future<void> _queryPlayList({
     bool isInit = false,
     bool isLoadPrev = false,
@@ -289,6 +336,24 @@ class AudioController extends GetxController
       res.toast();
       return false;
     }
+  }
+
+  Future<bool> _queryPlayUrlForSwitch(int generation) async {
+    final result = await _queryPlayUrl();
+    if (_isStaleSwitch(generation)) {
+      return false;
+    }
+    return result;
+  }
+
+  bool _isCompletionVerified({Duration tolerance = const Duration(milliseconds: 180)}) {
+    final currentPosition = player?.state.position ?? position.value;
+    final currentDuration = player?.state.duration ?? duration.value;
+    if (currentDuration <= Duration.zero) {
+      return false;
+    }
+    final remaining = currentDuration - currentPosition;
+    return remaining <= tolerance;
   }
 
   Future<bool> _tryPlayLocalIfAvailable() async {
@@ -430,26 +495,66 @@ class AudioController extends GetxController
           _cancelPendingCompletionTimer();
           return;
         }
-
-        final remaining = _completionRemaining;
-        if (remaining > const Duration(milliseconds: 800)) {
-          _schedulePendingCompletion(remaining);
-          return;
-        }
-
-        _handlePlaybackCompleted();
+        _verifyPlaybackCompleted();
       }),
     ];
   }
 
   Duration get _completionRemaining {
-    final remaining = duration.value - position.value;
+    final currentPosition = player?.state.position ?? position.value;
+    final currentDuration = player?.state.duration ?? duration.value;
+    final remaining = currentDuration - currentPosition;
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
   void _cancelPendingCompletionTimer() {
     _pendingCompletionTimer?.cancel();
     _pendingCompletionTimer = null;
+  }
+
+  Future<void> _verifyPlaybackCompleted() {
+    final existing = _pendingCompletionVerification;
+    if (existing != null) {
+      return existing;
+    }
+
+    _cancelPendingCompletionTimer();
+
+    final expectedGeneration = _switchGeneration;
+    final expectedOid = oid;
+    final expectedSubId = subId.firstOrNull;
+
+    return _pendingCompletionVerification = () async {
+      try {
+        for (var index = 0; index < 6; index++) {
+          if (isClosed ||
+              expectedGeneration != _switchGeneration ||
+              oid != expectedOid ||
+              subId.firstOrNull != expectedSubId) {
+            return;
+          }
+
+          if (_isCompletionVerified()) {
+            _handlePlaybackCompleted();
+            return;
+          }
+
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+        }
+
+        final remaining = _completionRemaining;
+        if (remaining > const Duration(milliseconds: 250)) {
+          _schedulePendingCompletion(remaining);
+          return;
+        }
+
+        if (_isCompletionVerified(tolerance: const Duration(milliseconds: 250))) {
+          _handlePlaybackCompleted();
+        }
+      } finally {
+        _pendingCompletionVerification = null;
+      }
+    }();
   }
 
   void _schedulePendingCompletion(Duration remaining) {
@@ -479,6 +584,7 @@ class AudioController extends GetxController
 
   void _handlePlaybackCompleted() {
     _cancelPendingCompletionTimer();
+    _pendingCompletionVerification = null;
     _videoDetailController?.playedTime = duration.value;
     videoPlayerServiceHandler?.onStatusChange(
       PlayerStatus.completed,
@@ -501,7 +607,12 @@ class AudioController extends GetxController
           break;
         case PlayRepeat.singleCycle:
           willAutoContinue = true;
-          onPlay();
+          _enqueueSwitch(() async {
+            if (player case final currentPlayer?) {
+              await currentPlayer.seek(Duration.zero);
+              await currentPlayer.play();
+            }
+          });
           break;
         case PlayRepeat.listCycle:
           if (playNext(nextPart: true)) {
@@ -511,7 +622,12 @@ class AudioController extends GetxController
             playIndex(0);
           } else {
             willAutoContinue = true;
-            onPlay();
+            _enqueueSwitch(() async {
+              if (player case final currentPlayer?) {
+                await currentPlayer.seek(Duration.zero);
+                await currentPlayer.play();
+              }
+            });
           }
           break;
         case PlayRepeat.autoPlayRelated:
@@ -821,9 +937,7 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final prev = index! - 1;
       if (prev >= 0) {
-        // 切换前保存当前视频进度
-        _saveCurrentProgress();
-        playIndex(prev, skipSaveProgress: true);
+        _enqueueSwitch(() => _playIndexInternal(prev, skipSaveProgress: false));
         return true;
       }
     }
@@ -831,7 +945,6 @@ class AudioController extends GetxController
   }
 
   bool playNext({bool nextPart = false}) {
-    _cancelPendingCompletionTimer();
     if (nextPart) {
       if (audioItem.value case final currentItem?) {
         final parts = currentItem.parts;
@@ -839,17 +952,7 @@ class AudioController extends GetxController
           final subId = this.subId.firstOrNull;
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
           if (nextIndex != 0 && nextIndex < parts.length) {
-            // 切换前保存当前视频进度（在更新 oid/subId 之前）
-            _saveCurrentProgress();
-
-            final nextPart = parts[nextIndex];
-            oid = nextPart.oid;
-            this.subId = [nextPart.subId];
-            _queryPlayUrl().then((res) {
-              if (res) {
-                _updateCurrItem(currentItem);
-              }
-            });
+            _enqueueSwitch(() => _playNextPartInternal(nextIndex));
             return true;
           }
         }
@@ -858,12 +961,7 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final next = index! + 1;
       if (next < playlist!.length) {
-        if (next == playlist!.length - 1 && _next != null) {
-          _queryPlayList(isLoadNext: true);
-        }
-        // 切换前保存当前视频进度
-        _saveCurrentProgress();
-        playIndex(next, skipSaveProgress: true);
+        _enqueueSwitch(() => _playIndexInternal(next, skipSaveProgress: false));
         return true;
       }
     }
@@ -875,11 +973,49 @@ class AudioController extends GetxController
     List<Int64>? subId,
     bool skipSaveProgress = false,
   }) {
+    _enqueueSwitch(
+      () => _playIndexInternal(
+        index,
+        subId: subId,
+        skipSaveProgress: skipSaveProgress,
+      ),
+    );
+  }
+
+  Future<void> _playNextPartInternal(int nextPartIndex) async {
+    final currentItem = audioItem.value;
+    if (currentItem == null) {
+      return;
+    }
+    final parts = currentItem.parts;
+    if (nextPartIndex < 0 || nextPartIndex >= parts.length) {
+      return;
+    }
+
+    _saveCurrentProgress();
+    final generation = _beginSwitch();
+    final nextPart = parts[nextPartIndex];
+    _isLocalPlayback = false;
+    oid = nextPart.oid;
+    subId = [nextPart.subId];
+
+    final res = await _queryPlayUrlForSwitch(generation);
+    if (res) {
+      _updateCurrentItemFromState();
+    }
+  }
+
+  Future<void> _playIndexInternal(
+    int index, {
+    List<Int64>? subId,
+    bool skipSaveProgress = false,
+  }) async {
     if (index == this.index && subId == null) return;
     // 切换前保存当前视频进度（如果没有在调用方保存过）
     if (!skipSaveProgress) {
       _saveCurrentProgress();
     }
+    final generation = _beginSwitch();
     this.index = index;
     _isLocalPlayback = false;
     final audioItem = playlist![index];
@@ -902,13 +1038,10 @@ class AudioController extends GetxController
       );
     }
     _start = progress > 0 ? Duration(seconds: progress) : null;
-    _queryPlayUrl().then((res) {
-      if (res) {
-        // 保持与 VideoDetailController 的连接，不再设置为 null
-        // _videoDetailController = null;
-        _updateCurrItem(audioItem);
-      }
-    });
+    final res = await _queryPlayUrlForSwitch(generation);
+    if (res) {
+      _updateCurrentItemFromState();
+    }
   }
 
   /// 从 VideoDetailController 的 mediaList 中获取视频的本地进度（秒）
