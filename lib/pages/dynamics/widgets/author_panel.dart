@@ -187,21 +187,23 @@ class AuthorPanel extends StatelessWidget {
           Positioned(
             top: 0,
             right: 0,
-            height: height,
-            child: CachedNetworkImage(
-              height: height,
-              memCacheHeight: height.cacheSize(context),
-              imageUrl: ImageUtils.safeThumbnailUrl(
-                moduleAuthor.decorate!.cardUrl,
+            bottom: 0,
+            child: Center(
+              child: CachedNetworkImage(
+                height: height,
+                memCacheHeight: height.cacheSize(context),
+                imageUrl: ImageUtils.safeThumbnailUrl(
+                  moduleAuthor.decorate!.cardUrl,
+                ),
+                placeholder: (_, _) => const SizedBox.shrink(),
               ),
-              placeholder: (_, _) => const SizedBox.shrink(),
             ),
           ),
           if (moduleAuthor.decorate!.fan?.numStr?.isNotEmpty == true)
             Positioned(
               top: 0,
+              bottom: 0,
               right: height,
-              height: height,
               child: Center(
                 child: Text(
                   moduleAuthor.decorate!.fan!.numStr!.toString(),
