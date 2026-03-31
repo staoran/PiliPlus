@@ -54,6 +54,7 @@ import 'package:PiliPlus/pages/search_trending/view.dart';
 import 'package:PiliPlus/pages/setting/extra_setting.dart';
 import 'package:PiliPlus/pages/setting/pages/bar_set.dart';
 import 'package:PiliPlus/pages/setting/pages/color_select.dart';
+import 'package:PiliPlus/pages/setting/pages/debug_logs.dart';
 import 'package:PiliPlus/pages/setting/pages/display_mode.dart';
 import 'package:PiliPlus/pages/setting/pages/font_size_select.dart';
 import 'package:PiliPlus/pages/setting/pages/logs.dart';
@@ -162,6 +163,7 @@ class Routes {
     GetPage(name: '/memberDynamics', page: () => const MemberDynamicsPage()),
     // 日志
     GetPage(name: '/logs', page: () => const LogsPage()),
+    GetPage(name: '/debugLogs', page: () => const DebugLogsPage()),
     // 订阅
     GetPage(name: '/subscription', page: () => const SubPage()),
     // 订阅详情

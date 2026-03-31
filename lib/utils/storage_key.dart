@@ -154,6 +154,8 @@ abstract final class SettingBoxKey {
       showDynDispute = 'showDynDispute',
       touchSlopH = 'touchSlopH';
 
+  static const String enableDebugLog = 'enableDebugLog';
+
   static const String minimizeOnExit = 'minimizeOnExit',
       windowSize = 'windowSize',
       windowPosition = 'windowPosition',

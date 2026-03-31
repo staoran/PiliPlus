@@ -27,6 +27,7 @@ import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart'
 import 'package:PiliPlus/pages/video/pay_coins/view.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
@@ -201,6 +202,15 @@ class AudioController extends GetxController
       (subId.firstOrNull ?? oid).toInt(),
       hashCode.toString(),
     );
+    DebugLogService.log(
+      'audio.item',
+      'update current item',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'title': item.arc.title,
+      },
+    );
   }
 
   DetailItem? _findCurrentDetailItem() {
@@ -237,7 +247,17 @@ class AudioController extends GetxController
 
   int _beginSwitch() {
     _cancelPendingCompletionTimer();
-    return ++_switchGeneration;
+    final generation = ++_switchGeneration;
+    DebugLogService.log(
+      'audio.switch',
+      'begin switch',
+      extra: {
+        'generation': generation,
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+      },
+    );
+    return generation;
   }
 
   bool _isStaleSwitch(int generation) =>
@@ -308,6 +328,16 @@ class AudioController extends GetxController
   }
 
   Future<bool> _queryPlayUrl() async {
+    DebugLogService.log(
+      'audio.playurl',
+      'query play url start',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.map((e) => e.toString()).toList(),
+        'itemType': itemType,
+        'isLocalPlayback': _isLocalPlayback,
+      },
+    );
     if (_isLocalPlayback) return true;
 
     // 切换视频时，立即清空旧的空降助手数据，防止 UI 残留
@@ -316,6 +346,15 @@ class AudioController extends GetxController
     // 尝试使用本地已缓存的离线音频
     final triedLocal = await _tryPlayLocalIfAvailable();
     if (triedLocal) {
+      DebugLogService.log(
+        'audio.playurl',
+        'use local cache instead of remote url',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'localEntry': currentLocalEntry?.entryDirPath,
+        },
+      );
       // 本地播放也需要查询空降助手（如果有网络）
       _querySponsorBlock();
       return true;
@@ -330,9 +369,26 @@ class AudioController extends GetxController
       subId: subId,
     );
     if (res case Success(:final response)) {
+      DebugLogService.log(
+        'audio.playurl',
+        'query play url success',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+        },
+      );
       _onPlay(response);
       return true;
     } else {
+      DebugLogService.log(
+        'audio.playurl',
+        'query play url failed',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'error': res.toString(),
+        },
+      );
       res.toast();
       return false;
     }
@@ -392,6 +448,15 @@ class AudioController extends GetxController
     _isLocalPlayback = true;
     // 保存找到的本地缓存条目
     currentLocalEntry = local;
+    DebugLogService.log(
+      'audio.local',
+      'local cache hit',
+      extra: {
+        'oid': oid.toString(),
+        'cid': targetCid,
+        'entryDirPath': local.entryDirPath,
+      },
+    );
     duration.value = Duration(milliseconds: local.totalTimeMilli);
     _onOpenMedia(audioPath, ua: '', referer: null);
     return true;
@@ -431,6 +496,17 @@ class AudioController extends GetxController
     String? referer,
   }) async {
     _cancelPendingCompletionTimer();
+    DebugLogService.log(
+      'audio.media',
+      'open media',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'url': url,
+        'start': _start?.inMilliseconds,
+        'isLocalPlayback': _isLocalPlayback,
+      },
+    );
     position.value = Duration.zero;
     // 切换媒资时重置本地播放标记
     if (!_isLocalPlayback) {
@@ -495,6 +571,16 @@ class AudioController extends GetxController
           _cancelPendingCompletionTimer();
           return;
         }
+        DebugLogService.log(
+          'audio.completed',
+          'completed signal received',
+          extra: {
+            'oid': oid.toString(),
+            'subId': subId.firstOrNull?.toString(),
+            'position': position.value.inMilliseconds,
+            'duration': duration.value.inMilliseconds,
+          },
+        );
         _verifyPlaybackCompleted();
       }),
     ];
@@ -535,6 +621,18 @@ class AudioController extends GetxController
           }
 
           if (_isCompletionVerified()) {
+            DebugLogService.log(
+              'audio.completed',
+              'completion verified during polling',
+              extra: {
+                'oid': oid.toString(),
+                'subId': subId.firstOrNull?.toString(),
+                'position':
+                    (player?.state.position ?? position.value).inMilliseconds,
+                'duration':
+                    (player?.state.duration ?? duration.value).inMilliseconds,
+              },
+            );
             _handlePlaybackCompleted();
             return;
           }
@@ -549,6 +647,14 @@ class AudioController extends GetxController
         }
 
         if (_isCompletionVerified(tolerance: const Duration(milliseconds: 250))) {
+          DebugLogService.log(
+            'audio.completed',
+            'completion verified after fallback check',
+            extra: {
+              'oid': oid.toString(),
+              'subId': subId.firstOrNull?.toString(),
+            },
+          );
           _handlePlaybackCompleted();
         }
       } finally {
@@ -585,6 +691,15 @@ class AudioController extends GetxController
   void _handlePlaybackCompleted() {
     _cancelPendingCompletionTimer();
     _pendingCompletionVerification = null;
+    DebugLogService.log(
+      'audio.completed',
+      'handle playback completed',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'playMode': playMode.value.name,
+      },
+    );
     _videoDetailController?.playedTime = duration.value;
     videoPlayerServiceHandler?.onStatusChange(
       PlayerStatus.completed,
@@ -995,13 +1110,43 @@ class AudioController extends GetxController
     _saveCurrentProgress();
     final generation = _beginSwitch();
     final nextPart = parts[nextPartIndex];
+    DebugLogService.log(
+      'audio.switch',
+      'switch to next part',
+      extra: {
+        'generation': generation,
+        'currentOid': oid.toString(),
+        'nextOid': nextPart.oid.toString(),
+        'nextSubId': nextPart.subId.toString(),
+        'nextPartIndex': nextPartIndex,
+      },
+    );
     _isLocalPlayback = false;
     oid = nextPart.oid;
     subId = [nextPart.subId];
 
     final res = await _queryPlayUrlForSwitch(generation);
     if (res) {
+      DebugLogService.log(
+        'audio.switch',
+        'switch to next part success',
+        extra: {
+          'generation': generation,
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+        },
+      );
       _updateCurrentItemFromState();
+    } else {
+      DebugLogService.log(
+        'audio.switch',
+        'switch to next part failed',
+        extra: {
+          'generation': generation,
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+        },
+      );
     }
   }
 
@@ -1037,10 +1182,42 @@ class AudioController extends GetxController
         '🎵 playIndex: index=$index, oid=${item.oid}, progress=$progress seconds',
       );
     }
+    DebugLogService.log(
+      'audio.switch',
+      'switch to playlist index',
+      extra: {
+        'generation': generation,
+        'index': index,
+        'oid': item.oid.toString(),
+        'subId': this.subId.firstOrNull?.toString(),
+        'progress': progress,
+      },
+    );
     _start = progress > 0 ? Duration(seconds: progress) : null;
     final res = await _queryPlayUrlForSwitch(generation);
     if (res) {
+      DebugLogService.log(
+        'audio.switch',
+        'switch to playlist index success',
+        extra: {
+          'generation': generation,
+          'index': index,
+          'oid': oid.toString(),
+          'subId': this.subId.firstOrNull?.toString(),
+        },
+      );
       _updateCurrentItemFromState();
+    } else {
+      DebugLogService.log(
+        'audio.switch',
+        'switch to playlist index failed',
+        extra: {
+          'generation': generation,
+          'index': index,
+          'oid': oid.toString(),
+          'subId': this.subId.firstOrNull?.toString(),
+        },
+      );
     }
   }
 

@@ -10,6 +10,7 @@ import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
@@ -73,6 +74,14 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (_lifecycleDebugLogEnabled && kDebugMode) {
       debugPrint('[AudioServiceLifecycle] $message');
     }
+    DebugLogService.log(
+      'audio.handler',
+      message,
+      extra: {
+        'ownerCount': ownerCount,
+        'itemCount': _item.length,
+      },
+    );
   }
 
   /// 设置列表控制模式

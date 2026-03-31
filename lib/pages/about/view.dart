@@ -9,6 +9,7 @@ import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
+import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
@@ -20,6 +21,7 @@ import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart' hide ListTile;
@@ -87,6 +89,10 @@ class _AboutPageState extends State<AboutPage> {
     final subTitleStyle = TextStyle(fontSize: 13, color: outline);
     final showAppBar = widget.showAppBar;
     final padding = MediaQuery.viewPaddingOf(context);
+    final enableDebugLog = GStorage.setting.get(
+      SettingBoxKey.enableDebugLog,
+      defaultValue: false,
+    );
     return Scaffold(
       appBar: showAppBar ? AppBar(title: const Text('关于')) : null,
       resizeToAvoidBottomInset: false,
@@ -205,6 +211,30 @@ Commit Hash: ${BuildConfig.commitHash}''',
                 : LoggerUtils.clearLogs,
             leading: const Icon(Icons.bug_report_outlined),
             title: const Text('错误日志'),
+            subtitle: Text('长按清除日志', style: subTitleStyle),
+            trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
+          ),
+          SwitchListTile(
+            value: enableDebugLog,
+            secondary: const Icon(Icons.developer_mode_outlined),
+            title: const Text('开启调试日志'),
+            subtitle: Text('开启后收集后台播放/切换等调试日志', style: subTitleStyle),
+            onChanged: (value) async {
+              await GStorage.setting.put(SettingBoxKey.enableDebugLog, value);
+              if (context.mounted) {
+                setState(() {});
+              }
+              SmartDialog.showToast('已${value ? '开启' : '关闭'}调试日志');
+            },
+          ),
+          ListTile(
+            onTap: () => Get.toNamed('/debugLogs'),
+            onLongPress: DebugLogService.clear,
+            onSecondaryTap: PlatformUtils.isMobile
+                ? null
+                : DebugLogService.clear,
+            leading: const Icon(Icons.article_outlined),
+            title: const Text('调试日志'),
             subtitle: Text('长按清除日志', style: subTitleStyle),
             trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
           ),
