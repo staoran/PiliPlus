@@ -575,6 +575,11 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
               audioPosition > Duration.zero)
           ? audioPosition
           : null;
+      if (progressToPass != null) {
+        videoDetailCtr
+          ..playedTime = progressToPass
+          ..defaultST = progressToPass;
+      }
       await videoDetailCtr.queryVideoUrl(defaultST: progressToPass);
 
       if (this.bvid != bvid) {

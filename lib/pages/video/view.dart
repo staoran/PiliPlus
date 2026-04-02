@@ -119,6 +119,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoDetailController.plPlayerController.pipNoDanmaku;
 
   bool isShowing = true;
+  Duration? _pendingAudioSyncPosition;
 
   bool get isFullScreen =>
       videoDetailController.plPlayerController.isFullScreen.value;
@@ -505,16 +506,20 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     () async {
+      final syncedPosition = _pendingAudioSyncPosition;
+      _pendingAudioSyncPosition = null;
       if (videoDetailController.autoPlay) {
         await videoDetailController.playerInit(
           autoplay: videoDetailController.playerStatus?.isPlaying ?? false,
           localEntry: videoDetailController.currentLocalEntry,
+          seekToTime: syncedPosition,
         );
       } else if (videoDetailController.plPlayerController.preInitPlayer &&
           !videoDetailController.isQuerying &&
           videoDetailController.videoState.value is! Error) {
         await videoDetailController.playerInit(
           localEntry: videoDetailController.currentLocalEntry,
+          seekToTime: syncedPosition,
         );
       }
       if (!mounted || !isShowing) return;
@@ -542,8 +547,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
       // 如果听视频切换了视频，需要同步到视频页
       final audioOid = audioController.oid;
+      final audioCid = audioController.subId.firstOrNull?.toInt();
       final currentBvid = IdUtils.av2bv(audioOid.toInt());
       final audioPosition = audioController.position.value;
+      _pendingAudioSyncPosition = audioPosition > Duration.zero
+          ? audioPosition
+          : null;
 
       if (currentBvid != videoDetailController.bvid) {
         if (kDebugMode) {
@@ -554,15 +563,52 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
         // 触发视频切换
         if (videoDetailController.isUgc) {
-          // 从播放列表中找到对应的视频并切换
-          final targetIndex = videoDetailController.mediaList.indexWhere(
-            (item) => item.bvid == currentBvid,
-          );
-          if (targetIndex != -1) {
-            final targetItem = videoDetailController.mediaList[targetIndex];
+          dynamic targetItem;
 
-            // 触发切换逻辑，传递听视频的进度
-            // 注意：不需要再保存旧视频进度，因为听视频切换时已经保存了
+          final videoDetail = ugcIntroController.videoDetail.value;
+          final currentPages = videoDetail.pages;
+          if (currentPages != null && currentPages.isNotEmpty) {
+            for (final item in currentPages) {
+              if (item.aid == audioOid.toInt() ||
+                  item.cid == audioCid ||
+                  item.bvid == currentBvid) {
+                targetItem = item;
+                break;
+              }
+            }
+          }
+
+          final sections = videoDetail.ugcSeason?.sections;
+          if (targetItem == null && sections != null) {
+            for (final section in sections) {
+              final episodes = section.episodes;
+              if (episodes == null) continue;
+              for (final item in episodes) {
+                if (item.aid == audioOid.toInt() ||
+                    item.cid == audioCid ||
+                    item.bvid == currentBvid) {
+                  targetItem = item;
+                  break;
+                }
+              }
+              if (targetItem != null) {
+                break;
+              }
+            }
+          }
+
+          if (targetItem == null) {
+            for (final item in videoDetailController.mediaList) {
+              if (item.aid == audioOid.toInt() ||
+                  item.cid == audioCid ||
+                  item.bvid == currentBvid) {
+                targetItem = item;
+                break;
+              }
+            }
+          }
+
+          if (targetItem != null) {
             ugcIntroController.onChangeEpisode(
               targetItem,
               fromAudioPage: true,

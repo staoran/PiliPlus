@@ -45,6 +45,7 @@ import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -107,6 +108,16 @@ class AudioController extends GetxController
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
   int _switchGeneration = 0;
+
+  bool get _isAppInForeground =>
+      SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  bool get _hasVideoDetailController => _videoDetailController != null;
+
+  bool get _shouldSyncVideoDetailMetadata => _hasVideoDetailController;
+
+  bool get _shouldSyncVideoDetailSideEffects =>
+      _hasVideoDetailController && _isAppInForeground;
 
   @override
   void onInit() {
@@ -197,11 +208,23 @@ class AudioController extends GetxController
     if (isClosed) {
       return;
     }
-    videoPlayerServiceHandler?.onVideoDetailChange(
-      item,
-      (subId.firstOrNull ?? oid).toInt(),
-      hashCode.toString(),
-    );
+    if (_shouldSyncVideoDetailSideEffects) {
+      videoPlayerServiceHandler?.onVideoDetailChange(
+        item,
+        (subId.firstOrNull ?? oid).toInt(),
+        hashCode.toString(),
+      );
+    } else {
+      DebugLogService.log(
+        'audio.item',
+        'skip onVideoDetailChange in background',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'foreground': _isAppInForeground,
+        },
+      );
+    }
     DebugLogService.log(
       'audio.item',
       'update current item',
@@ -547,7 +570,9 @@ class AudioController extends GetxController
         if (isDragging) return;
         if (position.inSeconds != this.position.value.inSeconds) {
           this.position.value = position;
-          _videoDetailController?.playedTime = position;
+          if (_shouldSyncVideoDetailMetadata) {
+            _videoDetailController?.playedTime = position;
+          }
           videoPlayerServiceHandler?.onPositionChange(position);
         }
       }),
@@ -700,7 +725,9 @@ class AudioController extends GetxController
         'playMode': playMode.value.name,
       },
     );
-    _videoDetailController?.playedTime = duration.value;
+    if (_shouldSyncVideoDetailMetadata) {
+      _videoDetailController?.playedTime = duration.value;
+    }
     videoPlayerServiceHandler?.onStatusChange(
       PlayerStatus.completed,
       false,
@@ -1274,13 +1301,26 @@ class AudioController extends GetxController
       }
 
       // 使用新的公开方法更新指定视频的进度
-      _videoDetailController!.updateProgressForVideo(
-        videoAid: currentOid,
-        videoBvid: currentBvid,
-        videoCid: currentCid,
-        progressSeconds: progressSeconds,
-        videoDuration: currentDuration,
-      );
+      if (_shouldSyncVideoDetailMetadata) {
+        _videoDetailController!.updateProgressForVideo(
+          videoAid: currentOid,
+          videoBvid: currentBvid,
+          videoCid: currentCid,
+          progressSeconds: progressSeconds,
+          videoDuration: currentDuration,
+        );
+      } else {
+        DebugLogService.log(
+          'audio.progress',
+          'skip updateProgressForVideo in background',
+          extra: {
+            'videoAid': currentOid,
+            'videoCid': currentCid,
+            'progressSeconds': progressSeconds,
+            'foreground': _isAppInForeground,
+          },
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('AudioController: 保存进度失败: $e');
@@ -1292,9 +1332,11 @@ class AudioController extends GetxController
     if (player case final player?) {
       this.speed = speed;
       player.setRate(speed);
-      unawaited(
-        _videoDetailController?.plPlayerController.setPlaybackSpeed(speed),
-      );
+      if (_shouldSyncVideoDetailSideEffects) {
+        unawaited(
+          _videoDetailController?.plPlayerController.setPlaybackSpeed(speed),
+        );
+      }
     }
   }
 
@@ -1373,7 +1415,15 @@ class AudioController extends GetxController
       ..onSeek = null;
     // 不要在这里重置 setListControlMode，因为播放器页有自己的状态管理
     // 从听视频页返回时，播放器页的 didPopNext 会恢复正确的列表控制模式
-    videoPlayerServiceHandler?.onVideoDetailDispose(hashCode.toString());
+    if (_shouldSyncVideoDetailSideEffects) {
+      videoPlayerServiceHandler?.onVideoDetailDispose(hashCode.toString());
+    } else {
+      DebugLogService.log(
+        'audio.handler',
+        'skip onVideoDetailDispose while background',
+        extra: {'foreground': _isAppInForeground},
+      );
+    }
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions?.clear();
     _subscriptions = null;

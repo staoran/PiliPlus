@@ -1038,6 +1038,13 @@ class PlPlayerController with BlockConfigMixin {
       if (kDebugMode)
         stream.log.listen(((PlayerLog log) {
           if (log.level == 'error' || log.level == 'fatal') {
+            if (_shouldSilenceRecoverableError(log.text) ||
+                _isTransientNetworkError(log.text)) {
+              debugPrint(
+                'PlPlayerController: ignore recoverable ffmpeg log: ${log.level}: ${log.prefix}: ${log.text}',
+              );
+              return;
+            }
             Utils.reportError('${log.level}: ${log.prefix}: ${log.text}', null);
           } else {
             debugPrint(log.toString());
