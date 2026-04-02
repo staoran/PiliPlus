@@ -58,11 +58,38 @@ abstract final class GrpcReq {
     T Function(Uint8List) grpcParser, {
     bool isolate = false,
   }) async {
-    final response = await Request().post<Uint8List>(
-      HttpString.appBaseUrl + url,
-      data: compressProtobuf(request.writeToBuffer()),
-      options: options,
-    );
+    final requestUrl = HttpString.appBaseUrl + url;
+    final requestData = compressProtobuf(request.writeToBuffer());
+
+    Future<Response<dynamic>> makeRequest({required bool useHttp11}) async {
+      final client = useHttp11 ? Request.http11Dio : Request.dio;
+      return client.post<Uint8List>(
+        requestUrl,
+        data: requestData,
+        options: options,
+      );
+    }
+
+    Future<bool> shouldFallbackToHttp11(Response<dynamic> response) async {
+      if (response.data is! Map) {
+        return false;
+      }
+      final message = response.data['message']?.toString().toLowerCase() ?? '';
+      return message.contains('连接错误') ||
+          message.contains('tls') ||
+          message.contains('ssl') ||
+          message.contains('handshake') ||
+          message.contains('network');
+    }
+
+    var response = await makeRequest(useHttp11: false);
+    if (await shouldFallbackToHttp11(response)) {
+      if (kDebugMode) {
+        // ignore: avoid_print
+        print('GrpcReq: fallback to http11 for $url');
+      }
+      response = await makeRequest(useHttp11: true);
+    }
 
     if (response.data case final Map map) {
       return Error(map['message']);

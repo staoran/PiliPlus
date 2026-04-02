@@ -8,6 +8,18 @@ class RetryInterceptor extends Interceptor {
 
   RetryInterceptor(this._client, this._count, this._delay);
 
+  bool _canRetryTransportError(DioException err) {
+    final options = err.requestOptions;
+    if (options.method == 'GET') {
+      return true;
+    }
+    if (options.responseType == ResponseType.bytes &&
+        options.contentType == 'application/grpc') {
+      return true;
+    }
+    return false;
+  }
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (err.requestOptions.responseType == ResponseType.stream) {
@@ -55,8 +67,9 @@ class RetryInterceptor extends Interceptor {
         case DioExceptionType.sendTimeout:
         case DioExceptionType.unknown:
           if ((err.requestOptions.extra['_rt'] ??= 0) < _count &&
-              err.error
-                  is! TransportConnectionException // 网络中断, 此时请求可能已经被服务器所接收
+              (err.error
+                      is! TransportConnectionException || // 网络中断, 此时请求可能已经被服务器所接收
+                  _canRetryTransportError(err))
                   ) {
             Future.delayed(
               Duration(
