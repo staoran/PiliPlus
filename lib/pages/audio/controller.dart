@@ -101,8 +101,6 @@ class AudioController extends GetxController
 
   ListOrder order = ListOrder.ORDER_NORMAL;
 
-  Timer? _pendingCompletionTimer;
-  Future<void>? _pendingCompletionVerification;
   Future<void> _switchQueue = Future<void>.value();
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
@@ -269,7 +267,6 @@ class AudioController extends GetxController
   }
 
   int _beginSwitch() {
-    _cancelPendingCompletionTimer();
     final generation = ++_switchGeneration;
     DebugLogService.log(
       'audio.switch',
@@ -425,16 +422,6 @@ class AudioController extends GetxController
     return result;
   }
 
-  bool _isCompletionVerified({Duration tolerance = const Duration(milliseconds: 180)}) {
-    final currentPosition = player?.state.position ?? position.value;
-    final currentDuration = player?.state.duration ?? duration.value;
-    if (currentDuration <= Duration.zero) {
-      return false;
-    }
-    final remaining = currentDuration - currentPosition;
-    return remaining <= tolerance;
-  }
-
   Future<bool> _tryPlayLocalIfAvailable() async {
     // 与视频页保持一致：允许通过参数强制本地播放，或全局开关 Pref.enableLocalPlayInOnlineList
     final bool forceLocalPlay = args['forceLocalPlay'] == true;
@@ -518,7 +505,6 @@ class AudioController extends GetxController
     String ua = Constants.userAgentApp,
     String? referer,
   }) async {
-    _cancelPendingCompletionTimer();
     DebugLogService.log(
       'audio.media',
       'open media',
@@ -578,9 +564,6 @@ class AudioController extends GetxController
       }),
       stream.duration.listen(duration.call),
       stream.playing.listen((playing) {
-        if (playing) {
-          _cancelPendingCompletionTimer();
-        }
         final PlayerStatus playerStatus;
         if (playing) {
           animController.forward();
@@ -593,7 +576,6 @@ class AudioController extends GetxController
       }),
       stream.completed.listen((completed) {
         if (!completed) {
-          _cancelPendingCompletionTimer();
           return;
         }
         DebugLogService.log(
@@ -606,116 +588,14 @@ class AudioController extends GetxController
             'duration': duration.value.inMilliseconds,
           },
         );
-        _verifyPlaybackCompleted();
+        _handlePlaybackCompleted();
       }),
     ];
   }
 
-  Duration get _completionRemaining {
-    final currentPosition = player?.state.position ?? position.value;
-    final currentDuration = player?.state.duration ?? duration.value;
-    final remaining = currentDuration - currentPosition;
-    return remaining.isNegative ? Duration.zero : remaining;
-  }
 
-  void _cancelPendingCompletionTimer() {
-    _pendingCompletionTimer?.cancel();
-    _pendingCompletionTimer = null;
-  }
-
-  Future<void> _verifyPlaybackCompleted() {
-    final existing = _pendingCompletionVerification;
-    if (existing != null) {
-      return existing;
-    }
-
-    _cancelPendingCompletionTimer();
-
-    final expectedGeneration = _switchGeneration;
-    final expectedOid = oid;
-    final expectedSubId = subId.firstOrNull;
-
-    return _pendingCompletionVerification = () async {
-      try {
-        for (var index = 0; index < 6; index++) {
-          if (isClosed ||
-              expectedGeneration != _switchGeneration ||
-              oid != expectedOid ||
-              subId.firstOrNull != expectedSubId) {
-            return;
-          }
-
-          if (_isCompletionVerified()) {
-            DebugLogService.log(
-              'audio.completed',
-              'completion verified during polling',
-              extra: {
-                'oid': oid.toString(),
-                'subId': subId.firstOrNull?.toString(),
-                'position':
-                    (player?.state.position ?? position.value).inMilliseconds,
-                'duration':
-                    (player?.state.duration ?? duration.value).inMilliseconds,
-              },
-            );
-            _handlePlaybackCompleted();
-            return;
-          }
-
-          await Future<void>.delayed(const Duration(milliseconds: 80));
-        }
-
-        final remaining = _completionRemaining;
-        if (remaining > const Duration(milliseconds: 250)) {
-          _schedulePendingCompletion(remaining);
-          return;
-        }
-
-        if (_isCompletionVerified(tolerance: const Duration(milliseconds: 250))) {
-          DebugLogService.log(
-            'audio.completed',
-            'completion verified after fallback check',
-            extra: {
-              'oid': oid.toString(),
-              'subId': subId.firstOrNull?.toString(),
-            },
-          );
-          _handlePlaybackCompleted();
-        }
-      } finally {
-        _pendingCompletionVerification = null;
-      }
-    }();
-  }
-
-  void _schedulePendingCompletion(Duration remaining) {
-    final waitDuration = remaining > const Duration(seconds: 2)
-        ? const Duration(seconds: 2)
-        : remaining;
-    final expectedOid = oid;
-    final expectedSubId = subId.firstOrNull;
-
-    _cancelPendingCompletionTimer();
-    if (kDebugMode) {
-      debugPrint(
-        'AudioController: completed 触发过早，延迟 ${waitDuration.inMilliseconds}ms 再切换，remaining=${remaining.inMilliseconds}ms',
-      );
-    }
-
-    _pendingCompletionTimer = Timer(waitDuration, () {
-      _pendingCompletionTimer = null;
-      if (isClosed ||
-          oid != expectedOid ||
-          subId.firstOrNull != expectedSubId) {
-        return;
-      }
-      _handlePlaybackCompleted();
-    });
-  }
 
   void _handlePlaybackCompleted() {
-    _cancelPendingCompletionTimer();
-    _pendingCompletionVerification = null;
     DebugLogService.log(
       'audio.completed',
       'handle playback completed',
@@ -1399,7 +1279,6 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
-    _cancelPendingCompletionTimer();
 
     // 退出听视频时保存最后的进度
     _saveCurrentProgress();
