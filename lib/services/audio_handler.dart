@@ -42,6 +42,7 @@ Future<VideoPlayerServiceHandler> initAudioService() {
 
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static const _backgroundPauseGracePeriod = Duration(minutes: 2);
+  static const _autoContinueGuardDuration = Duration(seconds: 8);
   static final List<MediaItem> _item = [];
   static final Set<String> _activeOwners = <String>{};
   static final Set<String> _disposedOwners = <String>{};
@@ -49,6 +50,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   bool _lifecycleDebugLogEnabled = kDebugMode && Pref.enableLog;
   Future<void>? _clearFuture;
   Timer? _pauseReleaseTimer;
+  Timer? _autoContinueGuardTimer;
+  bool _isAutoContinuing = false;
 
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
@@ -167,7 +170,31 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     _pauseReleaseTimer = null;
   }
 
+  void _startAutoContinueGuard() {
+    _autoContinueGuardTimer?.cancel();
+    _isAutoContinuing = true;
+    _logLifecycle('auto continue guard started');
+    _autoContinueGuardTimer = Timer(_autoContinueGuardDuration, () {
+      _autoContinueGuardTimer = null;
+      _isAutoContinuing = false;
+      _logLifecycle('auto continue guard expired');
+    });
+  }
+
+  void _stopAutoContinueGuard({String reason = 'manual'}) {
+    if (_autoContinueGuardTimer != null || _isAutoContinuing) {
+      _logLifecycle('auto continue guard stopped: $reason');
+    }
+    _autoContinueGuardTimer?.cancel();
+    _autoContinueGuardTimer = null;
+    _isAutoContinuing = false;
+  }
+
   void _schedulePauseRelease() {
+    if (_isAutoContinuing) {
+      _logLifecycle('skip pause release during auto continue');
+      return;
+    }
     _cancelPauseReleaseTimer();
     final delay = _isAppInForeground
         ? Duration.zero
@@ -316,8 +343,10 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     );
     if (willAutoContinue) {
       _cancelPauseReleaseTimer();
+      _startAutoContinueGuard();
       return;
     }
+    _stopAutoContinueGuard(reason: 'playback completed without auto continue');
     unawaited(clear(force: true));
   }
 
@@ -345,6 +374,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     }
 
     _activeOwners.add(herotag);
+    _stopAutoContinueGuard(reason: 'owner attached');
     _logLifecycle('owner attached: $herotag, owners=$ownerCount');
 
     Uri getUri(String? cover) => Uri.parse(ImageUtils.safeThumbnailUrl(cover));
@@ -438,6 +468,11 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     // 这样可以避免页面层与 handler 层同时清理导致的竞态和通知残留。
     if (!enableBackgroundPlay) return;
 
+    if (_isAutoContinuing) {
+      _logLifecycle('skip owner dispose during auto continue: $herotag');
+      return;
+    }
+
     _disposedOwners.add(herotag);
     _activeOwners.remove(herotag);
     _logLifecycle('owner disposed: $herotag, owners=$ownerCount');
@@ -465,12 +500,18 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void> clear({bool force = false}) async {
     if (!force && !enableBackgroundPlay) return;
 
+    if (!force && _isAutoContinuing) {
+      _logLifecycle('skip clear during auto continue');
+      return;
+    }
+
     if (_clearFuture != null) {
       return _clearFuture!;
     }
 
     _clearFuture = () async {
       _cancelPauseReleaseTimer();
+      _stopAutoContinueGuard(reason: 'clear');
       _item.clear();
       _activeOwners.clear();
       _disposedOwners.clear();
