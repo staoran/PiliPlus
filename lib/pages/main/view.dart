@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/floating_navigation_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/tabs.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -330,91 +331,105 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Widget? get _bottomNav {
-    Widget? bottomNav = _mainController.navigationBars.length > 1
-        ? _mainController.enableMYBar
-              ? Obx(
-                  () => NavigationBar(
-                    maintainBottomViewPadding: true,
-                    labelBehavior: _mainController.showBottomLabel.value
-                        ? NavigationDestinationLabelBehavior.alwaysShow
-                        : NavigationDestinationLabelBehavior.alwaysHide,
-                    onDestinationSelected: _mainController.setIndex,
-                    selectedIndex: _mainController.selectedIndex.value,
-                    destinations: _mainController.navigationBars
+    Widget? bottomNav;
+    if (_mainController.navigationBars.length > 1) {
+      if (_mainController.floatingNavBar) {
+        bottomNav = Obx(
+          () => FloatingNavigationBar(
+            onDestinationSelected: _mainController.setIndex,
+            selectedIndex: _mainController.selectedIndex.value,
+            destinations: _mainController.navigationBars
+                .map(
+                  (e) => FloatingNavigationDestination(
+                    label: e.label,
+                    icon: _buildIcon(type: e),
+                    selectedIcon: _buildIcon(type: e, selected: true),
+                  ),
+                )
+                .toList(),
+          ),
+        );
+      } else if (_mainController.enableMYBar) {
+        bottomNav = Obx(
+          () => NavigationBar(
+            maintainBottomViewPadding: true,
+            onDestinationSelected: _mainController.setIndex,
+            selectedIndex: _mainController.selectedIndex.value,
+            destinations: _mainController.navigationBars
+                .map(
+                  (e) => NavigationDestination(
+                    label: e.label,
+                    icon: _buildIcon(type: e),
+                    selectedIcon: _buildIcon(type: e, selected: true),
+                  ),
+                )
+                .toList(),
+          ),
+        );
+      } else {
+        bottomNav = Obx(
+          () {
+            final padding = MediaQuery.viewPaddingOf(context);
+            final showLabel = _mainController.showBottomLabel.value;
+            // 关闭 MD3 样式时降低底栏高度，不显示文字时进一步降低。
+            final bottomBarHeight = showLabel ? 48.0 : 40.0;
+            return MediaQuery.removePadding(
+              context: context,
+              removeBottom: true,
+              child: ClipRect(
+                child: SizedBox(
+                  height: bottomBarHeight + padding.bottom,
+                  child: BottomNavigationBar(
+                    currentIndex: _mainController.selectedIndex.value,
+                    onTap: _mainController.setIndex,
+                    iconSize: showLabel ? 16 : 22,
+                    selectedFontSize: 12,
+                    unselectedFontSize: 12,
+                    showSelectedLabels: showLabel,
+                    showUnselectedLabels: showLabel,
+                    type: BottomNavigationBarType.fixed,
+                    items: _mainController.navigationBars
                         .map(
-                          (e) => NavigationDestination(
+                          (e) => BottomNavigationBarItem(
                             label: e.label,
                             icon: _buildIcon(type: e),
-                            selectedIcon: _buildIcon(type: e, selected: true),
+                            activeIcon: _buildIcon(type: e, selected: true),
                           ),
                         )
                         .toList(),
                   ),
-                )
-              : Obx(
-                  () {
-                    final padding = MediaQuery.viewPaddingOf(context);
-                    final showLabel = _mainController.showBottomLabel.value;
-                    // 关闭 MD3 样式时降低底栏高度
-                    // 不显示文字时高度进一步降低
-                    final bottomBarHeight = showLabel ? 48.0 : 40.0;
-                    return MediaQuery.removePadding(
-                      context: context,
-                      removeBottom: true,
-                      child: ClipRect(
-                        child: SizedBox(
-                          height: bottomBarHeight + padding.bottom,
-                          child: BottomNavigationBar(
-                            currentIndex: _mainController.selectedIndex.value,
-                            onTap: _mainController.setIndex,
-                            iconSize: showLabel ? 16 : 22,
-                            selectedFontSize: 12,
-                            unselectedFontSize: 12,
-                            showSelectedLabels: showLabel,
-                            showUnselectedLabels: showLabel,
-                            type: BottomNavigationBarType.fixed,
-                            items: _mainController.navigationBars
-                                .map(
-                                  (e) => BottomNavigationBarItem(
-                                    label: e.label,
-                                    icon: _buildIcon(type: e),
-                                    activeIcon: _buildIcon(
-                                      type: e,
-                                      selected: true,
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                )
-        : null;
-    if (bottomNav != null && _mainController.hideBottomBar) {
-      if (_mainController.barOffset case final barOffset?) {
-        return Obx(
-          () => FractionalTranslation(
-            translation: Offset(
-              0.0,
-              barOffset.value / Style.topBarHeight,
-            ),
-            child: bottomNav,
-          ),
+                ),
+              ),
+            );
+          },
         );
       }
-      if (_mainController.showBottomBar case final showBottomBar?) {
-        return Obx(
-          () => AnimatedSlide(
-            curve: Curves.easeInOutCubicEmphasized,
-            duration: const Duration(milliseconds: 500),
-            offset: Offset(0, showBottomBar.value ? 0 : 1),
-            child: bottomNav,
-          ),
-        );
+
+      if (_mainController.hideBottomBar) {
+        if (_mainController.barOffset case final barOffset?) {
+          return Obx(
+            () => FractionalTranslation(
+              translation: Offset(
+                0.0,
+                barOffset.value / Style.topBarHeight,
+              ),
+              child: bottomNav,
+            ),
+          );
+        }
+        if (_mainController.showBottomBar case final showBottomBar?) {
+          return Obx(
+            () => AnimatedSlide(
+              curve: Curves.easeInOutCubicEmphasized,
+              duration: const Duration(milliseconds: 500),
+              offset: Offset(0, showBottomBar.value ? 0 : 1),
+              child: bottomNav,
+            ),
+          );
+        }
       }
     }
+
     return bottomNav;
   }
 
