@@ -762,8 +762,6 @@ class VideoDetailController extends GetxController
             pages: [
               media_list.Page(
                 id: localCid,
-                title: e.showTitle,
-                duration: e.totalTimeMilli ~/ 1000,
               ),
             ],
           );
@@ -1814,17 +1812,20 @@ class VideoDetailController extends GetxController
         (item) => item.aid == videoAid && item.bvid == videoBvid,
       );
 
-      if (targetItem != null && videoDuration > 0) {
-        final newProgressPercent = progressSeconds == -1
-            ? 100.0 // 已完成
-            : (progressSeconds / videoDuration * 100).clamp(0.0, 100.0);
+      if (targetItem != null) {
+        final newProgress = progressSeconds == -1
+            ? -1
+            : progressSeconds.clamp(
+                0,
+                videoDuration > 0 ? videoDuration : progressSeconds,
+              );
 
-        if ((targetItem.progressPercent ?? 0) != newProgressPercent) {
-          targetItem.progressPercent = newProgressPercent;
+        if (targetItem.progress != newProgress) {
+          targetItem.progress = newProgress;
           mediaList.refresh();
           if (kDebugMode) {
             debugPrint(
-              '✅ 更新 mediaList 进度: aid=$videoAid, bvid=$videoBvid -> $newProgressPercent%',
+              '✅ 更新 mediaList 进度: aid=$videoAid, bvid=$videoBvid -> ${newProgress}s',
             );
           }
         }

@@ -9,6 +9,7 @@ class MediaListItemModel extends BaseEpisodeItem {
   String? intro;
   CntInfo? cntInfo;
   int? duration;
+  int? progress;
   List<Page>? pages;
   int? type;
   Owner? upper;
@@ -21,6 +22,7 @@ class MediaListItemModel extends BaseEpisodeItem {
     this.cntInfo,
     super.cover,
     this.duration,
+    this.progress,
     this.pages,
     super.title,
     this.type,
@@ -38,6 +40,7 @@ class MediaListItemModel extends BaseEpisodeItem {
         : CntInfo.fromJson(json['cnt_info']);
     cover = json['cover'] as String?;
     duration = json['duration'] as int?;
+    progress = json['progress'] as int?;
     pages = (json['pages'] as List?)?.map((e) => Page.fromJson(e)).toList();
     title = json['title'] as String?;
     type = json['type'] as int?;

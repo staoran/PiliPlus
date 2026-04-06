@@ -1215,16 +1215,8 @@ class AudioController extends GetxController
     try {
       final mediaList = _videoDetailController!.mediaList;
       final item = mediaList.firstWhereOrNull((e) => e.aid == aid);
-      if (item != null &&
-          item.progressPercent != null &&
-          item.duration != null &&
-          item.progressPercent! > 0) {
-        // progressPercent 可能是 0-1 格式（服务器返回）或 0-100 格式（内部更新）
-        // 如果值 <= 1，认为是 0-1 格式；否则是 0-100 格式
-        final percent = item.progressPercent! <= 1
-            ? item.progressPercent!
-            : item.progressPercent! / 100;
-        return (percent * item.duration!).round();
+      if (item != null && item.progress != null && item.progress! > 0) {
+        return item.progress!;
       }
     } catch (e) {
       if (kDebugMode) {

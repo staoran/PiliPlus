@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:PiliPlus/common/constants.dart' show StyleString;
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/grpc/dyn.dart';
