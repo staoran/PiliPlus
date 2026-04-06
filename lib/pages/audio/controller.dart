@@ -660,6 +660,7 @@ class AudioController extends GetxController
         'playMode': playMode.value.name,
       },
     );
+    _syncCompletedProgress();
     if (_shouldSyncVideoDetailMetadata) {
       _videoDetailController?.playedTime = duration.value;
     }
@@ -1284,6 +1285,48 @@ class AudioController extends GetxController
     } catch (e) {
       if (kDebugMode) {
         debugPrint('AudioController: 保存进度失败: $e');
+      }
+    }
+  }
+
+  void _syncCompletedProgress() {
+    if (_videoDetailController == null) return;
+
+    try {
+      final currentOid = oid.toInt();
+      final currentCid = (subId.firstOrNull ?? oid).toInt();
+      final currentBvid = IdUtils.av2bv(currentOid);
+      final currentDuration = duration.value.inSeconds;
+
+      if (currentDuration <= 0) {
+        return;
+      }
+
+      if (index != null && playlist != null && index! < playlist!.length) {
+        playlist![index!].progress = Int64(currentDuration);
+      }
+
+      _videoDetailController!.updateProgressForVideo(
+        videoAid: currentOid,
+        videoBvid: currentBvid,
+        videoCid: currentCid,
+        progressSeconds: -1,
+        videoDuration: currentDuration,
+      );
+
+      DebugLogService.log(
+        'audio.progress',
+        'sync completed progress',
+        extra: {
+          'videoAid': currentOid,
+          'videoCid': currentCid,
+          'videoDuration': currentDuration,
+          'foreground': _isAppInForeground,
+        },
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AudioController: 同步完成进度失败: $e');
       }
     }
   }
