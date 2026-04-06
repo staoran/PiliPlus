@@ -349,6 +349,11 @@ class PgcIntroController extends CommonIntroController {
       this.epId = epId;
       this.bvid = bvid;
 
+      await videoDetailCtr.ensureVideoSwitchProtection(
+        reason: 'pgc_switch',
+        text: '正在切换剧集…',
+      );
+
       videoDetailCtr
         ..plPlayerController.pause()
         // 切换前先保存当前视频的进度（特别是新窗口模式）
@@ -390,6 +395,10 @@ class PgcIntroController extends CommonIntroController {
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e, s) {
+      await videoDetailCtr.finishVideoSwitchProtection(
+        success: false,
+        reason: 'pgc_switch_failed',
+      );
       if (kDebugMode) debugPrint('pgc onChangeEpisode: $e');
       Utils.reportError(e, s);
       return false;

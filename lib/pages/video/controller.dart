@@ -57,6 +57,7 @@ import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
+import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
@@ -118,6 +119,7 @@ class VideoDetailController extends GetxController
   // 视频切换状态追踪：防止切换过程中退出时保存错误的进度
   // 当视频切换时设为true，播放器初始化完成后设为false
   bool _isSwitchingVideo = false;
+  bool _pendingVideoSwitchProtection = false;
 
   /// tabs相关配置
   late TabController tabCtr;
@@ -140,6 +142,44 @@ class VideoDetailController extends GetxController
   final plPlayerController = PlPlayerController.getInstance()
     ..brightness.value = -1;
   bool get setSystemBrightness => plPlayerController.setSystemBrightness;
+
+  bool get isAppInForeground =>
+      SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  Future<void> ensureVideoSwitchProtection({
+    required String reason,
+    String? text,
+  }) async {
+    if (isAppInForeground) {
+      return;
+    }
+    _pendingVideoSwitchProtection = true;
+    await PlaybackForegroundService.start(
+      title: 'PiliPlus 后台播放',
+      text: text ?? '正在切换视频…',
+    );
+    if (kDebugMode) {
+      debugPrint('🎬 启动视频切换保护: reason=$reason');
+    }
+  }
+
+  Future<void> finishVideoSwitchProtection({
+    required bool success,
+    required String reason,
+  }) async {
+    _pendingVideoSwitchProtection = false;
+    if (!isAppInForeground && PlaybackForegroundService.isRunning) {
+      await PlaybackForegroundService.update(
+        title: 'PiliPlus 后台播放',
+        text: success ? '视频切换完成' : '视频切换失败',
+        force: true,
+      );
+      await PlaybackForegroundService.stop();
+    }
+    if (kDebugMode) {
+      debugPrint('🎬 结束视频切换保护: reason=$reason, success=$success');
+    }
+  }
 
   late VideoItem firstVideo;
   String? videoUrl;
@@ -1058,6 +1098,13 @@ class VideoDetailController extends GetxController
       volume: volume ?? this.volume,
       autoFullScreenFlag: autoFullScreenFlag,
     );
+
+    if (_pendingVideoSwitchProtection) {
+      await finishVideoSwitchProtection(
+        success: true,
+        reason: 'player_init_completed',
+      );
+    }
 
     if (isClosed) return;
 

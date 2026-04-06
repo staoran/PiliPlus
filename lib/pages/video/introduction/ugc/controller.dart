@@ -552,6 +552,11 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
       videoDetailCtr.plPlayerController.pause();
 
+      await videoDetailCtr.ensureVideoSwitchProtection(
+        reason: 'ugc_switch',
+        text: '正在切换视频…',
+      );
+
       // 从听视频页返回时，进度已经在听视频切换时保存过了，不需要再保存
       if (!fromAudioPage) {
         // 切换前先保存当前视频的进度（特别是新窗口模式）
@@ -638,6 +643,10 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       queryOnlineTotal();
       return true;
     } catch (e, s) {
+      await videoDetailCtr.finishVideoSwitchProtection(
+        success: false,
+        reason: 'ugc_switch_failed',
+      );
       if (kDebugMode) debugPrint('ugc onChangeEpisode: $e');
       Utils.reportError(e, s);
       return false;
