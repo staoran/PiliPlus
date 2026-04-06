@@ -1,6 +1,5 @@
 import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models_new/later/bangumi.dart';
-import 'package:PiliPlus/models_new/later/page.dart';
 import 'package:PiliPlus/models_new/later/rights.dart';
 import 'package:PiliPlus/models_new/later/stat.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
@@ -8,7 +7,6 @@ import 'package:PiliPlus/pages/common/multi_select/base.dart';
 
 class LaterItemModel with MultiSelectData {
   int? aid;
-  int? videos;
   String? pic;
   String? title;
   String? subtitle;
@@ -18,7 +16,6 @@ class LaterItemModel with MultiSelectData {
   Rights? rights;
   Owner? owner;
   Stat? stat;
-  List<Page>? pages;
   Bangumi? bangumi;
   int? cid;
   int? progress;
@@ -26,14 +23,12 @@ class LaterItemModel with MultiSelectData {
   bool? isPgc;
   String? pgcLabel;
   bool? isPugv;
-  int? seasonId;
   bool? isCharging;
   bool hasOfflineCache = false;
   Dimension? dimension;
 
   LaterItemModel({
     this.aid,
-    this.videos,
     this.pic,
     this.title,
     this.subtitle,
@@ -43,7 +38,6 @@ class LaterItemModel with MultiSelectData {
     this.rights,
     this.owner,
     this.stat,
-    this.pages,
     this.bangumi,
     this.cid,
     this.progress,
@@ -51,14 +45,12 @@ class LaterItemModel with MultiSelectData {
     this.isPgc,
     this.pgcLabel,
     this.isPugv,
-    this.seasonId,
     this.isCharging,
     this.dimension,
   });
 
   factory LaterItemModel.fromJson(Map<String, dynamic> json) => LaterItemModel(
     aid: json['aid'] as int?,
-    videos: json['videos'] as int?,
     pic: json['pic'] as String?,
     title: json['title'] as String?,
     pubdate: json['pubdate'] as int?,
@@ -73,9 +65,6 @@ class LaterItemModel with MultiSelectData {
     stat: json['stat'] == null
         ? null
         : Stat.fromJson(json['stat'] as Map<String, dynamic>),
-    pages: (json['pages'] as List<dynamic>?)
-        ?.map((e) => Page.fromJson(e as Map<String, dynamic>))
-        .toList(),
     bangumi: json['bangumi'] == null
         ? null
         : Bangumi.fromJson(json['bangumi'] as Map<String, dynamic>),
@@ -91,7 +80,6 @@ class LaterItemModel with MultiSelectData {
     isPgc: json['is_pgc'] as bool?,
     pgcLabel: json['pgc_label'] == '' ? null : json['pgc_label'],
     isPugv: json['is_pugv'] as bool?,
-    seasonId: json['season_id'] as int?,
     isCharging: json['charging_pay']?['level'] != null,
     dimension: json['dimension'] == null
         ? null

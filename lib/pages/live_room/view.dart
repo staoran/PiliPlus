@@ -832,7 +832,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                             ),
                           ),
                           Positioned(
-                            right: -12,
+                            left: 30,
                             top: -12,
                             child: Obx(() {
                               final likeClickTime =
