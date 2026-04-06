@@ -40,8 +40,8 @@ class PlaybackForegroundService {
         eventAction: ForegroundTaskEventAction.nothing(),
         autoRunOnBoot: false,
         autoRunOnMyPackageReplaced: false,
-        allowWakeLock: false,
-        allowWifiLock: false,
+        allowWakeLock: true,
+        allowWifiLock: true,
       ),
     );
 

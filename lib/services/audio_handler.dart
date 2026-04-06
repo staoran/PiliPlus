@@ -30,8 +30,8 @@ Future<VideoPlayerServiceHandler> initAudioService() {
       // 本项目的视频/听视频页并不依赖 Android 的媒体恢复入口。
       // 关闭 resume-on-click，避免服务销毁后 SystemUI 继续保留可恢复媒体卡片。
       androidResumeOnClick: false,
-      // 采用 audio_service 推荐的暂停即退出前台策略，确保系统可以移除通知。
-      androidStopForegroundOnPause: true,
+      // 对后台音频播放更稳妥的策略：暂停后仍保持前台服务，降低切歌/恢复阶段被系统挂起的概率。
+      androidStopForegroundOnPause: false,
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
       androidNotificationChannelDescription: 'Media notification channel',

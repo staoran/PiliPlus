@@ -29,6 +29,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -106,7 +107,7 @@ class AudioController extends GetxController
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
   int _switchGeneration = 0;
-
+  bool _pendingSwitchProtection = false;
   bool get _isAppInForeground =>
       SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
@@ -282,6 +283,52 @@ class AudioController extends GetxController
 
   bool _isStaleSwitch(int generation) =>
       isClosed || generation != _switchGeneration;
+
+  Future<void> _ensureSwitchProtection({
+    required String reason,
+    String? text,
+  }) async {
+    if (_isAppInForeground) {
+      return;
+    }
+    _pendingSwitchProtection = true;
+    await PlaybackForegroundService.start(
+      title: 'PiliPlus 后台播放',
+      text: text ?? '正在准备下一条音频…',
+    );
+    DebugLogService.log(
+      'audio.switch',
+      'ensure switch protection',
+      extra: {
+        'reason': reason,
+        'foreground': _isAppInForeground,
+      },
+    );
+  }
+
+  Future<void> _finishSwitchProtection({
+    required bool success,
+    required String reason,
+  }) async {
+    _pendingSwitchProtection = false;
+    if (!_isAppInForeground && PlaybackForegroundService.isRunning) {
+      await PlaybackForegroundService.update(
+        title: 'PiliPlus 后台播放',
+        text: success ? '切换完成' : '切换失败',
+        force: true,
+      );
+      await PlaybackForegroundService.stop();
+    }
+    DebugLogService.log(
+      'audio.switch',
+      'finish switch protection',
+      extra: {
+        'success': success,
+        'reason': reason,
+        'foreground': _isAppInForeground,
+      },
+    );
+  }
 
   void _enqueueSwitch(Future<void> Function() action) {
     _switchQueue = _switchQueue.then((_) => action());
@@ -486,7 +533,7 @@ class AudioController extends GetxController
           (e) => e.id <= cacheAudioQa,
           (a, b) => a.id > b.id ? a : b,
         );
-        _onOpenMedia(VideoUtils.getCdnUrl(audio.playUrls));
+        _onOpenMedia(VideoUtils.getCdnUrl(audio.playUrls, isAudio: true));
       } else if (playInfo.hasPlayUrl()) {
         final playUrl = playInfo.playUrl;
         final durls = playUrl.durl;
@@ -495,7 +542,7 @@ class AudioController extends GetxController
         }
         final durl = durls.first;
         position.value = Duration.zero;
-        _onOpenMedia(VideoUtils.getCdnUrl(durl.playUrls));
+        _onOpenMedia(VideoUtils.getCdnUrl(durl.playUrls, isAudio: true));
       }
     }
   }
@@ -568,6 +615,14 @@ class AudioController extends GetxController
         if (playing) {
           animController.forward();
           playerStatus = PlayerStatus.playing;
+          if (_pendingSwitchProtection) {
+            unawaited(
+              _finishSwitchProtection(
+                success: true,
+                reason: 'playback_started',
+              ),
+            );
+          }
         } else {
           animController.reverse();
           playerStatus = PlayerStatus.paused;
@@ -959,6 +1014,12 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final prev = index! - 1;
       if (prev >= 0) {
+        unawaited(
+          _ensureSwitchProtection(
+            reason: 'play_prev',
+            text: '正在切换上一条音频…',
+          ),
+        );
         _enqueueSwitch(() => _playIndexInternal(prev, skipSaveProgress: false));
         return true;
       }
@@ -974,6 +1035,12 @@ class AudioController extends GetxController
           final subId = this.subId.firstOrNull;
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
           if (nextIndex != 0 && nextIndex < parts.length) {
+            unawaited(
+              _ensureSwitchProtection(
+                reason: 'play_next_part',
+                text: '正在切换下一段音频…',
+              ),
+            );
             _enqueueSwitch(() => _playNextPartInternal(nextIndex));
             return true;
           }
@@ -983,6 +1050,12 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final next = index! + 1;
       if (next < playlist!.length) {
+        unawaited(
+          _ensureSwitchProtection(
+            reason: 'play_next',
+            text: '正在切换下一条音频…',
+          ),
+        );
         _enqueueSwitch(() => _playIndexInternal(next, skipSaveProgress: false));
         return true;
       }
@@ -995,6 +1068,12 @@ class AudioController extends GetxController
     List<Int64>? subId,
     bool skipSaveProgress = false,
   }) {
+    unawaited(
+      _ensureSwitchProtection(
+        reason: 'play_index',
+        text: '正在切换指定音频…',
+      ),
+    );
     _enqueueSwitch(
       () => _playIndexInternal(
         index,
@@ -1031,7 +1110,6 @@ class AudioController extends GetxController
     _isLocalPlayback = false;
     oid = nextPart.oid;
     subId = [nextPart.subId];
-
     final res = await _queryPlayUrlForSwitch(generation);
     if (res) {
       DebugLogService.log(
@@ -1054,6 +1132,7 @@ class AudioController extends GetxController
           'subId': subId.firstOrNull?.toString(),
         },
       );
+      await _finishSwitchProtection(success: false, reason: 'next_part');
     }
   }
 
@@ -1125,6 +1204,7 @@ class AudioController extends GetxController
           'subId': this.subId.firstOrNull?.toString(),
         },
       );
+      await _finishSwitchProtection(success: false, reason: 'playlist_index');
     }
   }
 
