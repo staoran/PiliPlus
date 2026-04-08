@@ -30,9 +30,9 @@ Future<VideoPlayerServiceHandler> initAudioService() {
       // 本项目的视频/听视频页并不依赖 Android 的媒体恢复入口。
       // 关闭 resume-on-click，避免服务销毁后 SystemUI 继续保留可恢复媒体卡片。
       androidResumeOnClick: false,
-      // 保持 audio_service 在暂停后退出前台，避免退出播放时 Android 残留媒体卡片。
-      // 后台切歌/切视频的短时保活已交由 PlaybackForegroundService 单独承担。
-      androidStopForegroundOnPause: true,
+      // 播放暂停后仍保留 audio_service 前台能力，减少后台自动续播下一条前被系统挂起的概率。
+      // 真正退出时会通过 clear(force: true) 显式停止会话并移除媒体卡片。
+      androidStopForegroundOnPause: false,
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
       androidNotificationChannelDescription: 'Media notification channel',
@@ -138,6 +138,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     _cancelPauseReleaseTimer();
+    _logLifecycle(
+      'stop requested: processing=${playbackState.value.processingState.name}, playing=${playbackState.value.playing}, owners=$ownerCount, items=${_item.length}',
+    );
     // 检查当前状态，如果已经是 idle，需要先设置为非 idle
     // 这样才能触发 audio_service Android 端的 stop() 逻辑
     // 根据 AudioService.java 源码：
@@ -155,6 +158,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       );
     }
     await super.stop();
+    _logLifecycle(
+      'stop completed: processing=${playbackState.value.processingState.name}, playing=${playbackState.value.playing}, owners=$ownerCount, items=${_item.length}',
+    );
   }
 
   @override
@@ -476,10 +482,15 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
     _disposedOwners.add(herotag);
     _activeOwners.remove(herotag);
-    _logLifecycle('owner disposed: $herotag, owners=$ownerCount');
+    _logLifecycle(
+      'owner disposed: $herotag, owners=$ownerCount, itemsBefore=${_item.length}',
+    );
 
     if (_item.isNotEmpty) {
       _item.removeWhere((item) => item.id.endsWith(herotag));
+      _logLifecycle(
+        'owner items removed: $herotag, itemsAfter=${_item.length}, lastItem=${_item.isNotEmpty ? _item.last.id : 'none'}',
+      );
     }
 
     if (_item.isEmpty) {
@@ -511,12 +522,20 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     }
 
     _clearFuture = () async {
+      _logLifecycle(
+        'clear start(force=$force): processing=${playbackState.value.processingState.name}, playing=${playbackState.value.playing}, owners=$ownerCount, items=${_item.length}, mediaClosed=${mediaItem.isClosed}',
+      );
       _cancelPauseReleaseTimer();
       _stopAutoContinueGuard(reason: 'clear');
       _item.clear();
       _activeOwners.clear();
       _disposedOwners.clear();
       _logLifecycle('clear called(force=$force), owners=0, items=0');
+
+      if (!mediaItem.isClosed) {
+        _logLifecycle('clear media item stream -> null');
+        mediaItem.add(null);
+      }
 
       // 立即重置播放状态，避免通知卡片在 stop 完成前残留旧进度和按钮
       playbackState.add(
@@ -534,7 +553,13 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       onSkipToNext = null;
       onSkipToPrevious = null;
 
+      _logLifecycle('clear calling stop()');
       await stop();
+      _logLifecycle('clear calling super.stop() fallback');
+      await super.stop();
+      _logLifecycle(
+        'clear finished(force=$force): processing=${playbackState.value.processingState.name}, playing=${playbackState.value.playing}, owners=$ownerCount, items=${_item.length}',
+      );
     }();
 
     try {
