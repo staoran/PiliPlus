@@ -112,6 +112,17 @@ jobs:
           RPM_BUILD_ROOT="$PWD/rpm_build"
           mkdir -p "$RPM_BUILD_ROOT/BUILD" "$RPM_BUILD_ROOT/RPMS" "$RPM_BUILD_ROOT/SOURCES" "$RPM_BUILD_ROOT/SPECS" "$RPM_BUILD_ROOT/SRPMS"
 
+          # RPM spec requires Version to not contain '-'.
+          # Split env.version like 2.0.3-1+5064 into Version=2.0.3, Release=1.5064.
+          FULL_VERSION="${{ env.version }}"
+          RPM_VERSION="${FULL_VERSION%%-*}"
+          RPM_RELEASE_RAW="${FULL_VERSION#*-}"
+          if [ "$RPM_RELEASE_RAW" = "$FULL_VERSION" ]; then
+            RPM_RELEASE_RAW="1"
+          fi
+          RPM_RELEASE="${RPM_RELEASE_RAW//+/.}"
+          RPM_RELEASE="${RPM_RELEASE//-/.}"
+
           printf "准备源码归档（仅包含运行时与元数据）...\n"
           DATE="$(date '+%a %b %d %Y')"
           SRC_DIR="$PWD/piliplus-${{ env.version }}"
@@ -124,8 +135,8 @@ jobs:
           printf "生成 spec 文件...\n"
           cat > "$RPM_BUILD_ROOT/SPECS/piliplus.spec" <<EOF
           Name:           piliplus
-          Version:        ${{ env.version }}
-          Release:        1%{?dist}
+          Version:        ${RPM_VERSION}
+          Release:        ${RPM_RELEASE}%{?dist}
           Summary:        PiliPlus Linux Version
           License:        GPL-3.0
           Source0:        piliplus-${{ env.version }}.tar.gz
