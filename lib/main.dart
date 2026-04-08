@@ -11,6 +11,7 @@ import 'package:PiliPlus/common/widgets/scroll_behavior.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
+import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
@@ -38,6 +39,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/window/player_entry.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -90,6 +92,10 @@ Future<void> _initTmpPath() async {
 
 Future<void> _initAppPath() async {
   appSupportDirPath = (await getApplicationSupportDirectory()).path;
+}
+
+Future<void> _initSdkInt() async {
+  Utils.sdkInt = (await DeviceInfoPlugin().androidInfo).version.sdkInt;
 }
 
 void main() async {
@@ -196,15 +202,8 @@ void main() async {
 
   if (PlatformUtils.isMobile) {
     await Future.wait([
-      SystemChrome.setPreferredOrientations(
-        [
-          DeviceOrientation.portraitUp,
-          if (Pref.horizontalScreen) ...[
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ],
-        ],
-      ),
+      if (Platform.isAndroid) _initSdkInt(),
+      if (Pref.horizontalScreen) ?fullMode() else ?portraitUpMode(),
       setupServiceLocator(),
     ]);
   } else if (Platform.isWindows) {
@@ -228,12 +227,10 @@ void main() async {
     batteryDebug.init();
   }
 
-  SmartDialog.config.toast = SmartConfigToast(
-    displayType: SmartToastType.onlyRefresh,
-  );
+  SmartDialog.config.toast = SmartConfigToast(displayType: .onlyRefresh);
 
   if (PlatformUtils.isMobile) {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setEnabledSystemUIMode(.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.transparent,
