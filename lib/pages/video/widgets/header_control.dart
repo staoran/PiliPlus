@@ -1762,11 +1762,7 @@ class HeaderControlState extends State<HeaderControl>
                       PlayerWindowService.showMainWindow();
                     }
 
-                    plPlayerController.onPopInvokedWithResult(
-                      false,
-                      null,
-                      videoDetailCtr.isPortrait,
-                    );
+                    plPlayerController.onPopInvokedWithResult(false, null);
                   },
                 ),
               ),

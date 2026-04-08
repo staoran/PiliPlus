@@ -2240,7 +2240,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     videoDetailController.plPlayerController.onPopInvokedWithResult(
       didPop,
       result,
-      isPortrait,
     );
   }
 
