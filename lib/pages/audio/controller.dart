@@ -1015,13 +1015,13 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final prev = index! - 1;
       if (prev >= 0) {
-        unawaited(
-          _ensureSwitchProtection(
+        _enqueueSwitch(() async {
+          await _ensureSwitchProtection(
             reason: 'play_prev',
             text: '正在切换上一条音频…',
-          ),
-        );
-        _enqueueSwitch(() => _playIndexInternal(prev, skipSaveProgress: false));
+          );
+          await _playIndexInternal(prev, skipSaveProgress: false);
+        });
         return true;
       }
     }
@@ -1036,13 +1036,13 @@ class AudioController extends GetxController
           final subId = this.subId.firstOrNull;
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
           if (nextIndex != 0 && nextIndex < parts.length) {
-            unawaited(
-              _ensureSwitchProtection(
+            _enqueueSwitch(() async {
+              await _ensureSwitchProtection(
                 reason: 'play_next_part',
                 text: '正在切换下一段音频…',
-              ),
-            );
-            _enqueueSwitch(() => _playNextPartInternal(nextIndex));
+              );
+              await _playNextPartInternal(nextIndex);
+            });
             return true;
           }
         }
@@ -1051,13 +1051,13 @@ class AudioController extends GetxController
     if (index != null && playlist != null && player != null) {
       final next = index! + 1;
       if (next < playlist!.length) {
-        unawaited(
-          _ensureSwitchProtection(
+        _enqueueSwitch(() async {
+          await _ensureSwitchProtection(
             reason: 'play_next',
             text: '正在切换下一条音频…',
-          ),
-        );
-        _enqueueSwitch(() => _playIndexInternal(next, skipSaveProgress: false));
+          );
+          await _playIndexInternal(next, skipSaveProgress: false);
+        });
         return true;
       }
     }
@@ -1069,18 +1069,18 @@ class AudioController extends GetxController
     List<Int64>? subId,
     bool skipSaveProgress = false,
   }) {
-    unawaited(
-      _ensureSwitchProtection(
-        reason: 'play_index',
-        text: '正在切换指定音频…',
-      ),
-    );
     _enqueueSwitch(
-      () => _playIndexInternal(
+      () async {
+        await _ensureSwitchProtection(
+          reason: 'play_index',
+          text: '正在切换指定音频…',
+        );
+        await _playIndexInternal(
         index,
         subId: subId,
         skipSaveProgress: skipSaveProgress,
-      ),
+        );
+      },
     );
   }
 
@@ -1394,9 +1394,17 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
-
     // 退出听视频时保存最后的进度
     _saveCurrentProgress();
+
+    if (_pendingSwitchProtection) {
+      unawaited(
+        _finishSwitchProtection(
+          success: false,
+          reason: 'controller_closed',
+        ),
+      );
+    }
 
     // _cancelTimer();
     shutdownTimerService

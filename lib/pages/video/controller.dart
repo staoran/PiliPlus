@@ -1971,6 +1971,14 @@ class VideoDetailController extends GetxController
     if (isFileSource) {
       cacheLocalProgress();
     }
+    if (_pendingVideoSwitchProtection) {
+      unawaited(
+        finishVideoSwitchProtection(
+          success: false,
+          reason: 'controller_closed',
+        ),
+      );
+    }
     // 取消定时器和流订阅，防止后台耗电
     _cancelVideoSizeSubscriptions();
     introScrollCtr?.dispose();
