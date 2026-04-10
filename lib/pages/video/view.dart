@@ -1378,7 +1378,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         !isFullScreen &&
         !videoDetailController.plPlayerController.isDesktopPip &&
         (videoDetailController.horizontalScreen || isPortrait),
-    onPopInvokedWithResult: _onPopInvokedWithResult,
+    onPopInvokedWithResult:
+        videoDetailController.plPlayerController.onPopInvokedWithResult,
     child: Obx(
       () =>
           !videoDetailController.videoState.value ||
@@ -2217,13 +2218,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ),
       );
     }
-  }
-
-  void _onPopInvokedWithResult(bool didPop, result) {
-    videoDetailController.plPlayerController.onPopInvokedWithResult(
-      didPop,
-      result,
-    );
   }
 
   void onShowMemberPage(int? mid) {
