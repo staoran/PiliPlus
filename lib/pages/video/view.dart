@@ -288,13 +288,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       }
 
-      // 播放完成后的清理由 handler 统一决策，避免页面层分叉。
-      if (PlatformUtils.isMobile) {
-        videoPlayerServiceHandler?.onPlaybackCompleted(
-          willAutoContinue: !exitFlag,
-          source: 'video',
-        );
-      }
     }
   }
 
@@ -340,8 +333,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   @override
   void dispose() {
-    debugPrint('[VideoDetailPage] dispose() called');
-
     plPlayerController
       ?..removeStatusLister(playerListener)
       ..removePositionListener(positionListener);
@@ -371,6 +362,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     if (!videoDetailController.plPlayerController.isCloseAll) {
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
+      videoPlayerServiceHandler?.clear(force: true);
       if (plPlayerController != null) {
         videoDetailController.makeHeartBeat();
         plPlayerController!.dispose();
@@ -381,30 +373,21 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     removeObserverMobile(this);
     if (PlatformUtils.isMobile) {
       showStatusBar();
-      // 方案对比说明：
-      // - 旧方案在页面层直接 clear(force: true)
-      // - 新方案统一交给 onVideoDetailDispose -> handler 决策清理
-      // 避免页面生命周期与 handler 定时释放同时触发造成竞态。
     }
 
-    // 明确删除所有控制器，确保资源被正确释放
     if (videoDetailController.showReply) {
-      Get.delete<VideoReplyController>(tag: heroTag);
+      Get.delete<VideoReplyController>(tag: heroTag, force: true);
     }
-
-    // 删除介绍控制器
     if (!videoDetailController.isFileSource) {
       if (videoDetailController.isUgc) {
-        Get.delete<UgcIntroController>(tag: heroTag);
+        Get.delete<UgcIntroController>(tag: heroTag, force: true);
       } else {
-        Get.delete<PgcIntroController>(tag: heroTag);
+        Get.delete<PgcIntroController>(tag: heroTag, force: true);
       }
     } else {
-      Get.delete<LocalIntroController>(tag: heroTag);
+      Get.delete<LocalIntroController>(tag: heroTag, force: true);
     }
-
-    // 最后删除主控制器
-    Get.delete<VideoDetailController>(tag: heroTag);
+    Get.delete<VideoDetailController>(tag: heroTag, force: true);
 
     super.dispose();
   }

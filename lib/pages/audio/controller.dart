@@ -669,22 +669,19 @@ class AudioController extends GetxController
       false,
       false,
     );
-    var willAutoContinue = false;
     if (kDebugMode) {
       debugPrint('AudioController: 播放完成，准备切换下一个');
     }
     if (shutdownTimerService.isWaiting) {
-      willAutoContinue = true;
       shutdownTimerService.handleWaiting();
     } else {
       switch (playMode.value) {
         case PlayRepeat.pause:
           break;
         case PlayRepeat.listOrder:
-          willAutoContinue = playNext(nextPart: true);
+          playNext(nextPart: true);
           break;
         case PlayRepeat.singleCycle:
-          willAutoContinue = true;
           _enqueueSwitch(() async {
             if (player case final currentPlayer?) {
               await currentPlayer.seek(Duration.zero);
@@ -694,12 +691,9 @@ class AudioController extends GetxController
           break;
         case PlayRepeat.listCycle:
           if (playNext(nextPart: true)) {
-            willAutoContinue = true;
           } else if (index != null && index != 0 && playlist != null) {
-            willAutoContinue = true;
             playIndex(0);
           } else {
-            willAutoContinue = true;
             _enqueueSwitch(() async {
               if (player case final currentPlayer?) {
                 await currentPlayer.seek(Duration.zero);
@@ -713,13 +707,6 @@ class AudioController extends GetxController
       }
     }
 
-    // 统一由 handler 处理“播放完成是否清理卡片”的最终策略。
-    if (PlatformUtils.isMobile) {
-      videoPlayerServiceHandler?.onPlaybackCompleted(
-        willAutoContinue: willAutoContinue,
-        source: 'audio',
-      );
-    }
   }
 
   @pragma('vm:notify-debugger-on-exception')
