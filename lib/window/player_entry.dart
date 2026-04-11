@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/back_detector.dart';
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
@@ -25,6 +27,8 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
+
+bool get _shouldDisablePlayerWindowSemantics => Platform.isWindows;
 
 /// Minimal routes for player window (no Pref dependency)
 final List<GetPage> _playerWindowRoutes = [
@@ -398,7 +402,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
         },
       ),
     );
@@ -682,7 +686,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
               return BackDetector(
                 onBack: onBack,
-                child: child,
+                child: _shouldDisablePlayerWindowSemantics
+                    ? ExcludeSemantics(child: child)
+                    : child,
               );
             },
           ),
