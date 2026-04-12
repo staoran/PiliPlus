@@ -193,7 +193,7 @@ class Request {
     }
 
     // 日志拦截器 输出请求、响应内容
-    if (kDebugMode) {
+    if (kDebugMode && Pref.enableNetworkLog) {
       dio.interceptors.add(
         LogInterceptor(
           request: false,
