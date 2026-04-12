@@ -19,6 +19,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -512,23 +513,28 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   void _navigateToVideo(Map args) {
+    final currentArgs = Get.arguments;
+    final currentHeroTag = currentArgs is Map ? currentArgs['heroTag'] : null;
+    final nextArgs = _buildVideoArguments(args);
+    final nextHeroTag = nextArgs['heroTag'];
+
+    if (kDebugMode) {
+      debugPrint(
+        '[PlayerWindow] navigateToVideo currentHeroTag=$currentHeroTag nextHeroTag=$nextHeroTag aid=${args['aid']} bvid=${args['bvid']} cid=${args['cid']}',
+      );
+    }
+
     // Update window title for video
     windowManager.setTitle('${Constants.appName} - 播放器');
 
     Get.offAllNamed(
       '/videoV',
-      arguments: _buildVideoArguments(args),
+      arguments: nextArgs,
     );
   }
 
   void _navigateToLive(Map args) {
     final roomId = args['roomId'] as int?;
-    if (roomId == null) {
-      debugPrint('Cannot navigate to live: roomId is null');
-      return;
-    }
-
-    // Update window title for live
     windowManager.setTitle('${Constants.appName} - 直播');
 
     // LiveRoomPage expects roomId as a direct int argument, not a Map

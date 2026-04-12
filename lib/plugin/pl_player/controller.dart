@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer;
+import 'dart:async' show StreamSubscription, Timer, unawaited;
 import 'dart:convert' show ascii;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
@@ -800,6 +800,9 @@ class PlPlayerController with BlockConfigMixin {
       }
     } else if (PlatformUtils.isDesktop) {
       opt['volume'] = (volume.value * 100).toString();
+      if (hwdec != null) {
+        opt['hwdec'] = hwdec!;
+      }
     }
     final autosync = Pref.autosync;
     if (autosync != '0') {
@@ -854,16 +857,37 @@ class PlPlayerController with BlockConfigMixin {
 
     var player = _videoPlayerController;
 
+    if (kDebugMode && Platform.isWindows) {
+      debugPrint(
+        '[PlPlayerController] createVideoController start playerExists=${player != null} playerCount=$_playerCount aid=$_aid bvid=$_bvid cid=$cid seekTo=$seekTo isLive=$isLive',
+      );
+    }
+
+    if (Platform.isWindows && player != null) {
+      if (kDebugMode) {
+        debugPrint(
+          '[PlPlayerController] Windows media switch: disposing current native player before reopen',
+        );
+      }
+      await _disposeCurrentPlayer();
+      player = null;
+    }
+
     if (player == null) {
       player = await _initPlayer();
       if (_playerCount == 0) {
         _removeListeners();
-        player.dispose();
+        await player.dispose();
         player = null;
         _videoController = null;
         return;
       }
       _videoPlayerController = player;
+      if (kDebugMode && Platform.isWindows) {
+        debugPrint(
+          '[PlPlayerController] created new native player for current media',
+        );
+      }
       if (isAnim && superResolutionType.value != .disable) {
         await setShader();
       }
@@ -910,6 +934,11 @@ class PlPlayerController with BlockConfigMixin {
 
     _isSwitchingMedia = true;
     try {
+      if (kDebugMode && Platform.isWindows) {
+        debugPrint(
+          '[PlPlayerController] opening media video=${dataSource.videoSource} audio=${dataSource.audioSource} seekTo=$seekTo',
+        );
+      }
       await player.open(
         Media(
           video,
@@ -922,7 +951,40 @@ class PlPlayerController with BlockConfigMixin {
       // mpv 在 open 完成后可能还会短暂发出旧 stream 的 error 事件，延迟重置
       Future.delayed(const Duration(milliseconds: 500), () {
         _isSwitchingMedia = false;
+        if (kDebugMode && Platform.isWindows) {
+          debugPrint('[PlPlayerController] media switch flag reset');
+        }
       });
+    }
+  }
+
+  Future<void> _disposeCurrentPlayer() async {
+    final player = _videoPlayerController;
+    if (player == null) {
+      _videoController = null;
+      return;
+    }
+
+    if (kDebugMode && Platform.isWindows) {
+      debugPrint(
+        '[PlPlayerController] disposeCurrentPlayer playerCount=$_playerCount aid=$_aid bvid=$_bvid cid=$cid',
+      );
+    }
+
+    _removeListeners();
+    _videoPlayerController = null;
+    _videoController = null;
+
+    try {
+      await player.stop();
+    } catch (_) {}
+
+    try {
+      await player.dispose();
+    } catch (_) {}
+
+    if (kDebugMode && Platform.isWindows) {
+      debugPrint('[PlPlayerController] disposeCurrentPlayer completed');
     }
   }
 
@@ -1745,11 +1807,11 @@ class PlPlayerController with BlockConfigMixin {
       WakelockPlus.disable();
     }
     if (kDebugMode) {
-      debugPrint('dispose player');
+      debugPrint(
+        '[PlPlayerController] dispose player playerCount=$_playerCount isCloseAll=$_isCloseAll aid=$_aid bvid=$_bvid cid=$cid',
+      );
     }
-    _videoPlayerController?.dispose();
-    _videoPlayerController = null;
-    _videoController = null;
+    unawaited(_disposeCurrentPlayer());
     _instance = null;
     // 页面/窗口销毁后的最后一道保险，强制清理媒体卡片。
     // 即使上层生命周期分支遗漏，播放器完全销毁后也不应继续保留通知。

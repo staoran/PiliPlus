@@ -158,8 +158,8 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     }
     PlPlayerController.setPlayCallBack(null);
     plPlayerController
-      ..removeStatusLister(playerListener)
-      ..dispose();
+      ..removeStatusLister(playerListener);
+    PlPlayerController.updatePlayCount();
     for (final e in LiveContributionRankType.values) {
       Get.delete<ContributionRankController>(
         tag: '${_liveRoomController.roomId}${e.name}',

@@ -30,6 +30,7 @@ class _LogsPageState extends State<LogsPage> {
   List<Report> logsContent = [];
   Report? latestLog;
   late bool enableLog = Pref.enableLog;
+  late bool enableNetworkLog = Pref.enableNetworkLog;
 
   @override
   void initState() {
@@ -135,6 +136,19 @@ class _LogsPageState extends State<LogsPage> {
                   SmartDialog.showToast('已${enableLog ? '开启' : '关闭'}，重启生效');
                 },
                 child: Text('${enableLog ? '关闭' : '开启'}日志'),
+              ),
+              PopupMenuItem(
+                onTap: () {
+                  enableNetworkLog = !enableNetworkLog;
+                  GStorage.setting.put(
+                    SettingBoxKey.enableNetworkLog,
+                    enableNetworkLog,
+                  );
+                  SmartDialog.showToast(
+                    '已${enableNetworkLog ? '开启' : '关闭'}网络日志，重启生效',
+                  );
+                },
+                child: Text('${enableNetworkLog ? '关闭' : '开启'}网络日志'),
               ),
               PopupMenuItem(
                 onTap: copyLogs,
