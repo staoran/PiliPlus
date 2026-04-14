@@ -872,7 +872,7 @@ class PlPlayerController with BlockConfigMixin {
       );
     }
 
-    if (Platform.isWindows && player != null) {
+    if (Platform.isWindows && player != null && _playerCount <= 1) {
       if (kDebugMode) {
         debugPrint(
           '[PlPlayerController] Windows media switch: disposing current native player before reopen',

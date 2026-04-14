@@ -295,6 +295,15 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   @override
+  void didUpdateWidget(covariant PLVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextController = widget.plPlayerController.videoController;
+    if (nextController != null && !identical(videoController, nextController)) {
+      videoController = nextController;
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!plPlayerController.continuePlayInBackground.value) {
       late final player = plPlayerController.videoPlayerController;
@@ -2056,6 +2065,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             key: _videoKey,
             child: Obx(
               () {
+                final currentVideoController =
+                    plPlayerController.videoController ?? videoController;
+                if (!identical(videoController, currentVideoController)) {
+                  videoController = currentVideoController;
+                }
                 final videoFit = plPlayerController.videoFit.value;
                 return Transform.flip(
                   flipX: plPlayerController.flipX.value,
@@ -2064,7 +2078,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     fit: videoFit.boxFit,
                     alignment: widget.alignment,
                     child: SimpleVideo(
-                      controller: plPlayerController.videoController!,
+                      key: ValueKey(currentVideoController.hashCode),
+                      controller: currentVideoController,
                       fill: widget.fill,
                       aspectRatio: videoFit.aspectRatio,
                     ),
