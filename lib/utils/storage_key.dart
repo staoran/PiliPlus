@@ -153,7 +153,8 @@ abstract final class SettingBoxKey {
       enableImgMenu = 'enableImgMenu',
       showDynDispute = 'showDynDispute',
       touchSlopH = 'touchSlopH',
-      floatingNavBar = 'floatingNavBar';
+      floatingNavBar = 'floatingNavBar',
+      removeSafeArea = 'removeSafeArea';
 
   static const String enableDebugLog = 'enableDebugLog';
 

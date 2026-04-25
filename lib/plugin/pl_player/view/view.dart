@@ -1621,6 +1621,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     isTop: true,
                     controller: animationController,
                     isFullScreen: isFullScreen,
+                    removeSafeArea: plPlayerController.removeSafeArea,
                     child: plPlayerController.isDesktopPip
                         ? GestureDetector(
                             behavior: HitTestBehavior.translucent,
@@ -1633,6 +1634,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     isTop: false,
                     controller: animationController,
                     isFullScreen: isFullScreen,
+                    removeSafeArea: plPlayerController.removeSafeArea,
                     child:
                         widget.bottomControl ??
                         BottomControl(
@@ -1821,6 +1823,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           if (plPlayerController.showFsLockBtn)
             ViewSafeArea(
               right: false,
+              left: !plPlayerController.removeSafeArea,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: FractionalTranslation(
@@ -1864,6 +1867,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           if (plPlayerController.showFsScreenshotBtn)
             ViewSafeArea(
               left: false,
+              right: !plPlayerController.removeSafeArea,
               child: Obx(
                 () => Align(
                   alignment: Alignment.centerRight,

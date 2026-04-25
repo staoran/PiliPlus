@@ -143,6 +143,7 @@ class DetailItem extends StatelessWidget {
               pgcType: ep?.seasonType,
               cover: entry.cover,
               title: entry.showTitle,
+              isVertical: entry.pageData?.isVertical ?? false,
               extraArguments: {
                 if (useOnlinePlayer) ...{
                   // 离线列表播放（isPlayAll）+ 在线详情/评论 + 本地文件播放

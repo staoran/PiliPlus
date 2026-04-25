@@ -41,11 +41,7 @@ class _DynamicsPageState extends State<DynamicsPage>
             theme.colorScheme.secondaryContainer,
           ),
         ),
-        onPressed: () {
-          if (_dynamicsController.accountService.isLogin.value) {
-            CreateDynPanel.onCreateDyn(context);
-          }
-        },
+        onPressed: () => CreateDynPanel.onCreateDyn(context),
         icon: Icon(
           Icons.add,
           size: 18,

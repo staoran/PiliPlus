@@ -13,6 +13,7 @@ import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models/model_hot_video_item.dart';
 import 'package:PiliPlus/models/model_video.dart';
 import 'package:PiliPlus/models/search/result.dart';
+import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -77,7 +78,7 @@ class _VideoCardHState extends State<VideoCardH> {
       title: videoItem.title,
       cover: videoItem.cover,
     );
-    final colorScheme = ColorScheme.of(context);
+    final theme = Theme.of(context);
     return Material(
       type: MaterialType.transparency,
       child: MouseRegion(
@@ -112,30 +113,35 @@ class _VideoCardHState extends State<VideoCardH> {
                     }
                     return;
                   }
+
+                  Dimension? dimension;
                   if (videoItem case final HotVideoItemModel item) {
                     if (item.redirectUrl?.isNotEmpty == true &&
                         PageUtils.viewPgcFromUri(item.redirectUrl!)) {
                       return;
                     }
+                    dimension = item.dimension;
                   }
 
-                  try {
-                    final int? cid =
-                        videoItem.cid ??
-                        await SearchHttp.ab2c(
+                  int? cid = videoItem.cid;
+                  if (cid == null) {
+                    if (await SearchHttp.ab2cWithDimension(
                           aid: videoItem.aid,
                           bvid: videoItem.bvid,
-                        );
-                    if (cid != null) {
-                      PageUtils.toVideoPage(
-                        bvid: videoItem.bvid,
-                        cid: cid,
-                        cover: videoItem.cover,
-                        title: videoItem.title,
-                      );
+                        )
+                        case final res?) {
+                      cid = res.cid;
+                      dimension = res.dimension;
                     }
-                  } catch (err) {
-                    SmartDialog.showToast(err.toString());
+                  }
+                  if (cid != null) {
+                    PageUtils.toVideoPage(
+                      bvid: videoItem.bvid,
+                      cid: cid,
+                      cover: videoItem.cover,
+                      title: videoItem.title,
+                      dimension: dimension,
+                    );
                   }
                 },
             child: Padding(
@@ -189,9 +195,9 @@ class _VideoCardHState extends State<VideoCardH> {
                                 bottom: 0,
                                 right: 0,
                                 child: VideoProgressIndicator(
-                                  color: colorScheme.primary,
+                                  color: theme.colorScheme.primary,
                                   backgroundColor:
-                                      colorScheme.secondaryContainer,
+                                      theme.colorScheme.secondaryContainer,
                                   progress: progress == -1
                                       ? 1
                                       : progress / videoItem.duration,
@@ -221,7 +227,7 @@ class _VideoCardHState extends State<VideoCardH> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  content(context),
+                  content(theme),
                 ],
               ),
             ),
@@ -278,8 +284,7 @@ class _VideoCardHState extends State<VideoCardH> {
     );
   }
 
-  Widget content(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget content(ThemeData theme) {
     String pubdate = DateFormatUtils.dateFormat(videoItem.pubdate!);
     if (pubdate != '') pubdate += '  ';
     return Expanded(

@@ -95,6 +95,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
               epId: ep?.episodeId,
               title: title,
               cover: cover,
+              isVertical: pageData?.isVertical ?? false,
             );
           },
         ),
@@ -265,6 +266,8 @@ class PageInfo {
   final String? downloadSubtitle;
 
   bool get cacheWidth => width <= height;
+
+  bool get isVertical => rotate == 1 ? width > height : height > width;
 
   PageInfo({
     required this.cid,
