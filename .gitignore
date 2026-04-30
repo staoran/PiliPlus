@@ -9,6 +9,11 @@
 .history
 .svn/
 migrate_working_dir/
+_gsdata_/
+.claude/
+.omx/
+.planning/
+AGENTS.md
 
 # IntelliJ related
 *.iml
