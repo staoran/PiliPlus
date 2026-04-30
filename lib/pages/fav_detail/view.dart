@@ -14,10 +14,11 @@ import 'package:PiliPlus/pages/common/fab_mixin.dart'
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/fav_detail/controller.dart';
 import 'package:PiliPlus/pages/fav_detail/widget/fav_video_card.dart';
+import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/download_dialog_utils.dart';
-import 'package:PiliPlus/utils/fav_utils.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
+import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
@@ -196,12 +197,12 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
       ),
       Obx(() {
         final attr = _favDetailController.folderInfo.value.attr;
-        return attr == -1 || !FavUtils.isPublicFav(attr)
+        return attr == -1 || !BiliUtils.isPublicFav(attr)
             ? const SizedBox.shrink()
             : IconButton(
                 iconSize: 22,
                 tooltip: '分享',
-                onPressed: () => Utils.shareText(
+                onPressed: () => ShareUtils.shareText(
                   'https://www.bilibili.com/medialist/detail/ml${_favDetailController.mediaId}',
                 ),
                 icon: const Icon(Icons.share),
@@ -256,7 +257,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                     _favDetailController.onFav(folderInfo.favState == 1),
                 child: Text('${folderInfo.favState == 1 ? '取消' : ''}收藏'),
               ),
-            if (FavUtils.isPublicFav(folderInfo.attr))
+            if (BiliUtils.isPublicFav(folderInfo.attr))
               PopupMenuItem(
                 onTap: () => showModalBottomSheet(
                   context: context,
@@ -277,7 +278,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                 onTap: _favDetailController.cleanFav,
                 child: const Text('清除失效内容'),
               ),
-              if (!FavUtils.isDefaultFav(folderInfo.attr)) ...[
+              if (!BiliUtils.isDefaultFav(folderInfo.attr)) ...[
                 const PopupMenuDivider(height: 12),
                 PopupMenuItem(
                   onTap: () => showConfirmDialog(
@@ -475,7 +476,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                           ],
                           Text(
                             '共${folderInfo.mediaCount}条视频 · '
-                            '${FavUtils.isPublicFavText(folderInfo.attr)}',
+                            '${BiliUtils.isPublicFavText(folderInfo.attr)}',
                             style: style,
                           ),
                         ],

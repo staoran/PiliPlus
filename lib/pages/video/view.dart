@@ -11,8 +11,6 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/main.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
@@ -59,11 +57,13 @@ import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
+import 'package:PiliPlus/utils/max_screen_size.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:floating/floating.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -146,7 +146,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     videoDetailController = Get.put(VideoDetailController(), tag: heroTag);
 
     if (videoDetailController.removeSafeArea) {
-      hideStatusBar();
+      hideSystemBar();
     }
 
     if (videoDetailController.showReply) {
@@ -290,7 +290,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           }
         }
       }
-
     }
   }
 
@@ -344,13 +343,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       tag: videoDetailController.heroTag,
     );
 
-    if (!Get.previousRoute.startsWith('/video')) {
-      if (Platform.isAndroid && !videoDetailController.setSystemBrightness) {
-        ScreenBrightnessPlatform.instance.resetApplicationScreenBrightness();
-      }
-      PlPlayerController.setPlayCallBack(null);
-    }
-
     if (!videoDetailController.isFileSource) {
       if (videoDetailController.isUgc) {
         ugcIntroController
@@ -362,7 +354,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     if (!videoDetailController.removeSafeArea) {
-      showStatusBar();
+      showSystemBar();
     }
 
     if (!videoDetailController.plPlayerController.isCloseAll) {
@@ -614,6 +606,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     final size = MediaQuery.sizeOf(context);
     maxWidth = size.width;
     maxHeight = size.height;
+    isWindowMode = MaxScreenSize.isWindowMode(
+      width: maxWidth,
+      height: maxHeight,
+    );
     videoDetailController.plPlayerController.screenRatio = maxHeight / maxWidth;
 
     final shortestSide = size.shortestSide;
@@ -628,12 +624,13 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           : minVideoHeight;
 
     themeData = videoDetailController.plPlayerController.darkVideoPage
-        ? MyApp.darkThemeData ?? Theme.of(context)
+        ? ThemeUtils.darkTheme
         : Theme.of(context);
   }
 
-  bool get removeAppBar =>
-      videoDetailController.removeSafeArea || (isFullScreen && !isPortrait);
+  bool removeAppBar(bool isFullScreen) =>
+      videoDetailController.removeSafeArea ||
+      (isWindowMode && isFullScreen && !isPortrait);
 
   Widget get childWhenDisabled {
     return Obx(
@@ -641,7 +638,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         final isFullScreen = this.isFullScreen;
         return Scaffold(
           resizeToAvoidBottomInset: false,
-          appBar: removeAppBar
+          appBar: removeAppBar(isFullScreen)
               ? null
               : PreferredSize(
                   preferredSize: const Size.fromHeight(0),
@@ -681,7 +678,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             onlyOneScrollInBody: true,
             pinnedHeaderSliverHeightBuilder: () {
               double pinnedHeight = this.isFullScreen || !isPortrait
-                  ? maxHeight - (isPortrait ? padding.top : 0)
+                  ? maxHeight - (isWindowMode && !isPortrait ? 0 : padding.top)
                   : videoDetailController.isExpanding ||
                         videoDetailController.isCollapsing
                   ? videoDetailController.animHeight
@@ -707,7 +704,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             },
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               final height = isFullScreen || !isPortrait
-                  ? maxHeight - (isPortrait ? padding.top : 0)
+                  ? maxHeight - (isWindowMode && !isPortrait ? 0 : padding.top)
                   : videoDetailController.isExpanding ||
                         videoDetailController.isCollapsing
                   ? videoDetailController.animHeight
@@ -997,7 +994,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       final isFullScreen = this.isFullScreen;
       return Scaffold(
         resizeToAvoidBottomInset: false,
-        appBar: removeAppBar
+        appBar: removeAppBar(isFullScreen)
             ? null
             : AppBar(backgroundColor: Colors.black, toolbarHeight: 0),
         body: Padding(
@@ -1011,7 +1008,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   );
 
   Widget childSplit(double ratio) {
-    final double videoHeight = maxHeight - padding.vertical;
+    final double videoHeight = isFullScreen && isWindowMode && !isPortrait
+        ? maxHeight
+        : maxHeight - padding.top;
     final double width = videoHeight * ratio;
     final videoWidth = isFullScreen ? maxWidth : width;
     final introWidth = maxWidth - width - padding.horizontal;
@@ -1021,10 +1020,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         // 左侧：播放器（占满垂直空间）
         SizedBox(
           width: videoWidth,
-          height: maxHeight - padding.top,
+          height: videoHeight,
           child: videoPlayer(
             width: videoWidth,
-            height: maxHeight - padding.top,
+            height: videoHeight,
           ),
         ),
         // 右侧：Tab内容区域
@@ -1032,10 +1031,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           offstage: isFullScreen,
           child: SizedBox(
             width: introWidth,
-            height: maxHeight - padding.top,
+            height: videoHeight,
             child: buildTabContentArea(
               width: introWidth,
-              height: maxHeight,
+              height: videoHeight,
             ),
           ),
         ),
@@ -1051,7 +1050,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (videoDetailController.isVertical.value &&
         enableVerticalExpand &&
         !isPortrait) {
-      final double videoHeight = maxHeight - padding.top;
+      final double videoHeight = isFullScreen && isWindowMode && !isPortrait
+          ? maxHeight
+          : maxHeight - padding.top;
       final double width = videoHeight * 9 / 16;
       final videoWidth = isFullScreen ? maxWidth : width;
       final introWidth = maxWidth - padding.horizontal - width;
@@ -1091,10 +1092,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       width = maxWidth - clampDouble(maxWidth - width, 280, 425);
     }
     final videoWidth = isFullScreen ? maxWidth : width;
-    final videoHeight = maxHeight - padding.top;
+    final videoHeight = isFullScreen && isWindowMode && !isPortrait
+        ? maxHeight
+        : maxHeight - padding.top;
 
     // 检查宽度是否合理，如果视频区域太窄则使用childSplit
-    final double minVideoWidth = (maxHeight - padding.top) * 9 / 16;
+    final double minVideoWidth = videoHeight * 9 / 16;
     if (videoWidth < minVideoWidth) {
       return childSplit(16 / 9);
     }
@@ -1131,7 +1134,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     final isFullScreen = this.isFullScreen;
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: removeAppBar
+      appBar: removeAppBar(isFullScreen)
           ? null
           : AppBar(backgroundColor: Colors.black, toolbarHeight: 0),
       body: Padding(
@@ -1159,7 +1162,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       // 接近正方形屏幕：上下布局
       final double height = maxHeight / 2.5;
       final videoHeight = isFullScreen
-          ? maxHeight - (isPortrait ? padding.top : 0)
+          ? maxHeight - (isWindowMode && !isPortrait ? 0 : padding.top)
           : height;
       final bottomHeight = maxHeight - height - padding.top;
       return Column(
@@ -1388,6 +1391,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   late bool isPortrait;
   late double maxWidth;
   late double maxHeight;
+  bool isWindowMode = false;
   late EdgeInsets padding;
 
   @override

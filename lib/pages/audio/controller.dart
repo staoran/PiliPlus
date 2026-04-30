@@ -33,6 +33,7 @@ import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/global_data.dart';
@@ -40,6 +41,7 @@ import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
@@ -143,7 +145,7 @@ class AudioController extends GetxController
     _queryPlayList(isInit: true);
 
     // 先确定音频质量配置，再检查离线资源和播放
-    Utils.isWiFi.then((isWiFi) async {
+    ConnectivityUtils.isWiFi.then((isWiFi) async {
       cacheAudioQa = isWiFi ? Pref.defaultAudioQa : Pref.defaultAudioQaCellular;
 
       final String? audioUrl = args['audioUrl'];
@@ -648,8 +650,6 @@ class AudioController extends GetxController
     ];
   }
 
-
-
   void _handlePlaybackCompleted() {
     DebugLogService.log(
       'audio.completed',
@@ -706,7 +706,6 @@ class AudioController extends GetxController
           break;
       }
     }
-
   }
 
   @pragma('vm:notify-debugger-on-exception')
@@ -915,7 +914,7 @@ class AudioController extends GetxController
                     :final arc,
                     :final owner,
                   )) {
-                    Utils.shareText(
+                    ShareUtils.shareText(
                       '${arc.title} '
                       'UP主: ${owner.name}'
                       ' - $audioUrl',
@@ -1063,9 +1062,9 @@ class AudioController extends GetxController
           text: '正在切换指定音频…',
         );
         await _playIndexInternal(
-        index,
-        subId: subId,
-        skipSaveProgress: skipSaveProgress,
+          index,
+          subId: subId,
+          skipSaveProgress: skipSaveProgress,
         );
       },
     );

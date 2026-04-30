@@ -8,18 +8,13 @@ import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/user.dart';
-import 'package:PiliPlus/models/common/badge_type.dart';
-import 'package:PiliPlus/models/common/stat_type.dart';
-import 'package:PiliPlus/models/model_hot_video_item.dart';
-import 'package:PiliPlus/models/model_video.dart';
-import 'package:PiliPlus/models/search/result.dart';
+import 'package:PiliPlus/models/horizontal_video_model.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter/material.dart' hide LayoutBuilder;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 // 视频卡片 - 水平布局
 class VideoCardH extends StatefulWidget {
@@ -30,7 +25,7 @@ class VideoCardH extends StatefulWidget {
     this.onViewLater,
     this.onRemove,
   });
-  final BaseVideoItemModel videoItem;
+  final HorizontalVideoModel videoItem;
   final VoidCallback? onTap;
   final ValueChanged<int>? onViewLater;
   final VoidCallback? onRemove;
@@ -43,36 +38,12 @@ class _VideoCardHState extends State<VideoCardH> {
   bool _isHovering = false;
   bool _isInWatchLater = false;
 
-  BaseVideoItemModel get videoItem => widget.videoItem;
+  HorizontalVideoModel get videoItem => widget.videoItem;
   VoidCallback? get onTap => widget.onTap;
   VoidCallback? get onRemove => widget.onRemove;
 
   @override
   Widget build(BuildContext context) {
-    String type = 'video';
-    String? badge;
-    if (videoItem case final SearchVideoItemModel item) {
-      final typeOrNull = item.type;
-      if (typeOrNull != null && typeOrNull.isNotEmpty) {
-        type = typeOrNull;
-        if (type == 'ketang') {
-          badge = '课堂';
-        } else if (type == 'live_room') {
-          badge = '直播';
-        }
-      }
-      if (item.isUnionVideo == 1) {
-        badge = '合作';
-      }
-    } else if (videoItem case final HotVideoItemModel item) {
-      if (item.isCharging == true) {
-        badge = '充电专属';
-      } else if (item.isCooperation == 1) {
-        badge = '合作';
-      } else {
-        badge = item.pgcLabel;
-      }
-    }
     void onLongPress() => imageSaveDialog(
       bvid: videoItem.bvid,
       title: videoItem.title,
@@ -80,7 +51,7 @@ class _VideoCardHState extends State<VideoCardH> {
     );
     final theme = Theme.of(context);
     return Material(
-      type: MaterialType.transparency,
+      type: .transparency,
       child: MouseRegion(
         onEnter: PlatformUtils.isMobile
             ? null
@@ -89,161 +60,151 @@ class _VideoCardHState extends State<VideoCardH> {
             ? null
             : (_) => setState(() => _isHovering = false),
         child: Stack(
-          clipBehavior: Clip.none,
+          clipBehavior: .none,
           children: [
             InkWell(
               onLongPress: onLongPress,
               onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
               onTap:
-                onTap ??
-                () async {
-                  if (type == 'ketang') {
-                    PageUtils.viewPugv(seasonId: videoItem.aid);
-                    return;
-                  } else if (type == 'live_room') {
-                    if (videoItem case final SearchVideoItemModel item) {
-                      int? roomId = item.id;
-                      if (roomId != null) {
-                        PageUtils.toLiveRoom(roomId);
-                      }
-                    } else {
-                      SmartDialog.showToast(
-                        'err: live_room : ${videoItem.runtimeType}',
-                      );
-                    }
-                    return;
-                  }
-
-                  Dimension? dimension;
-                  if (videoItem case final HotVideoItemModel item) {
-                    if (item.redirectUrl?.isNotEmpty == true &&
-                        PageUtils.viewPgcFromUri(item.redirectUrl!)) {
+                  onTap ??
+                  () async {
+                    if (videoItem.isPugv ?? false) {
+                      PageUtils.viewPugv(seasonId: videoItem.seasonId);
                       return;
                     }
-                    dimension = item.dimension;
-                  }
 
-                  int? cid = videoItem.cid;
-                  if (cid == null) {
-                    if (await SearchHttp.ab2cWithDimension(
-                          aid: videoItem.aid,
-                          bvid: videoItem.bvid,
-                        )
-                        case final res?) {
-                      cid = res.cid;
-                      dimension = res.dimension;
+                    if (videoItem.isLive ?? false) {
+                      if (videoItem.roomId case final roomId?) {
+                        PageUtils.toLiveRoom(roomId);
+                      }
+                      return;
                     }
-                  }
-                  if (cid != null) {
-                    PageUtils.toVideoPage(
-                      bvid: videoItem.bvid,
-                      cid: cid,
-                      cover: videoItem.cover,
-                      title: videoItem.title,
-                      dimension: dimension,
-                    );
-                  }
-                },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Style.safeSpace,
-                vertical: 5,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  AspectRatio(
-                    aspectRatio: Style.aspectRatio,
-                    child: LayoutBuilder(
-                      builder: (context, boxConstraints) {
-                        final double maxWidth = boxConstraints.maxWidth;
-                        final double maxHeight = boxConstraints.maxHeight;
-                        num? progress;
-                        if (videoItem case final HotVideoItemModel item) {
-                          progress = item.progress;
-                        }
 
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            NetworkImgLayer(
-                              src: videoItem.cover,
-                              width: maxWidth,
-                              height: maxHeight,
-                            ),
-                            if (badge != null)
-                              PBadge(
-                                text: badge,
-                                top: 6.0,
-                                right: 6.0,
-                                type: switch (badge) {
-                                  '充电专属' => PBadgeType.error,
-                                  _ => PBadgeType.primary,
-                                },
+                    if (videoItem.redirectUrl?.isNotEmpty == true &&
+                        PageUtils.viewPgcFromUri(videoItem.redirectUrl!)) {
+                      return;
+                    }
+
+                    int? cid = videoItem.cid;
+                    Dimension? dimension = videoItem.dimension;
+                    if (cid == null) {
+                      if (await SearchHttp.ab2cWithDimension(
+                            aid: videoItem.aid,
+                            bvid: videoItem.bvid,
+                          )
+                          case final res?) {
+                        cid = res.cid;
+                        dimension = res.dimension;
+                      }
+                    }
+                    if (cid != null) {
+                      PageUtils.toVideoPage(
+                        bvid: videoItem.bvid,
+                        cid: cid,
+                        cover: videoItem.cover,
+                        title: videoItem.title,
+                        dimension: dimension,
+                      );
+                    }
+                  },
+              child: Padding(
+                padding: const .symmetric(
+                  horizontal: Style.safeSpace,
+                  vertical: 5,
+                ),
+                child: Row(
+                  crossAxisAlignment: .start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: Style.aspectRatio,
+                      child: LayoutBuilder(
+                        builder: (context, boxConstraints) {
+                          final double maxWidth = boxConstraints.maxWidth;
+                          final double maxHeight = boxConstraints.maxHeight;
+
+                          final progress = videoItem.progress;
+
+                          return Stack(
+                            clipBehavior: .none,
+                            children: [
+                              NetworkImgLayer(
+                                src: videoItem.cover,
+                                width: maxWidth,
+                                height: maxHeight,
                               ),
-                            if (progress != null && progress != 0) ...[
-                              PBadge(
-                                text: progress == -1
-                                    ? '已看完'
-                                    : '${DurationUtils.formatDuration(progress)}/${DurationUtils.formatDuration(videoItem.duration)}',
-                                right: 6,
-                                bottom: 8,
-                                type: PBadgeType.gray,
-                              ),
-                              Positioned(
-                                left: 0,
-                                bottom: 0,
-                                right: 0,
-                                child: VideoProgressIndicator(
-                                  color: theme.colorScheme.primary,
-                                  backgroundColor:
-                                      theme.colorScheme.secondaryContainer,
-                                  progress: progress == -1
-                                      ? 1
-                                      : progress / videoItem.duration,
+                              if (videoItem.badge case final badge?)
+                                PBadge(
+                                  text: badge,
+                                  top: 6.0,
+                                  right: 6.0,
+                                  type: switch (badge) {
+                                    '充电专属' => .error,
+                                    _ => .primary,
+                                  },
                                 ),
-                              ),
-                            ] else if (videoItem.duration > 0)
-                              PBadge(
-                                text: DurationUtils.formatDuration(
-                                  videoItem.duration,
+                              if (progress != null && progress != 0) ...[
+                                PBadge(
+                                  text: progress == -1
+                                      ? '已看完'
+                                      : '${DurationUtils.formatDuration(progress)}/${DurationUtils.formatDuration(videoItem.duration)}',
+                                  right: 6,
+                                  bottom: 8,
+                                  type: .gray,
                                 ),
-                                right: 6.0,
-                                bottom: 6.0,
-                                type: PBadgeType.gray,
-                              ),
-                            // 桌面端悬停显示稍后再看按钮
+                                Positioned(
+                                  left: 0,
+                                  bottom: 0,
+                                  right: 0,
+                                  child: VideoProgressIndicator(
+                                    color: theme.colorScheme.primary,
+                                    backgroundColor:
+                                        theme.colorScheme.secondaryContainer,
+                                    progress: progress == -1
+                                        ? 1
+                                        : progress / videoItem.duration,
+                                  ),
+                                ),
+                              ] else if (videoItem.duration > 0)
+                                PBadge(
+                                  text: DurationUtils.formatDuration(
+                                    videoItem.duration,
+                                  ),
+                                  right: 6.0,
+                                  bottom: 6.0,
+                                  type: .gray,
+                                ),
+                              // 桌面端悬停显示稍后再看按钮
                               if (!PlatformUtils.isMobile &&
                                   _isHovering &&
                                   videoItem.bvid != null)
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: _buildWatchLaterButton(),
-                              ),
-                          ],
-                        );
-                      },
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: _buildWatchLaterButton(),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  content(theme),
-                ],
+                    const SizedBox(width: 10),
+                    content(theme),
+                  ],
+                ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 12,
-            width: 29,
-            height: 29,
-            child: VideoPopupMenu(
-              iconSize: 17,
-              videoItem: videoItem,
-              onRemove: onRemove,
+            Positioned(
+              bottom: 0,
+              right: 12,
+              width: 29,
+              height: 29,
+              child: VideoPopupMenu(
+                iconSize: 17,
+                videoItem: videoItem,
+                onRemove: onRemove,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -251,7 +212,9 @@ class _VideoCardHState extends State<VideoCardH> {
 
   Widget _buildWatchLaterButton() {
     return Material(
-      color: _isInWatchLater ? Colors.green.withValues(alpha: 0.8) : Colors.black54,
+      color: _isInWatchLater
+          ? Colors.green.withValues(alpha: 0.8)
+          : Colors.black54,
       borderRadius: BorderRadius.circular(4),
       child: InkWell(
         borderRadius: BorderRadius.circular(4),
@@ -289,45 +252,44 @@ class _VideoCardHState extends State<VideoCardH> {
     if (pubdate != '') pubdate += '  ';
     return Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: .start,
         children: [
-          if (videoItem case final SearchVideoItemModel item) ...[
-            if (item.titleList?.isNotEmpty == true)
-              Expanded(
-                child: Text.rich(
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                  TextSpan(
-                    children: item.titleList!
-                        .map(
-                          (e) => TextSpan(
-                            text: e.text,
-                            style: TextStyle(
-                              fontSize: theme.textTheme.bodyMedium!.fontSize,
-                              height: 1.42,
-                              letterSpacing: 0.3,
-                              color: e.isEm
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
-                            ),
+          if (videoItem.titleList?.isNotEmpty == true)
+            Expanded(
+              child: Text.rich(
+                overflow: .ellipsis,
+                maxLines: 2,
+                TextSpan(
+                  children: videoItem.titleList!
+                      .map(
+                        (e) => TextSpan(
+                          text: e.text,
+                          style: TextStyle(
+                            fontSize: theme.textTheme.bodyMedium!.fontSize,
+                            height: 1.42,
+                            letterSpacing: 0.3,
+                            color: e.isEm
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
                           ),
-                        )
-                        .toList(),
-                  ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
-          ] else
+            )
+          else
             Expanded(
               child: Text(
                 videoItem.title,
-                textAlign: TextAlign.start,
+                textAlign: .start,
                 style: TextStyle(
                   fontSize: theme.textTheme.bodyMedium!.fontSize,
                   height: 1.42,
                   letterSpacing: 0.3,
                 ),
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                overflow: .ellipsis,
               ),
             ),
           Text(
@@ -337,7 +299,7 @@ class _VideoCardHState extends State<VideoCardH> {
               fontSize: 12,
               height: 1,
               color: theme.colorScheme.outline,
-              overflow: TextOverflow.clip,
+              overflow: .clip,
             ),
           ),
           const SizedBox(height: 3),
@@ -345,11 +307,11 @@ class _VideoCardHState extends State<VideoCardH> {
             spacing: 8,
             children: [
               StatWidget(
-                type: StatType.play,
+                type: .play,
                 value: videoItem.stat.view,
               ),
               StatWidget(
-                type: StatType.danmaku,
+                type: .danmaku,
                 value: videoItem.stat.danmu,
               ),
             ],
