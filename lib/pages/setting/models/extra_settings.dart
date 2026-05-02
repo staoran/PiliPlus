@@ -70,6 +70,18 @@ List<SettingsModel> get extraSettings => [
       onTap: _showDownPathDialog,
     ),
   ],
+  NormalModel(
+    title: '同时缓存任务',
+    getSubtitle: () => '当前: ${Pref.downloadTaskCount} 个',
+    leading: const Icon(Icons.downloading),
+    onTap: _showDownloadTaskCountDialog,
+  ),
+  const SwitchModel(
+    title: '禁止移动流量下载',
+    leading: Icon(Icons.signal_cellular_off_outlined),
+    setKey: SettingBoxKey.disableMobileDownload,
+    defaultVal: false,
+  ),
   SplitModel(
     normalModel: const NormalModel.split(
       title: '空降助手',
@@ -826,6 +838,25 @@ void _showDownPathDialog(BuildContext context, VoidCallback setState) {
       ),
     ),
   );
+}
+
+Future<void> _showDownloadTaskCountDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final res = await showDialog<int>(
+    context: context,
+    builder: (context) => SelectDialog<int>(
+      title: '同时缓存任务',
+      value: Pref.downloadTaskCount,
+      values: const [(1, '1'), (2, '2'), (3, '3')],
+    ),
+  );
+  if (res != null) {
+    await GStorage.setting.put(SettingBoxKey.downloadTaskCount, res);
+    setState();
+    SmartDialog.showToast('重启生效');
+  }
 }
 
 void _showDynDialog(BuildContext context) {
