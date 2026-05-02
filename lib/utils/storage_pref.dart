@@ -168,6 +168,22 @@ abstract final class Pref {
     defaultValue: false,
   );
 
+  static int get downloadTaskCount {
+    final value = _setting.get(
+      SettingBoxKey.downloadTaskCount,
+      defaultValue: 2,
+    );
+    if (value is! num) {
+      return 2;
+    }
+    return value.clamp(1, 3).toInt();
+  }
+
+  static bool get disableMobileDownload => _setting.get(
+    SettingBoxKey.disableMobileDownload,
+    defaultValue: false,
+  );
+
   static bool get useOnlinePlayerForOfflineCacheList => _setting.get(
     SettingBoxKey.useOnlinePlayerForOfflineCacheList,
     defaultValue: false,
