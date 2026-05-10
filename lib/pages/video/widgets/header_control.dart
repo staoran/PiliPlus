@@ -669,7 +669,10 @@ class HeaderControlState extends State<HeaderControl>
                   onTap: () async {
                     Get.back();
                     try {
-                      final result = await FilePicker.pickFiles();
+                      final result = await FilePicker.pickFiles(
+                        type: .custom,
+                        allowedExtensions: const ['json', 'vtt', 'srt', 'ass'],
+                      );
                       if (result != null) {
                         final file = result.files.single;
                         final path = file.path;
