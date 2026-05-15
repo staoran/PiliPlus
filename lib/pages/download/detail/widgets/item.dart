@@ -372,7 +372,7 @@ class DetailItem extends StatelessWidget {
                       Positioned(
                         right: 0,
                         bottom: 0,
-                        child: entry.moreBtn(theme),
+                        child: entry.moreBtn(theme.colorScheme),
                       ),
                     ] else
                       Positioned(
