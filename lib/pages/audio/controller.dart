@@ -112,8 +112,10 @@ class AudioController extends GetxController
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
+  static const _switchProtectionWarmupThreshold = Duration(seconds: 6);
   int _switchGeneration = 0;
   bool _pendingSwitchProtection = false;
+  bool _switchProtectionWarmupStarted = false;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
   bool get _isAppInForeground =>
@@ -367,6 +369,62 @@ class AudioController extends GetxController
     );
   }
 
+  bool get _hasNextSwitchTarget {
+    if (playMode.value == PlayRepeat.pause ||
+        playMode.value == PlayRepeat.singleCycle ||
+        playMode.value == PlayRepeat.autoPlayRelated) {
+      return false;
+    }
+
+    if (audioItem.value case final currentItem?) {
+      final parts = currentItem.parts;
+      if (parts.length > 1) {
+        final currentSubId = subId.firstOrNull;
+        final partIndex = parts.indexWhere((e) => e.subId == currentSubId);
+        if (partIndex != -1 && partIndex + 1 < parts.length) {
+          return true;
+        }
+      }
+    }
+
+    final currentIndex = index;
+    final currentPlaylist = playlist;
+    if (currentIndex == null || currentPlaylist == null) {
+      return false;
+    }
+    if (currentIndex + 1 < currentPlaylist.length) {
+      return true;
+    }
+    return playMode.value == PlayRepeat.listCycle && currentIndex != 0;
+  }
+
+  void _maybeStartSwitchProtectionWarmup(Duration currentPosition) {
+    if (!_isInBackground) return;
+    if (_switchProtectionWarmupStarted || _pendingSwitchProtection) return;
+    final total = duration.value;
+    if (total <= Duration.zero || !_hasNextSwitchTarget) return;
+    final remaining = total - currentPosition;
+    if (remaining > _switchProtectionWarmupThreshold) return;
+
+    _switchProtectionWarmupStarted = true;
+    DebugLogService.log(
+      'audio.switch',
+      'pre-end warmup switch protection',
+      extra: {
+        'remainingMs': remaining.inMilliseconds,
+        'position': currentPosition.inMilliseconds,
+        'duration': total.inMilliseconds,
+        'playMode': playMode.value.name,
+      },
+    );
+    unawaited(
+      _ensureSwitchProtection(
+        reason: 'pre_end_warmup',
+        text: '正在准备下一条音频…',
+      ),
+    );
+  }
+
   Future<void> _ensureSwitchProtection({
     required String reason,
     String? text,
@@ -394,6 +452,7 @@ class AudioController extends GetxController
     required String reason,
   }) async {
     _pendingSwitchProtection = false;
+    _switchProtectionWarmupStarted = false;
     if (!_isAppInForeground && PlaybackForegroundService.isRunning) {
       await PlaybackForegroundService.update(
         title: 'PiliPlus 后台播放',
@@ -750,14 +809,7 @@ class AudioController extends GetxController
           }
           videoPlayerServiceHandler?.onPositionChange(position);
         }
-        if (_pendingSwitchProtection && position > Duration.zero) {
-          unawaited(
-            _finishSwitchProtection(
-              success: true,
-              reason: 'first_audio_data',
-            ),
-          );
-        }
+        _maybeStartSwitchProtectionWarmup(position);
       }),
       stream.duration.listen((duration) {
         if (_isSwitchingAudio) return;
@@ -768,6 +820,14 @@ class AudioController extends GetxController
         if (playing) {
           animController.forward();
           playerStatus = PlayerStatus.playing;
+          if (_pendingSwitchProtection) {
+            unawaited(
+              _finishSwitchProtection(
+                success: true,
+                reason: 'playback_started',
+              ),
+            );
+          }
         } else {
           animController.reverse();
           playerStatus = PlayerStatus.paused;
