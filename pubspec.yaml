@@ -35,7 +35,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  app_links: ^7.0.0
+  app_links: ^7.1.1
   archive: ^4.0.0
   audio_service: ^0.18.15
   audio_session: ^0.2.2
@@ -142,7 +142,7 @@ dependencies:
   pretty_qr_code: ^3.3.0
   protobuf: ^6.0.0
   re_highlight: ^0.0.3
-  saver_gallery: ^4.1.2
+  saver_gallery: ^5.0.2
   screen_brightness_platform_interface: ^2.1.0
   screen_retriever: ^0.2.0
   share_plus: ^13.1.0
