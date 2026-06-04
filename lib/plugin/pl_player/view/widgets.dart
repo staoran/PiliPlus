@@ -160,7 +160,7 @@ Future<ui.Image?> _getImg(String url) async {
       key: cacheKey,
       headers: Constants.baseHeaders,
     );
-    return _loadImg(fileInfo.path);
+    return await _loadImg(fileInfo.path);
   } catch (_) {
     return null;
   }
