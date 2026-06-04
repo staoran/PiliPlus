@@ -260,7 +260,7 @@ abstract final class VideoHttp {
         }
         return Success(data);
       } else if (epid != null && videoType == VideoType.ugc) {
-        return videoUrl(
+        return await videoUrl(
           avid: avid,
           bvid: bvid,
           cid: cid,
