@@ -182,6 +182,7 @@ class VideoDetailController extends GetxController
       debugPrint('🎬 结束视频切换保护: reason=$reason, success=$success');
     }
   }
+
   bool get removeSafeArea => plPlayerController.removeSafeArea;
   double get uiScale => plPlayerController.uiScale;
 
@@ -326,6 +327,9 @@ class VideoDetailController extends GetxController
       var height = firstVideo.height;
       if (width == null || height == null) {
         if (isUgc && !isFileSource) {
+          if (!Get.isRegistered<UgcIntroController>(tag: heroTag)) {
+            return;
+          }
           final ugcIntroCtr = Get.find<UgcIntroController>(tag: heroTag);
           final cid = this.cid.value;
           final part = ugcIntroCtr.videoDetail.value.pages?.firstWhereOrNull(

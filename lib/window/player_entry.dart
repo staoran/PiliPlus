@@ -90,6 +90,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
   /// 是否是预创建模式（没有视频参数，窗口保持隐藏等待使用）
   late final bool _isPreCreatedMode;
+  bool _isNavigationLocked = false;
+  String? _pendingNavigationMethod;
+  Map<String, dynamic>? _pendingNavigationArgs;
 
   @override
   void initState() {
@@ -161,7 +164,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       // Live room
       _initialRoute = '/liveRoom';
       _initialArguments = args['roomId'] as int;
-    } else if (args['aid'] != null && args['bvid'] != null && args['cid'] != null) {
+    } else if (args['aid'] != null &&
+        args['bvid'] != null &&
+        args['cid'] != null) {
       // Video
       _initialRoute = '/videoV';
       _initialArguments = _buildVideoArguments(args);
@@ -181,7 +186,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     if (videoTypeArg is VideoType) {
       videoType = videoTypeArg;
     } else if (videoTypeArg is int) {
-      videoType = VideoType.values[videoTypeArg.clamp(0, VideoType.values.length - 1)];
+      videoType =
+          VideoType.values[videoTypeArg.clamp(0, VideoType.values.length - 1)];
     } else if (videoTypeArg is String) {
       switch (videoTypeArg) {
         case 'ugc':
@@ -209,9 +215,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     if (sourceTypeArg is SourceType) {
       sourceType = sourceTypeArg;
     } else if (sourceTypeArg is int) {
-      sourceType = SourceType.values[sourceTypeArg.clamp(0, SourceType.values.length - 1)];
+      sourceType = SourceType
+          .values[sourceTypeArg.clamp(0, SourceType.values.length - 1)];
     } else if (sourceTypeArg is String) {
-      sourceType = SourceType.values.firstWhereOrNull((e) => e.name == sourceTypeArg);
+      sourceType = SourceType.values.firstWhereOrNull(
+        (e) => e.name == sourceTypeArg,
+      );
     }
 
     extraArgs.remove('sourceType');
@@ -250,35 +259,35 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       size: _windowSize,
       minimumSize: const Size(640, 480),
       skipTaskbar: false,
-      titleBarStyle:
-          _showTitleBar ? TitleBarStyle.normal : TitleBarStyle.hidden,
+      titleBarStyle: _showTitleBar
+          ? TitleBarStyle.normal
+          : TitleBarStyle.hidden,
       title: '${Constants.appName} - 播放器',
     );
 
     windowManager
       ..waitUntilReadyToShow(windowOptions, () async {
-      final pos = _windowPosition;
-      if (pos != null) {
+        final pos = _windowPosition;
+        if (pos != null) {
           // 校正多显示器不同缩放比例导致的位置偏移
           final correctedPos = await _correctPositionForDpi(
             Offset(pos[0], pos[1]),
           );
           await windowManager.setPosition(correctedPos);
-      } else {
-        // Calculate center position without using Pref
-        final position = await _calcCenterPosition(_windowSize);
-        await windowManager.setBounds(position & _windowSize);
-      }
+        } else {
+          // Calculate center position without using Pref
+          final position = await _calcCenterPosition(_windowSize);
+          await windowManager.setBounds(position & _windowSize);
+        }
         // 预创建模式下不显示窗口，保持隐藏等待使用
         if (!_isPreCreatedMode) {
           await windowManager.show();
           await windowManager.focus();
         }
-      if (_alwaysOnTop) {
-        await windowManager.setAlwaysOnTop(true);
-      }
+        if (_alwaysOnTop) {
+          await windowManager.setAlwaysOnTop(true);
+        }
       })
-
       ..addListener(this)
       ..setPreventClose(true);
   }
@@ -363,8 +372,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         surfaceTintColor: isDynamic
             ? colorScheme.onSurfaceVariant
             : isDark
-                ? colorScheme.onSurfaceVariant
-                : null,
+            ? colorScheme.onSurfaceVariant
+            : null,
         shadowColor: Colors.transparent,
       ),
       dialogTheme: DialogThemeData(
@@ -412,23 +421,23 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   void _setupPlayerChannel() {
     final _ = const WindowMethodChannel(PlayerWindowManager.channelName)
       ..setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'playVideo':
-          final args = call.arguments as Map?;
-          if (args != null) {
-            await _navigateToVideo(args);
-          }
-          return;
-        case 'playLive':
-          final args = call.arguments as Map?;
-          if (args != null) {
-            await _navigateToLive(args);
-          }
-          return;
-        default:
-          throw MissingPluginException('Not implemented: ${call.method}');
-      }
-    });
+        switch (call.method) {
+          case 'playVideo':
+            final args = call.arguments as Map?;
+            if (args != null) {
+              await _navigateToVideo(args);
+            }
+            return;
+          case 'playLive':
+            final args = call.arguments as Map?;
+            if (args != null) {
+              await _navigateToLive(args);
+            }
+            return;
+          default:
+            throw MissingPluginException('Not implemented: ${call.method}');
+        }
+      });
   }
 
   /// 设置 WindowController 的方法处理器，用于接收来自主窗口的消息
@@ -523,6 +532,78 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   Future<void> _navigateToVideo(Map args) async {
+    await _runSerializedNavigation(
+      method: 'playVideo',
+      args: Map<String, dynamic>.from(args),
+      action: _navigateToVideoInternal,
+    );
+  }
+
+  Future<void> _navigateToLive(Map args) async {
+    await _runSerializedNavigation(
+      method: 'playLive',
+      args: Map<String, dynamic>.from(args),
+      action: _navigateToLiveInternal,
+    );
+  }
+
+  Future<void> _runSerializedNavigation({
+    required String method,
+    required Map<String, dynamic> args,
+    required Future<void> Function(Map<String, dynamic> args) action,
+  }) async {
+    if (_isNavigationLocked) {
+      _pendingNavigationMethod = method;
+      _pendingNavigationArgs = Map<String, dynamic>.from(args);
+      return;
+    }
+
+    _isNavigationLocked = true;
+    try {
+      await action(args);
+      while (mounted && _pendingNavigationMethod != null) {
+        final pendingMethod = _pendingNavigationMethod!;
+        final pendingArgs = _pendingNavigationArgs!;
+        _pendingNavigationMethod = null;
+        _pendingNavigationArgs = null;
+        if (pendingMethod == 'playVideo') {
+          await _navigateToVideoInternal(pendingArgs);
+        } else {
+          await _navigateToLiveInternal(pendingArgs);
+        }
+      }
+    } finally {
+      _isNavigationLocked = false;
+      _pendingNavigationMethod = null;
+      _pendingNavigationArgs = null;
+    }
+  }
+
+  bool _isSameVideoRoute(Map<String, dynamic> nextArgs) {
+    if (Get.currentRoute != '/videoV') {
+      return false;
+    }
+    final currentArgs = Get.arguments;
+    if (currentArgs is! Map) {
+      return false;
+    }
+    return currentArgs['aid'] == nextArgs['aid'] &&
+        currentArgs['bvid'] == nextArgs['bvid'] &&
+        currentArgs['cid'] == nextArgs['cid'];
+  }
+
+  bool _isSameLiveRoute(Map<String, dynamic> nextArgs) {
+    if (Get.currentRoute != '/liveRoom') {
+      return false;
+    }
+    final currentArgs = Get.arguments;
+    if (currentArgs is! int) {
+      return false;
+    }
+    return currentArgs == nextArgs['roomId'];
+  }
+
+  Future<void> _navigateToVideoInternal(Map<String, dynamic> args) async {
     final currentArgs = Get.arguments;
     final currentHeroTag = currentArgs is Map ? currentArgs['heroTag'] : null;
     final nextArgs = _buildVideoArguments(args);
@@ -537,9 +618,17 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     // Update window title for video
     windowManager.setTitle('${Constants.appName} - 播放器');
 
+    if (_isSameVideoRoute(nextArgs)) {
+      if (kDebugMode) {
+        debugPrint('[PlayerWindow] skip duplicate video navigation');
+      }
+      return;
+    }
+
     await _pauseCurrentPlayerBeforeNavigation();
 
-    if (Get.currentRoute == '/videoV' && (Get.key.currentState?.canPop() ?? false)) {
+    if (Get.currentRoute == '/videoV' &&
+        (Get.key.currentState?.canPop() ?? false)) {
       Get.toNamed(
         '/videoV',
         arguments: nextArgs,
@@ -553,9 +642,16 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
   }
 
-  Future<void> _navigateToLive(Map args) async {
+  Future<void> _navigateToLiveInternal(Map<String, dynamic> args) async {
     final roomId = args['roomId'] as int?;
     windowManager.setTitle('${Constants.appName} - 直播');
+
+    if (_isSameLiveRoute(args)) {
+      if (kDebugMode) {
+        debugPrint('[PlayerWindow] skip duplicate live navigation');
+      }
+      return;
+    }
 
     await _pauseCurrentPlayerBeforeNavigation();
 

@@ -175,6 +175,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   // 获取视频资源，初始化播放器
   void videoSourceInit() {
+    // 先让当前页子树完成 unmount，再销毁 tagged controllers，
+    // 避免 Obx/TabBar 还在订阅或绘制时流已经被关闭。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       videoDetailController.queryVideoUrl(autoFullScreenFlag: true);
       if (videoDetailController.autoPlay) {
@@ -365,23 +367,38 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   @override
   void dispose() {
+    final currentHeroTag = heroTag;
+    final currentVideoDetailController = videoDetailController;
+    final currentHorizontalMemberController =
+        Get.isRegistered<HorizontalMemberPageController>(tag: currentHeroTag)
+        ? Get.find<HorizontalMemberPageController>(tag: currentHeroTag)
+        : null;
+    final currentVideoReplyController =
+        videoDetailController.showReply &&
+            Get.isRegistered<VideoReplyController>(tag: currentHeroTag)
+        ? Get.find<VideoReplyController>(tag: currentHeroTag)
+        : null;
+    final currentUgcIntroController =
+        !videoDetailController.isFileSource &&
+            videoDetailController.isUgc &&
+            Get.isRegistered<UgcIntroController>(tag: currentHeroTag)
+        ? Get.find<UgcIntroController>(tag: currentHeroTag)
+        : null;
+    final currentPgcIntroController =
+        !videoDetailController.isFileSource &&
+            !videoDetailController.isUgc &&
+            Get.isRegistered<PgcIntroController>(tag: currentHeroTag)
+        ? Get.find<PgcIntroController>(tag: currentHeroTag)
+        : null;
+    final currentLocalIntroController =
+        videoDetailController.isFileSource &&
+            Get.isRegistered<LocalIntroController>(tag: currentHeroTag)
+        ? Get.find<LocalIntroController>(tag: currentHeroTag)
+        : null;
+
     plPlayerController
       ?..removeStatusLister(playerListener)
       ..removePositionListener(positionListener);
-
-    Get.delete<HorizontalMemberPageController>(
-      tag: videoDetailController.heroTag,
-    );
-
-    if (!videoDetailController.isFileSource) {
-      if (videoDetailController.isUgc) {
-        ugcIntroController
-          ..cancelTimer()
-          ..videoDetail.close();
-      } else {
-        pgcIntroController.cancelTimer();
-      }
-    }
 
     if (!videoDetailController.removeSafeArea) {
       showSystemBar();
@@ -399,21 +416,54 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
     removeObserverMobile(this);
 
-    if (videoDetailController.showReply) {
-      Get.delete<VideoReplyController>(tag: heroTag, force: true);
-    }
-    if (!videoDetailController.isFileSource) {
-      if (videoDetailController.isUgc) {
-        Get.delete<UgcIntroController>(tag: heroTag, force: true);
-      } else {
-        Get.delete<PgcIntroController>(tag: heroTag, force: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deleteControllerIfSame<HorizontalMemberPageController>(
+        currentHeroTag,
+        currentHorizontalMemberController,
+      );
+      if (currentVideoReplyController != null) {
+        _deleteControllerIfSame<VideoReplyController>(
+          currentHeroTag,
+          currentVideoReplyController,
+        );
       }
-    } else {
-      Get.delete<LocalIntroController>(tag: heroTag, force: true);
-    }
-    Get.delete<VideoDetailController>(tag: heroTag, force: true);
+      if (currentUgcIntroController != null) {
+        currentUgcIntroController.cancelTimer();
+        currentUgcIntroController.videoDetail.close();
+        _deleteControllerIfSame<UgcIntroController>(
+          currentHeroTag,
+          currentUgcIntroController,
+        );
+      } else if (currentPgcIntroController != null) {
+        currentPgcIntroController.cancelTimer();
+        _deleteControllerIfSame<PgcIntroController>(
+          currentHeroTag,
+          currentPgcIntroController,
+        );
+      } else if (currentLocalIntroController != null) {
+        _deleteControllerIfSame<LocalIntroController>(
+          currentHeroTag,
+          currentLocalIntroController,
+        );
+      }
+      _deleteControllerIfSame<VideoDetailController>(
+        currentHeroTag,
+        currentVideoDetailController,
+      );
+    });
 
     super.dispose();
+  }
+
+  void _deleteControllerIfSame<T extends Object>(String tag, T? controller) {
+    if (controller == null) return;
+    try {
+      if (!Get.isRegistered<T>(tag: tag)) return;
+      final current = Get.find<T>(tag: tag);
+      if (identical(current, controller)) {
+        Get.delete<T>(tag: tag, force: true);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -1476,22 +1526,28 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       if (_shouldShowSeasonPanel) '播放列表',
     ];
     if (videoDetailController.tabCtr.length != tabs.length) {
-      videoDetailController.tabCtr.dispose();
+      final oldTabCtr = videoDetailController.tabCtr;
+      final nextIndex = tabs.isEmpty
+          ? 0
+          : oldTabCtr.index.clamp(0, tabs.length - 1);
       videoDetailController.tabCtr = TabController(
         vsync: this,
         length: tabs.length,
-        initialIndex: tabs.isEmpty
-            ? 0
-            : videoDetailController.tabCtr.index.clamp(0, tabs.length - 1),
+        initialIndex: nextIndex,
       );
+      // 延后一帧释放旧 controller，避免 TabBar 还在 paint 时动画控制器已销毁。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldTabCtr.dispose();
+      });
     }
 
     final flag = !needIndicator || tabs.length == 1;
+    final tabController = videoDetailController.tabCtr;
     Widget tabBar() => TabBar(
       labelColor: flag ? themeData.colorScheme.onSurface : null,
       indicator: flag ? const BoxDecoration() : null,
       padding: EdgeInsets.zero,
-      controller: videoDetailController.tabCtr,
+      controller: tabController,
       labelStyle:
           TabBarTheme.of(context).labelStyle?.copyWith(fontSize: 13) ??
           const TextStyle(fontSize: 13),
@@ -1516,7 +1572,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
         if (flag) {
           animToTop();
-        } else if (!videoDetailController.tabCtr.indexIsChanging) {
+        } else if (!tabController.indexIsChanging) {
           animToTop();
         }
       },

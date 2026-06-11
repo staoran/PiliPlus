@@ -1827,7 +1827,8 @@ class HeaderControlState extends State<HeaderControl>
                 }),
               if (!isFileSource) ...[
                 if (!isFSOrPip) ...[
-                  if (videoDetailCtr.isUgc && !PlayerWindowService.isPlayerWindow)
+                  if (videoDetailCtr.isUgc &&
+                      !PlayerWindowService.isPlayerWindow)
                     SizedBox(
                       width: btnWidth,
                       height: btnHeight,
