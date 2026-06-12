@@ -195,10 +195,10 @@ class HistoryItem extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 12,
-              bottom: 0,
-              width: 29,
-              height: 29,
+              right: 0,
+              bottom: -1.5,
+              width: 40,
+              height: 40,
               child: PopupMenuButton(
                 padding: EdgeInsets.zero,
                 tooltip: '功能菜单',
@@ -206,6 +206,11 @@ class HistoryItem extends StatelessWidget {
                   Icons.more_vert_outlined,
                   color: theme.colorScheme.outline,
                   size: 18,
+                ),
+                style: IconButton.styleFrom(
+                  fixedSize: const Size.square(40),
+                  minimumSize: const Size.square(40),
+                  padding: EdgeInsets.zero,
                 ),
                 position: PopupMenuPosition.under,
                 itemBuilder: (_) => [

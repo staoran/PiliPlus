@@ -258,8 +258,8 @@ class VideoCardHLater extends StatelessWidget {
                   ],
           ),
           Positioned(
-            right: 0,
-            bottom: -8,
+            right: -Style.safeSpace,
+            bottom: -4,
             child: Row(
               spacing: 2,
               mainAxisSize: MainAxisSize.min,
@@ -269,6 +269,7 @@ class VideoCardHLater extends StatelessWidget {
                     final isLoading = ctr.isPromotingToTop(videoItem);
                     return iconButton(
                       tooltip: '置顶',
+                      size: 40,
                       onPressed: isLoading
                           ? null
                           : () => ctr.promoteToTop(index, videoItem),
@@ -286,6 +287,7 @@ class VideoCardHLater extends StatelessWidget {
                   }),
                 iconButton(
                   tooltip: '移除',
+                  size: 40,
                   onPressed: () => ctr.toViewDel(context, index, videoItem.aid),
                   icon: const Icon(Icons.clear),
                   iconColor: theme.colorScheme.outline,

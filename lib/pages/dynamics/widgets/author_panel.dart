@@ -145,16 +145,19 @@ class AuthorPanel extends StatelessWidget {
     );
     Widget? moreBtn = isSave
         ? null
-        : SizedBox(
-            width: 32,
-            height: 32,
-            child: IconButton(
-              tooltip: '更多',
-              style: const ButtonStyle(
-                padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        : Transform.translate(
+            offset: const Offset(12, -8),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: IconButton(
+                tooltip: '更多',
+                style: const ButtonStyle(
+                  padding: WidgetStatePropertyAll(EdgeInsets.zero),
+                ),
+                onPressed: () => morePanel(context),
+                icon: const Icon(Icons.more_vert_outlined, size: 18),
               ),
-              onPressed: () => morePanel(context),
-              icon: const Icon(Icons.more_vert_outlined, size: 18),
             ),
           );
     final moduleTagText = !isDetail ? item.modules.moduleTag?.text : null;

@@ -177,10 +177,10 @@ class _VideoCardVState extends State<VideoCardV> {
         ),
         if (videoItem.goto == 'av')
           Positioned(
-            right: -5,
-            bottom: -2,
-            width: 29,
-            height: 29,
+            right: -2,
+            bottom: -3,
+            width: VideoPopupMenu.defaultTapTargetSize,
+            height: VideoPopupMenu.defaultTapTargetSize,
             child: VideoPopupMenu(
               iconSize: 17,
               videoItem: videoItem,

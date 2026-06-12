@@ -194,10 +194,10 @@ class VideoCardHMemberVideo extends StatelessWidget {
             ),
           ),
           Positioned(
-            bottom: 0,
-            right: 12,
-            width: 29,
-            height: 29,
+            bottom: -5.5,
+            right: 0,
+            width: VideoPopupMenu.defaultTapTargetSize,
+            height: VideoPopupMenu.defaultTapTargetSize,
             child: VideoPopupMenu(
               iconSize: 17,
               videoItem: videoItem,

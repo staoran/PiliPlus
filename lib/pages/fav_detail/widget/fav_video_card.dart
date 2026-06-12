@@ -209,11 +209,12 @@ class FavVideoCardH extends StatelessWidget {
           ),
           if (isOwner)
             Positioned(
-              right: 0,
-              bottom: -8,
+              right: -Style.safeSpace,
+              bottom: -4,
               child: iconButton(
                 icon: const Icon(Icons.clear),
                 tooltip: '取消收藏',
+                size: 40,
                 iconColor: colorScheme.outline,
                 onPressed: () => showDialog(
                   context: context,

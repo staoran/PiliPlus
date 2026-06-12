@@ -27,7 +27,10 @@ class _VideoCustomAction {
 }
 
 class VideoPopupMenu extends StatelessWidget {
+  static const double defaultTapTargetSize = 40;
+
   final double? iconSize;
+  final double tapTargetSize;
   final double menuItemHeight;
   final BaseSimpleVideoItemModel videoItem;
   final VoidCallback? onRemove;
@@ -37,6 +40,7 @@ class VideoPopupMenu extends StatelessWidget {
     required this.iconSize,
     required this.videoItem,
     this.onRemove,
+    this.tapTargetSize = defaultTapTargetSize,
     this.menuItemHeight = 45,
   });
 
@@ -48,6 +52,11 @@ class VideoPopupMenu extends StatelessWidget {
         Icons.more_vert_outlined,
         color: Theme.of(context).colorScheme.outline,
         size: iconSize,
+      ),
+      style: IconButton.styleFrom(
+        fixedSize: Size.square(tapTargetSize),
+        minimumSize: Size.square(tapTargetSize),
+        padding: EdgeInsets.zero,
       ),
       position: PopupMenuPosition.under,
       itemBuilder: (context) =>
