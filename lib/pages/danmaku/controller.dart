@@ -33,6 +33,7 @@ class PlDanmakuController {
   bool _disposed = false;
   bool _shownEmptyHint = false;
   bool _shownErrorHint = false;
+  bool get _hasLoadedDanmaku => _dmSegMap.isNotEmpty;
 
   static const int segmentLength = 60 * 6 * 1000;
 
@@ -91,7 +92,9 @@ class PlDanmakuController {
       handleDanmaku(response.elems);
     } else {
       _requestedSeg.remove(segmentIndex);
-      _showErrorHint('弹幕加载失败');
+      if (segmentIndex == 0 || !_hasLoadedDanmaku) {
+        _showErrorHint('弹幕加载失败');
+      }
     }
   }
 
