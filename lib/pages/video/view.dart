@@ -47,6 +47,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
+import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
@@ -92,6 +93,22 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   late final VideoDetailController videoDetailController;
   late final VideoReplyController _videoReplyController;
   PlPlayerController? plPlayerController;
+
+  // 页面级 completed gate 参数：
+  // completed 信号有机会早到或在切换窗口后晚到，因此页面层不能一收到
+  // completed 就直接 nextPlay/repeat。这里先要求提交时已经处于尾段，
+  // 再在 fallback 最大等待内持续确认当前位置；fallback 只服务于
+  // “已在尾段但 position 不再推进”的场景，不能把非尾段 completed 变成延迟切换。
+  static const Duration _completedGateTailThreshold = Duration(
+    milliseconds: 1200,
+  );
+  static const Duration _completedGateCheckInterval = Duration(
+    milliseconds: 120,
+  );
+  static const Duration _completedGateFallbackGrace = Duration(
+    milliseconds: 200,
+  );
+  int _completedGateToken = 0;
 
   // intro ctr
   late final CommonIntroController introController =
@@ -215,6 +232,264 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     videoDetailController.playedTime = position;
   }
 
+  Duration _rawVideoPosition(PlPlayerController controller) =>
+      controller.videoPlayerController?.state.position ?? controller.position;
+
+  Duration _rawVideoDuration(PlPlayerController controller) {
+    final stateDuration = controller.videoPlayerController?.state.duration;
+    return stateDuration != null && stateDuration > Duration.zero
+        ? stateDuration
+        : controller.duration.value;
+  }
+
+  Duration _completedGateFallbackWait(Duration remaining) {
+    final wait = remaining + _completedGateFallbackGrace;
+    return wait < _completedGateTailThreshold
+        ? wait
+        : _completedGateTailThreshold;
+  }
+
+  // token + 播放器实例 + 媒体身份共同决定 pending gate 是否仍属于当前媒体。
+  // 只看 aid/cid 不够：同一视频重开源、切清晰度、页面离开再回来时，旧
+  // completed 的异步等待仍可能晚到。
+  bool _isVideoCompletedGateCurrent(
+    int token,
+    PlPlayerController controller,
+    Object? playerInstance,
+    int aid,
+    String bvid,
+    int cid,
+    int? epId,
+    int? seasonId,
+    int? pgcType,
+    Object videoType,
+    Object sourceType,
+  ) {
+    return token == _completedGateToken &&
+        mounted &&
+        isShowing &&
+        identical(plPlayerController, controller) &&
+        identical(controller.videoPlayerController, playerInstance) &&
+        !videoDetailController.isSwitchingVideo &&
+        videoDetailController.aid == aid &&
+        videoDetailController.bvid == bvid &&
+        videoDetailController.cid.value == cid &&
+        videoDetailController.epId == epId &&
+        videoDetailController.seasonId == seasonId &&
+        videoDetailController.pgcType == pgcType &&
+        videoDetailController.videoType == videoType &&
+        videoDetailController.sourceType == sourceType;
+  }
+
+  Future<void> _runVideoCompletedGate({
+    required bool skipCompletedRefresh,
+  }) async {
+    final controller = plPlayerController;
+    if (controller == null) return;
+
+    final token = ++_completedGateToken;
+    final playerInstance = controller.videoPlayerController;
+    final aid = videoDetailController.aid;
+    final bvid = videoDetailController.bvid;
+    final cid = videoDetailController.cid.value;
+    final epId = videoDetailController.epId;
+    final seasonId = videoDetailController.seasonId;
+    final pgcType = videoDetailController.pgcType;
+    final videoType = videoDetailController.videoType;
+    final sourceType = videoDetailController.sourceType;
+    final submitPosition = _rawVideoPosition(controller);
+    final submitDuration = _rawVideoDuration(controller);
+    final submitRemaining = submitDuration - submitPosition;
+    // 非尾段 completed 直接丢弃，不创建 pending token。这样旧媒体的
+    // completed 即使在 500ms switching 窗口后晚到，也不会靠 fallback 切掉新媒体。
+    final isTailCompleted =
+        submitDuration > Duration.zero &&
+        submitPosition >= Duration.zero &&
+        submitRemaining >= Duration.zero &&
+        submitRemaining <= _completedGateTailThreshold;
+
+    if (!isTailCompleted) {
+      DebugLogService.log(
+        'video.completed',
+        'discard_non_tail_completed',
+        extra: {
+          'position': submitPosition.inMilliseconds,
+          'duration': submitDuration.inMilliseconds,
+          'remaining': submitRemaining.inMilliseconds,
+          'aid': aid,
+          'bvid': bvid,
+          'cid': cid,
+          'playMode': controller.playRepeat.name,
+          'switching': videoDetailController.isSwitchingVideo,
+        },
+      );
+      return;
+    }
+
+    DebugLogService.log(
+      'video.completed',
+      'submit completed gate',
+      extra: {
+        'position': submitPosition.inMilliseconds,
+        'duration': submitDuration.inMilliseconds,
+        'remaining': submitRemaining.inMilliseconds,
+        'aid': aid,
+        'bvid': bvid,
+        'cid': cid,
+        'playMode': controller.playRepeat.name,
+      },
+    );
+
+    final fallbackWait = _completedGateFallbackWait(submitRemaining);
+    final startedAt = DateTime.now();
+    var fallback = false;
+
+    while (DateTime.now().difference(startedAt) < fallbackWait) {
+      await Future<void>.delayed(_completedGateCheckInterval);
+      if (!_isVideoCompletedGateCurrent(
+        token,
+        controller,
+        playerInstance,
+        aid,
+        bvid,
+        cid,
+        epId,
+        seasonId,
+        pgcType,
+        videoType,
+        sourceType,
+      )) {
+        DebugLogService.log(
+          'video.completed',
+          'cancel completed gate identity mismatch',
+          extra: {
+            'aid': aid,
+            'bvid': bvid,
+            'cid': cid,
+            'token': token,
+            'switching': videoDetailController.isSwitchingVideo,
+          },
+        );
+        return;
+      }
+
+      final currentPosition = _rawVideoPosition(controller);
+      final currentDuration = _rawVideoDuration(controller);
+      final currentRemaining = currentDuration - currentPosition;
+      // 进入最后 200ms 视为“页面层可以消费 completed”。此处只延后
+      // next/repeat/尾处理，不改变 PlPlayerController 内部 completed heartbeat。
+      if (currentDuration > Duration.zero &&
+          currentRemaining >= Duration.zero &&
+          currentRemaining <= _completedGateFallbackGrace) {
+        DebugLogService.log(
+          'video.completed',
+          'confirm completed gate',
+          extra: {
+            'position': currentPosition.inMilliseconds,
+            'duration': currentDuration.inMilliseconds,
+            'remaining': currentRemaining.inMilliseconds,
+            'aid': aid,
+            'bvid': bvid,
+            'cid': cid,
+            'playMode': controller.playRepeat.name,
+          },
+        );
+        await _handleConfirmedVideoCompleted(skipCompletedRefresh);
+        return;
+      }
+
+      if (DateTime.now().difference(startedAt) >= fallbackWait) {
+        fallback = true;
+        break;
+      }
+    }
+
+    if (!_isVideoCompletedGateCurrent(
+      token,
+      controller,
+      playerInstance,
+      aid,
+      bvid,
+      cid,
+      epId,
+      seasonId,
+      pgcType,
+      videoType,
+      sourceType,
+    )) {
+      DebugLogService.log(
+        'video.completed',
+        'cancel completed gate identity mismatch',
+        extra: {
+          'aid': aid,
+          'bvid': bvid,
+          'cid': cid,
+          'token': token,
+          'switching': videoDetailController.isSwitchingVideo,
+        },
+      );
+      return;
+    }
+
+    // fallback 只允许提交时已经在尾段的 pending gate 使用。它的目的
+    // 是防止真实 completed 后 position 停住导致卡死，而不是普通延时切歌。
+    if (fallback || DateTime.now().difference(startedAt) >= fallbackWait) {
+      DebugLogService.log(
+        'video.completed',
+        'fallback completed gate',
+        extra: {
+          'submitRemaining': submitRemaining.inMilliseconds,
+          'wait': fallbackWait.inMilliseconds,
+          'aid': aid,
+          'bvid': bvid,
+          'cid': cid,
+          'playMode': controller.playRepeat.name,
+        },
+      );
+      await _handleConfirmedVideoCompleted(skipCompletedRefresh);
+    }
+  }
+
+  Future<void> _handleConfirmedVideoCompleted(
+    bool skipCompletedRefresh,
+  ) async {
+    bool exitFlag = true;
+
+    /// 顺序播放 列表循环
+    if (shutdownTimerService.isWaiting) {
+      shutdownTimerService.handleWaiting();
+    } else {
+      switch (plPlayerController!.playRepeat) {
+        case PlayRepeat.singleCycle:
+          exitFlag = false;
+          plPlayerController!.play(repeat: true);
+        case PlayRepeat.listOrder:
+        case PlayRepeat.listCycle:
+        case PlayRepeat.autoPlayRelated:
+          exitFlag = !introController.nextPlay();
+        case PlayRepeat.pause:
+      }
+    }
+
+    if (skipCompletedRefresh && exitFlag) {
+      videoDetailController.refreshPage();
+    }
+
+    if (exitFlag) {
+      if (autoExitFullscreen) {
+        plPlayerController!.triggerFullScreen(status: false);
+        if (plPlayerController!.controlsLock.value) {
+          plPlayerController!.onLockControl(false);
+        }
+      } else {
+        if (plPlayerController!.controlsLock.value &&
+            (!Platform.isAndroid || !AndroidHelper.isPipMode)) {
+          plPlayerController!.onLockControl(false);
+        }
+      }
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final isResume = state == .resumed;
@@ -290,41 +565,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       } catch (_) {}
 
-      bool exitFlag = true;
-
-      /// 顺序播放 列表循环
-      if (shutdownTimerService.isWaiting) {
-        shutdownTimerService.handleWaiting();
-      } else {
-        switch (plPlayerController!.playRepeat) {
-          case PlayRepeat.singleCycle:
-            exitFlag = false;
-            plPlayerController!.play(repeat: true);
-          case PlayRepeat.listOrder:
-          case PlayRepeat.listCycle:
-          case PlayRepeat.autoPlayRelated:
-            exitFlag = !introController.nextPlay();
-          case PlayRepeat.pause:
-        }
-      }
-
-      if (skipCompletedRefresh && exitFlag) {
-        videoDetailController.refreshPage();
-      }
-
-      if (exitFlag) {
-        if (autoExitFullscreen) {
-          plPlayerController!.triggerFullScreen(status: false);
-          if (plPlayerController!.controlsLock.value) {
-            plPlayerController!.onLockControl(false);
-          }
-        } else {
-          if (plPlayerController!.controlsLock.value &&
-              (!Platform.isAndroid || !AndroidHelper.isPipMode)) {
-            plPlayerController!.onLockControl(false);
-          }
-        }
-      }
+      // Gate completed before running next/repeat/fullscreen side effects.
+      // This guards page-level auto-next against early or stale completed
+      // signals; Stein remains immediate because it is not an auto-next path.
+      await _runVideoCompletedGate(skipCompletedRefresh: skipCompletedRefresh);
     }
   }
 
@@ -370,6 +614,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   @override
   void dispose() {
+    _completedGateToken++;
     final currentHeroTag = heroTag;
     final currentVideoDetailController = videoDetailController;
     final currentHorizontalMemberController =
@@ -474,6 +719,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void didPushNext() {
     super.didPushNext();
     isShowing = false;
+    _completedGateToken++;
 
     removeObserverMobile(this);
 

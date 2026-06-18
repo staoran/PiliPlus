@@ -115,12 +115,22 @@ class AudioController extends GetxController
   bool _isLocalPlayback = false;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
+  // 听音频 completed gate 参数：
+  // completed 信号可能早到，且 position.value 只按秒更新；因此 gate 用 raw
+  // player state 做亚秒尾段判断，并在 fallback 最大等待内持续确认。
+  // fallback 只允许提交时已经在尾段的 pending gate 使用，不能让非尾段
+  // completed 延迟后仍触发自动切换。
+  static const _completedGateTailThreshold = Duration(milliseconds: 1200);
+  static const _completedGateCheckInterval = Duration(milliseconds: 120);
+  static const _completedGateFallbackGrace = Duration(milliseconds: 200);
   static const _switchProtectionWarmupThreshold = Duration(seconds: 6);
   int _switchGeneration = 0;
+  int _completedGateToken = 0;
   bool _pendingSwitchProtection = false;
   bool _switchProtectionWarmupStarted = false;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
+  _CompletedAudioSwitchMarker? _completedSwitchMarker;
   bool get _isAppInForeground =>
       SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
@@ -351,6 +361,212 @@ class AudioController extends GetxController
 
   bool _isStaleSwitch(int generation) =>
       isClosed || generation != _switchGeneration;
+
+  Duration _rawAudioPosition(Player currentPlayer) {
+    final statePosition = currentPlayer.state.position;
+    return statePosition > Duration.zero ? statePosition : position.value;
+  }
+
+  Duration _rawAudioDuration(Player currentPlayer) {
+    final stateDuration = currentPlayer.state.duration;
+    return stateDuration > Duration.zero ? stateDuration : duration.value;
+  }
+
+  Duration _completedGateFallbackWait(Duration remaining) {
+    final wait = remaining + _completedGateFallbackGrace;
+    return wait < _completedGateTailThreshold
+        ? wait
+        : _completedGateTailThreshold;
+  }
+
+  // playlist item 本身也作为身份的一部分：gate 窗口内如果列表刷新、
+  // 用户手动切换或换源，旧 completed 的 pending token 必须失效。
+  Object? _currentAudioItemIdentity() {
+    final currentIndex = index;
+    final currentPlaylist = playlist;
+    if (currentIndex != null &&
+        currentPlaylist != null &&
+        currentIndex >= 0 &&
+        currentIndex < currentPlaylist.length) {
+      return currentPlaylist[currentIndex];
+    }
+    return audioItem.value;
+  }
+
+  // token 保证每个媒体最多只有一个 completed gate 可以消费；player、
+  // switchGeneration、oid/subId/index/item 一起防止晚到 completed 落到新媒体上。
+  bool _isAudioCompletedGateCurrent(_AudioCompletedGateSnapshot snapshot) {
+    return snapshot.token == _completedGateToken &&
+        !isClosed &&
+        identical(player, snapshot.player) &&
+        !_isSwitchingAudio &&
+        _switchGeneration == snapshot.switchGeneration &&
+        oid == snapshot.oid &&
+        _currentSubId == snapshot.subId &&
+        index == snapshot.index &&
+        identical(_currentAudioItemIdentity(), snapshot.itemIdentity);
+  }
+
+  void _markCompletedSwitchForCurrentAudio() {
+    // gate confirmed 后会先把当前条写成完成。紧随其后的自动切换会
+    // 进入 _saveCurrentProgress()，这里打一次性标记来跳过那一次保存，
+    // 避免把完成态 -1 降级成普通秒数。
+    _completedSwitchMarker = _CompletedAudioSwitchMarker(
+      oid: oid,
+      subId: _currentSubId,
+      switchGeneration: _switchGeneration,
+    );
+  }
+
+  bool _consumeCompletedSwitchProgressSkip() {
+    final marker = _completedSwitchMarker;
+    if (marker == null) return false;
+    final matches =
+        marker.oid == oid &&
+        marker.subId == _currentSubId &&
+        marker.switchGeneration == _switchGeneration;
+    if (matches) {
+      _completedSwitchMarker = null;
+      DebugLogService.log(
+        'audio.progress',
+        'skip save progress after completed switch',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'generation': _switchGeneration,
+        },
+      );
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _runAudioCompletedGate() async {
+    final currentPlayer = player;
+    if (currentPlayer == null) return;
+
+    final token = ++_completedGateToken;
+    final submitPosition = _rawAudioPosition(currentPlayer);
+    final submitDuration = _rawAudioDuration(currentPlayer);
+    final submitRemaining = submitDuration - submitPosition;
+    final snapshot = _AudioCompletedGateSnapshot(
+      token: token,
+      player: currentPlayer,
+      oid: oid,
+      subId: _currentSubId,
+      index: index,
+      itemIdentity: _currentAudioItemIdentity(),
+      switchGeneration: _switchGeneration,
+      submitPosition: submitPosition,
+      submitDuration: submitDuration,
+    );
+    final isTailCompleted =
+        submitDuration > Duration.zero &&
+        submitPosition >= Duration.zero &&
+        submitRemaining >= Duration.zero &&
+        submitRemaining <= _completedGateTailThreshold;
+
+    // 非尾段 completed 不进入 pending/fallback。否则旧媒体 completed 在
+    // 新媒体 position=0 或缓冲停住时晚到，也可能把新媒体错误切走。
+    if (!isTailCompleted) {
+      DebugLogService.log(
+        'audio.completed',
+        'discard_non_tail_completed',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'position': submitPosition.inMilliseconds,
+          'duration': submitDuration.inMilliseconds,
+          'remaining': submitRemaining.inMilliseconds,
+          'generation': _switchGeneration,
+          'switching': _isSwitchingAudio,
+        },
+      );
+      return;
+    }
+
+    DebugLogService.log(
+      'audio.completed',
+      'submit completed gate',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'position': submitPosition.inMilliseconds,
+        'duration': submitDuration.inMilliseconds,
+        'remaining': submitRemaining.inMilliseconds,
+        'playMode': playMode.value.name,
+        'generation': _switchGeneration,
+      },
+    );
+
+    final fallbackWait = _completedGateFallbackWait(submitRemaining);
+    final startedAt = DateTime.now();
+    var fallback = false;
+
+    while (DateTime.now().difference(startedAt) < fallbackWait) {
+      await Future<void>.delayed(_completedGateCheckInterval);
+      if (!_isAudioCompletedGateCurrent(snapshot)) {
+        DebugLogService.log(
+          'audio.completed',
+          'cancel completed gate identity mismatch',
+          extra: snapshot.debugExtra(this),
+        );
+        return;
+      }
+
+      final currentPosition = _rawAudioPosition(currentPlayer);
+      final currentDuration = _rawAudioDuration(currentPlayer);
+      final currentRemaining = currentDuration - currentPosition;
+      // 进入最后 200ms 后才消费 completed，确保“提前约 1 秒”的信号
+      // 不会立即触发 _syncCompletedProgress() 和 playNext()。
+      if (currentDuration > Duration.zero &&
+          currentRemaining >= Duration.zero &&
+          currentRemaining <= _completedGateFallbackGrace) {
+        DebugLogService.log(
+          'audio.completed',
+          'confirm completed gate',
+          extra: {
+            ...snapshot.debugExtra(this),
+            'position': currentPosition.inMilliseconds,
+            'duration': currentDuration.inMilliseconds,
+            'remaining': currentRemaining.inMilliseconds,
+            'playMode': playMode.value.name,
+          },
+        );
+        _handleConfirmedPlaybackCompleted();
+        return;
+      }
+
+      if (DateTime.now().difference(startedAt) >= fallbackWait) {
+        fallback = true;
+        break;
+      }
+    }
+
+    if (!_isAudioCompletedGateCurrent(snapshot)) {
+      DebugLogService.log(
+        'audio.completed',
+        'cancel completed gate identity mismatch',
+        extra: snapshot.debugExtra(this),
+      );
+      return;
+    }
+
+    // fallback 只允许提交时已经在尾段的 pending gate 使用。它防止真实
+    // completed 后 position 停住导致卡死，但不会把非尾段 completed 变成延时切歌。
+    if (fallback || DateTime.now().difference(startedAt) >= fallbackWait) {
+      DebugLogService.log(
+        'audio.completed',
+        'fallback completed gate',
+        extra: {
+          ...snapshot.debugExtra(this),
+          'wait': fallbackWait.inMilliseconds,
+          'playMode': playMode.value.name,
+        },
+      );
+      _handleConfirmedPlaybackCompleted();
+    }
+  }
 
   void _markAudioSwitching() {
     if (_isSwitchingAudio) return;
@@ -902,13 +1118,17 @@ class AudioController extends GetxController
     }
     DebugLogService.log(
       'audio.completed',
-      'handle playback completed',
+      'handle playback completed candidate',
       extra: {
         'oid': oid.toString(),
         'subId': subId.firstOrNull?.toString(),
         'playMode': playMode.value.name,
       },
     );
+    unawaited(_runAudioCompletedGate());
+  }
+
+  void _handleConfirmedPlaybackCompleted() {
     _syncCompletedProgress();
     if (_shouldSyncVideoDetailMetadata) {
       _videoDetailController?.playedTime = duration.value;
@@ -928,7 +1148,10 @@ class AudioController extends GetxController
         case PlayRepeat.pause:
           break;
         case PlayRepeat.listOrder:
-          playNext(nextPart: true);
+          _markCompletedSwitchForCurrentAudio();
+          if (!playNext(nextPart: true)) {
+            _completedSwitchMarker = null;
+          }
           break;
         case PlayRepeat.singleCycle:
           _enqueueSwitch(() async {
@@ -939,10 +1162,12 @@ class AudioController extends GetxController
           });
           break;
         case PlayRepeat.listCycle:
+          _markCompletedSwitchForCurrentAudio();
           if (playNext(nextPart: true)) {
           } else if (index != null && index != 0 && playlist != null) {
             playIndex(0);
           } else {
+            _completedSwitchMarker = null;
             _enqueueSwitch(() async {
               if (player case final currentPlayer?) {
                 await currentPlayer.seek(Duration.zero);
@@ -1474,6 +1699,10 @@ class AudioController extends GetxController
   /// 保存当前视频的播放进度到 VideoDetailController
   /// 使用听视频当前播放的视频信息，而不是 VideoDetailController 的视频信息
   void _saveCurrentProgress() {
+    // completed gate 确认后已经把当前音频写成完成态。紧随其后的自动
+    // 切换会再次调用 _saveCurrentProgress()，因此这里消费一次性标记，
+    // 只跳过这一次保存，避免完成态被降级成普通进度。
+    if (_consumeCompletedSwitchProgressSkip()) return;
     if (_videoDetailController == null) return;
     if (_isSwitchingAudio) {
       DebugLogService.log(
@@ -1669,6 +1898,8 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
+    _completedGateToken++;
+    _completedSwitchMarker = null;
     // 退出听视频时保存最后的进度
     if (!_isSwitchingAudio) {
       _saveCurrentProgress();
@@ -1744,6 +1975,57 @@ class AudioController extends GetxController
     } catch (_) {}
     return null;
   }
+}
+
+class _AudioCompletedGateSnapshot {
+  const _AudioCompletedGateSnapshot({
+    required this.token,
+    required this.player,
+    required this.oid,
+    required this.subId,
+    required this.index,
+    required this.itemIdentity,
+    required this.switchGeneration,
+    required this.submitPosition,
+    required this.submitDuration,
+  });
+
+  final int token;
+  final Player player;
+  final Int64 oid;
+  final int subId;
+  final int? index;
+  final Object? itemIdentity;
+  final int switchGeneration;
+  final Duration submitPosition;
+  final Duration submitDuration;
+
+  Map<String, dynamic> debugExtra(AudioController controller) => {
+    'token': token,
+    'oid': oid.toString(),
+    'subId': subId,
+    'index': index,
+    'generation': switchGeneration,
+    'currentGeneration': controller._switchGeneration,
+    'currentOid': controller.oid.toString(),
+    'currentSubId': controller._currentSubId,
+    'submitPosition': submitPosition.inMilliseconds,
+    'submitDuration': submitDuration.inMilliseconds,
+    'submitRemaining': (submitDuration - submitPosition).inMilliseconds,
+    'switching': controller._isSwitchingAudio,
+  };
+}
+
+class _CompletedAudioSwitchMarker {
+  const _CompletedAudioSwitchMarker({
+    required this.oid,
+    required this.subId,
+    required this.switchGeneration,
+  });
+
+  final Int64 oid;
+  final int subId;
+  final int switchGeneration;
 }
 
 extension on DashItem {
