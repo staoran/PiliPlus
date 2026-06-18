@@ -96,7 +96,15 @@ abstract final class ReplyUtils {
     if (!isManual) {
       await Future.delayed(const Duration(seconds: 8));
     }
-    void showReplyCheckResult(String message, {bool isBan = false}) {
+    void showReplyCheckResult(
+      String message, {
+      bool isPass = false,
+      bool isBan = false,
+    }) {
+      if (isPass) {
+        SmartDialog.showToast('评论检查通过，评论正常');
+        return;
+      }
       final theme = ThemeUtils.theme;
       final actions = [
         if (isBan)
@@ -163,7 +171,10 @@ abstract final class ReplyUtils {
             response.replies?.indexWhere((item) => item.rpid == id) ?? -1;
         if (index != -1) {
           // found
-          showReplyCheckResult('无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message');
+          showReplyCheckResult(
+            '无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message',
+            isPass: true,
+          );
         } else {
           // not found
 
@@ -211,6 +222,7 @@ https://api.bilibili.com/x/v2/reply/reply?oid=$oid&pn=1&ps=20&root=$id&type=$typ
 获取你的评论，疑似评论区被戒严或者这是你的视频。
 
 你的评论：$message''',
+                isPass: isManual,
               );
             }
           }
@@ -238,7 +250,10 @@ https://api.bilibili.com/x/v2/reply/reply?oid=$oid&pn=1&ps=20&root=$id&type=$typ
             // not found
           } else {
             // found
-            showReplyCheckResult('无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message');
+            showReplyCheckResult(
+              '无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message',
+              isPass: true,
+            );
             return;
           }
         }
