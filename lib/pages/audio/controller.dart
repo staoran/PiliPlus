@@ -128,6 +128,7 @@ class AudioController extends GetxController
   int _completedGateToken = 0;
   bool _pendingSwitchProtection = false;
   bool _switchProtectionWarmupStarted = false;
+  bool _audioSwitchOpenReady = false;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
   _CompletedAudioSwitchMarker? _completedSwitchMarker;
@@ -584,6 +585,7 @@ class AudioController extends GetxController
   void _clearAudioSwitching({required String reason}) {
     if (!_isSwitchingAudio) return;
     _isSwitchingAudio = false;
+    _audioSwitchOpenReady = false;
     DebugLogService.log(
       'audio.switch',
       'clear audio switching',
@@ -602,10 +604,26 @@ class AudioController extends GetxController
     });
   }
 
+  void _settleAudioSwitchingOnValidState({
+    Duration? position,
+    Duration? duration,
+  }) {
+    if (!_isSwitchingAudio) return;
+    final hasValidPosition = position != null && position > Duration.zero;
+    final hasValidDuration = duration != null && duration > Duration.zero;
+    if (!hasValidPosition && !hasValidDuration) return;
+    _clearAudioSwitching(
+      reason: hasValidPosition
+          ? 'first_valid_position'
+          : 'first_valid_duration',
+    );
+  }
+
   void _resetPlaybackProgressForSwitch() {
     position.value = Duration.zero;
     duration.value = Duration.zero;
     _start = null;
+    _audioSwitchOpenReady = false;
     videoPlayerServiceHandler?.onPositionChange(Duration.zero);
     DebugLogService.log(
       'audio.switch',
@@ -956,6 +974,7 @@ class AudioController extends GetxController
       },
     );
     if (openGeneration == _switchGeneration) {
+      _audioSwitchOpenReady = true;
       position.value = Duration.zero;
     }
     try {
@@ -1052,19 +1071,24 @@ class AudioController extends GetxController
     _subscriptions = [
       stream.position.listen((position) {
         if (isDragging) return;
-        if (_isSwitchingAudio) return;
-        if (position.inSeconds != this.position.value.inSeconds) {
+        if (_isSwitchingAudio && !_audioSwitchOpenReady) return;
+        final shouldUpdatePosition =
+            position.inSeconds != this.position.value.inSeconds ||
+            (this.position.value == Duration.zero && position > Duration.zero);
+        if (shouldUpdatePosition) {
           this.position.value = position;
           if (_shouldSyncVideoDetailMetadata) {
             _videoDetailController?.playedTime = position;
           }
           videoPlayerServiceHandler?.onPositionChange(position);
         }
+        _settleAudioSwitchingOnValidState(position: position);
         _maybeStartSwitchProtectionWarmup(position);
       }),
       stream.duration.listen((duration) {
-        if (_isSwitchingAudio) return;
+        if (_isSwitchingAudio && !_audioSwitchOpenReady) return;
         this.duration.value = duration;
+        _settleAudioSwitchingOnValidState(duration: duration);
       }),
       stream.playing.listen((playing) {
         final PlayerStatus playerStatus;
