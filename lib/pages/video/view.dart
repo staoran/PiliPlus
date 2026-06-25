@@ -12,6 +12,8 @@ import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
+import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart'
+    as pgc;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
@@ -131,6 +133,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   bool isShowing = true;
   Duration? _pendingAudioSyncPosition;
+
+  Duration _audioPagePosition(AudioController audioController) {
+    final rawPosition = audioController.player?.state.position;
+    if (rawPosition != null && rawPosition > Duration.zero) {
+      return rawPosition;
+    }
+    return audioController.position.value;
+  }
 
   bool get isFullScreen =>
       videoDetailController.plPlayerController.isFullScreen.value;
@@ -843,7 +853,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       final audioOid = audioController.oid;
       final audioCid = audioController.subId.firstOrNull?.toInt();
       final currentBvid = IdUtils.av2bv(audioOid.toInt());
-      final audioPosition = audioController.position.value;
+      final audioPosition = _audioPagePosition(audioController);
       final currentCid = videoDetailController.cid.value;
       final hasSwitchedBvid = currentBvid != videoDetailController.bvid;
       final hasSwitchedPart =
@@ -916,6 +926,32 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
           if (targetItem != null) {
             ugcIntroController.onChangeEpisode(
+              targetItem,
+              fromAudioPage: true,
+              audioPosition: audioPosition,
+            );
+          }
+        } else {
+          pgc.EpisodeItem? targetItem;
+          final audioAid = audioOid.toInt();
+
+          bool matchesAudioState(pgc.EpisodeItem item) =>
+              item.cid == audioCid ||
+              item.aid == audioAid ||
+              item.bvid == currentBvid;
+
+          final episodes = pgcIntroController.pgcItem.episodes;
+          if (episodes != null && episodes.isNotEmpty) {
+            for (final item in episodes) {
+              if (matchesAudioState(item)) {
+                targetItem = item;
+                break;
+              }
+            }
+          }
+
+          if (targetItem != null) {
+            pgcIntroController.onChangeEpisode(
               targetItem,
               fromAudioPage: true,
               audioPosition: audioPosition,

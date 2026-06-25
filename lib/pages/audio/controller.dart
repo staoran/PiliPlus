@@ -998,12 +998,16 @@ class AudioController extends GetxController
       await player!.play();
       player!.setRate(speed);
       if (openGeneration == _switchGeneration) {
-        final stateDuration = player!.state.duration;
+        final currentPlayer = player!;
+        final statePosition = _rawAudioPosition(currentPlayer);
+        final stateDuration = _rawAudioDuration(currentPlayer);
         if (stateDuration > Duration.zero) {
           duration.value = stateDuration;
         }
         if (_start case final start? when start > Duration.zero) {
           position.value = start;
+        } else if (statePosition > Duration.zero) {
+          position.value = statePosition;
         }
         _start = null;
         _scheduleClearAudioSwitching(openGeneration);
@@ -1637,12 +1641,10 @@ class AudioController extends GetxController
     final progressKey = _progressKey(currentAid, currentSubId);
     final savedPartProgress = _partProgress[progressKey];
     int progress = savedPartProgress ?? 0;
-    if (savedPartProgress == null && progress <= 0) {
+    if (progress <= 0) {
       progress = _getProgressFromMediaList(currentAid, currentSubId);
     }
-    if (savedPartProgress == null &&
-        progress <= 0 &&
-        _isSinglePart(audioItem)) {
+    if (progress <= 0 && audioItem.progress > 0) {
       progress = audioItem.progress.toInt();
     }
     if (kDebugMode) {
@@ -1740,15 +1742,18 @@ class AudioController extends GetxController
       return;
     }
 
+    final currentPlayer = player;
+    if (currentPlayer == null) return;
+
     try {
-      final currentPosition = position.value;
+      final currentPosition = _rawAudioPosition(currentPlayer);
       if (currentPosition == Duration.zero) return;
 
       // 获取听视频当前播放的视频信息
       final currentOid = oid.toInt();
       final currentCid = _currentSubId;
       final currentBvid = IdUtils.av2bv(currentOid);
-      final currentDuration = duration.value.inSeconds;
+      final currentDuration = _rawAudioDuration(currentPlayer).inSeconds;
       final progressSeconds = currentPosition.inSeconds;
 
       if (kDebugMode) {
@@ -1799,10 +1804,12 @@ class AudioController extends GetxController
     if (_videoDetailController == null) return;
 
     try {
+      final currentPlayer = player;
+      if (currentPlayer == null) return;
       final currentOid = oid.toInt();
       final currentCid = _currentSubId;
       final currentBvid = IdUtils.av2bv(currentOid);
-      final currentDuration = duration.value.inSeconds;
+      final currentDuration = _rawAudioDuration(currentPlayer).inSeconds;
 
       if (currentDuration <= 0) {
         return;

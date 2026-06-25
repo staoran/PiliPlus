@@ -318,46 +318,58 @@ class PgcIntroController extends CommonIntroController {
   }
 
   // 修改分P或番剧分集
-  Future<bool> onChangeEpisode(BaseEpisodeItem episode) async {
+  Future<bool> onChangeEpisode(
+    BaseEpisodeItem episode, {
+    bool fromAudioPage = false,
+    Duration? audioPosition,
+  }) async {
     try {
       final int epId = episode.epId ?? episode.id!;
       final String bvid = episode.bvid ?? this.bvid;
       final int aid = episode.aid ?? IdUtils.bv2av(bvid);
-      final int? cid =
-          episode.cid ?? await SearchHttp.ab2c(aid: aid, bvid: bvid);
+      final int? cid = episode.cid ?? await SearchHttp.ab2c(aid: aid, bvid: bvid);
       if (cid == null) {
         return false;
       }
       final String? cover = episode.cover;
 
-      // 重新获取视频资源
       this.epId = epId;
       this.bvid = bvid;
 
       await videoDetailCtr.ensureVideoSwitchProtection(
         reason: 'pgc_switch',
-        text: '正在切换剧集…',
+        text: '正在切换剧集...',
       );
 
+      videoDetailCtr.plPlayerController.pause();
+      if (!fromAudioPage) {
+        videoDetailCtr
+          ..saveProgressBeforeChange()
+          ..makeHeartBeat();
+      }
       videoDetailCtr
-        ..plPlayerController.pause()
-        // 切换前先保存当前视频的进度（特别是新窗口模式）
-        ..saveProgressBeforeChange()
-        ..makeHeartBeat()
         ..onReset()
         ..epId = epId
         ..bvid = bvid
         ..aid = aid
         ..cid.value = cid;
 
-      // 重要：在后台/锁屏场景下，必须等待 queryVideoUrl 完成才能继续
-      await videoDetailCtr.queryVideoUrl();
+      final Duration? progressToPass =
+          fromAudioPage && audioPosition != null && audioPosition > Duration.zero
+          ? audioPosition
+          : null;
+      if (progressToPass != null) {
+        videoDetailCtr
+          ..playedTime = progressToPass
+          ..defaultST = progressToPass;
+      }
+
+      await videoDetailCtr.queryVideoUrl(defaultST: progressToPass);
 
       if (cover != null && cover.isNotEmpty) {
         videoDetailCtr.cover.value = cover;
       }
 
-      // 重新请求评论
       if (videoDetailCtr.showReply) {
         try {
           final replyCtr = Get.find<VideoReplyController>(tag: heroTag)
@@ -376,7 +388,6 @@ class PgcIntroController extends CommonIntroController {
       this.cid.value = cid;
       queryOnlineTotal();
 
-      // 异步查询视频简介，不阻止播放切换
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e, s) {
@@ -390,7 +401,6 @@ class PgcIntroController extends CommonIntroController {
     }
   }
 
-  // 追番
   Future<void> pgcAdd() async {
     final result = await VideoHttp.pgcAdd(seasonId: pgcItem.seasonId);
     if (result case Success(:final response)) {
