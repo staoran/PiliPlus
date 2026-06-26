@@ -2251,6 +2251,64 @@ class VideoDetailController extends GetxController
     return false;
   }
 
+  List<Map<String, int>> _audioPlaylistProgressSnapshot() {
+    final snapshot = <Map<String, int>>[];
+    final seen = <String>{};
+    void addProgress({
+      required int? aid,
+      required int? cid,
+      required int? progress,
+    }) {
+      if (aid == null || aid <= 0 || cid == null || cid <= 0) {
+        return;
+      }
+      if (progress == null || progress <= 0) {
+        return;
+      }
+      final key = '$aid:$cid';
+      if (!seen.add(key)) {
+        return;
+      }
+      snapshot.add({
+        'aid': aid,
+        'cid': cid,
+        'progress': progress,
+      });
+    }
+
+    for (final item in mediaList) {
+      final aid = item.aid;
+      final progress = item.progress;
+      final pages = item.pages;
+      if (pages != null && pages.isNotEmpty) {
+        for (final page in pages) {
+          addProgress(aid: aid, cid: page.id, progress: progress);
+        }
+      } else {
+        addProgress(aid: aid, cid: item.cid, progress: progress);
+      }
+    }
+
+    if (sourceType == SourceType.watchLater) {
+      for (final tag in ['0', '2']) {
+        if (!Get.isRegistered<LaterController>(tag: tag)) {
+          continue;
+        }
+        final laterController = Get.find<LaterController>(tag: tag);
+        if (laterController.loadingState.value.data case final list?) {
+          for (final item in list) {
+            addProgress(
+              aid: item.aid,
+              cid: item.cid,
+              progress: item.progress,
+            );
+          }
+        }
+      }
+    }
+    return snapshot;
+  }
+
   void toAudioPage() {
     int? id;
     int? extraId;
@@ -2280,6 +2338,7 @@ class VideoDetailController extends GetxController
       speed: plPlayerController.playbackSpeed,
       audioUrl: audioUrl,
       extraId: extraId,
+      playlistProgress: _audioPlaylistProgressSnapshot(),
     );
   }
 

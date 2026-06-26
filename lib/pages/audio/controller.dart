@@ -6,7 +6,9 @@ import 'package:PiliPlus/grpc/audio.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pb.dart'
     show
         DetailItem,
+        PlaylistResp,
         PlayURLResp,
+        PlayItem,
         PlaylistSource,
         PlayInfo,
         ThumbUpReq_ThumbType,
@@ -95,6 +97,8 @@ class AudioController extends GetxController
   int? index;
   List<DetailItem>? playlist;
   final Map<String, int> _partProgress = {};
+  final Map<String, int> _initialPlaylistProgress = {};
+  final Map<String, int> _playlistHistoryProgress = {};
 
   late double speed = 1.0;
 
@@ -148,6 +152,20 @@ class AudioController extends GetxController
 
   String _progressKey(int aid, int subId) => '$aid:$subId';
 
+  Duration get syncPosition {
+    final currentPlayer = player;
+    if (currentPlayer != null) {
+      final rawPosition = _rawAudioPosition(currentPlayer);
+      if (rawPosition > Duration.zero) {
+        return rawPosition;
+      }
+    }
+    if (_start case final start? when start > Duration.zero) {
+      return start;
+    }
+    return position.value;
+  }
+
   bool _isSinglePart(DetailItem item) => item.parts.length <= 1;
 
   double? _lastVolume;
@@ -199,6 +217,7 @@ class AudioController extends GetxController
         _videoDetailController = Get.find<VideoDetailController>(tag: heroTag);
       } catch (_) {}
     }
+    _initPlaylistProgressSnapshot(args['playlistProgress']);
     speed = (args['speed'] as num?)?.toDouble() ?? 1.0;
 
     _queryPlayList(isInit: true);
@@ -742,6 +761,227 @@ class AudioController extends GetxController
     _switchQueue = _switchQueue.then((_) => action());
   }
 
+  String _playlistHistoryKey(int itemType, int aid, int cid) =>
+      '$itemType:$aid:$cid';
+
+  int? _readInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return null;
+  }
+
+  void _initPlaylistProgressSnapshot(dynamic raw) {
+    if (raw is! Iterable) {
+      return;
+    }
+
+    for (final item in raw) {
+      if (item is! Map) {
+        continue;
+      }
+      final aid = _readInt(item['aid']);
+      final cid = _readInt(item['cid']);
+      final progress = _readInt(item['progress']);
+      if (aid == null ||
+          aid <= 0 ||
+          cid == null ||
+          cid <= 0 ||
+          progress == null ||
+          progress <= 0) {
+        continue;
+      }
+      _initialPlaylistProgress[_progressKey(aid, cid)] = progress;
+    }
+
+    if (_initialPlaylistProgress.isNotEmpty) {
+      DebugLogService.log(
+        'audio.progress',
+        'init playlist progress snapshot',
+        extra: {
+          'count': _initialPlaylistProgress.length,
+        },
+      );
+    }
+  }
+
+  List<int> _detailItemSubIds(DetailItem item) {
+    final result = <int>[];
+    for (final subId in item.item.subId) {
+      final value = subId.toInt();
+      if (value > 0 && !result.contains(value)) {
+        result.add(value);
+      }
+    }
+    for (final part in item.parts) {
+      final value = part.subId.toInt();
+      if (value > 0 && !result.contains(value)) {
+        result.add(value);
+      }
+    }
+    return result;
+  }
+
+  List<int> _playItemSubIds(PlayItem item, List<DetailItem> list) {
+    final result = <int>[];
+    for (final subId in item.subId) {
+      final value = subId.toInt();
+      if (value > 0 && !result.contains(value)) {
+        result.add(value);
+      }
+    }
+    if (result.isNotEmpty) {
+      return result;
+    }
+
+    final matched = list.firstWhereOrNull(
+      (e) =>
+          e.item.oid == item.oid &&
+          (!item.hasItemType() || e.item.itemType == item.itemType),
+    );
+    if (matched == null) {
+      return result;
+    }
+    if (matched.lastPart > 0) {
+      return [matched.lastPart.toInt()];
+    }
+    final matchedSubIds = _detailItemSubIds(matched);
+    return matchedSubIds.length == 1 ? matchedSubIds : result;
+  }
+
+  int _normalizeProgressSeconds(
+    int progress, {
+    required int durationSeconds,
+  }) {
+    if (progress <= 0) {
+      return 0;
+    }
+    if (durationSeconds > 0 &&
+        progress > durationSeconds + 30 &&
+        progress ~/ 1000 <= durationSeconds + 30) {
+      return progress ~/ 1000;
+    }
+    if (durationSeconds <= 0 && progress > 12 * 60 * 60) {
+      return progress ~/ 1000;
+    }
+    return progress;
+  }
+
+  int _detailItemDurationSeconds(DetailItem item, int cid) {
+    final part = item.parts.firstWhereOrNull((e) => e.subId.toInt() == cid);
+    if (part != null && part.duration > 0) {
+      return part.duration.toInt();
+    }
+    return item.arc.duration.toInt();
+  }
+
+  int _detailProgressSeconds(DetailItem item, int cid) {
+    if (!_isSinglePart(item) && item.lastPart.toInt() != cid) {
+      return 0;
+    }
+
+    final durationSeconds = _detailItemDurationSeconds(item, cid);
+    final progress = _normalizeProgressSeconds(
+      item.progress.toInt(),
+      durationSeconds: durationSeconds,
+    );
+    if (progress > 0) {
+      return progress;
+    }
+    return _normalizeProgressSeconds(
+      item.lastPlayTime.toInt(),
+      durationSeconds: durationSeconds,
+    );
+  }
+
+  void _recordPlaylistHistoryProgress(PlaylistResp response) {
+    if (!response.hasLastPlay() || !response.hasLastProgress()) {
+      return;
+    }
+
+    final lastPlay = response.lastPlay;
+    final aid = lastPlay.oid.toInt();
+    if (aid <= 0) {
+      return;
+    }
+
+    final subIds = _playItemSubIds(lastPlay, response.list);
+    if (subIds.isEmpty) {
+      return;
+    }
+
+    final itemType = lastPlay.hasItemType() ? lastPlay.itemType : this.itemType;
+    for (final cid in subIds) {
+      final matched = response.list.firstWhereOrNull(
+        (e) => e.item.oid == lastPlay.oid && _detailItemSubIds(e).contains(cid),
+      );
+      final durationSeconds = matched == null
+          ? 0
+          : _detailItemDurationSeconds(matched, cid);
+      final progress = _normalizeProgressSeconds(
+        response.lastProgress.toInt(),
+        durationSeconds: durationSeconds,
+      );
+      if (progress <= 0) {
+        continue;
+      }
+      _playlistHistoryProgress[_playlistHistoryKey(itemType, aid, cid)] =
+          progress;
+      DebugLogService.log(
+        'audio.progress',
+        'record playlist history progress',
+        extra: {
+          'oid': aid,
+          'subId': cid,
+          'itemType': itemType,
+          'progress': progress,
+        },
+      );
+    }
+  }
+
+  ({int seconds, String source}) _resolvePlaylistItemProgress(
+    DetailItem audioItem,
+    int aid,
+    int cid,
+  ) {
+    final savedPartProgress = _partProgress[_progressKey(aid, cid)];
+    if (savedPartProgress != null && savedPartProgress > 0) {
+      return (seconds: savedPartProgress, source: 'partProgress');
+    }
+
+    final mediaListProgress = _getProgressFromMediaList(aid, cid);
+    if (mediaListProgress > 0) {
+      return (seconds: mediaListProgress, source: 'mediaList');
+    }
+
+    final initialPlaylistProgress =
+        _initialPlaylistProgress[_progressKey(aid, cid)];
+    if (initialPlaylistProgress != null && initialPlaylistProgress > 0) {
+      return (seconds: initialPlaylistProgress, source: 'playlistSnapshot');
+    }
+
+    final detailProgress = _detailProgressSeconds(audioItem, cid);
+    if (detailProgress > 0) {
+      return (seconds: detailProgress, source: 'detail');
+    }
+
+    final playlistHistoryProgress =
+        _playlistHistoryProgress[_playlistHistoryKey(
+          audioItem.item.itemType,
+          aid,
+          cid,
+        )];
+    if (playlistHistoryProgress != null && playlistHistoryProgress > 0) {
+      return (seconds: playlistHistoryProgress, source: 'playlistHistory');
+    }
+
+    return (seconds: 0, source: 'none');
+  }
+
   Future<void> _queryPlayList({
     bool isInit = false,
     bool isLoadPrev = false,
@@ -762,6 +1002,7 @@ class AudioController extends GetxController
       order: order,
     );
     if (res case Success(:final response)) {
+      _recordPlaylistHistoryProgress(response);
       if (isInit) {
         late final paginationReply = response.paginationReply;
         _prev = response.reachStart ? null : paginationReply.prev;
@@ -1578,6 +1819,25 @@ class AudioController extends GetxController
     oid = nextPart.oid;
     subId = [nextPart.subId];
     _resetPlaybackProgressForSwitch();
+    final resolvedProgress = _resolvePlaylistItemProgress(
+      currentItem,
+      oid.toInt(),
+      _currentSubId,
+    );
+    _start = resolvedProgress.seconds > 0
+        ? Duration(seconds: resolvedProgress.seconds)
+        : null;
+    DebugLogService.log(
+      'audio.switch',
+      'switch to next part progress',
+      extra: {
+        'generation': generation,
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'progress': resolvedProgress.seconds,
+        'progressSource': resolvedProgress.source,
+      },
+    );
     final res = await _queryPlayUrlForSwitch(generation);
     if (res) {
       DebugLogService.log(
@@ -1638,15 +1898,12 @@ class AudioController extends GetxController
     _resetPlaybackProgressForSwitch();
     final currentAid = item.oid.toInt();
     final currentSubId = _currentSubId;
-    final progressKey = _progressKey(currentAid, currentSubId);
-    final savedPartProgress = _partProgress[progressKey];
-    int progress = savedPartProgress ?? 0;
-    if (progress <= 0) {
-      progress = _getProgressFromMediaList(currentAid, currentSubId);
-    }
-    if (progress <= 0 && audioItem.progress > 0) {
-      progress = audioItem.progress.toInt();
-    }
+    final resolvedProgress = _resolvePlaylistItemProgress(
+      audioItem,
+      currentAid,
+      currentSubId,
+    );
+    final progress = resolvedProgress.seconds;
     if (kDebugMode) {
       debugPrint(
         '🎵 playIndex: index=$index, oid=${item.oid}, progress=$progress seconds',
@@ -1661,6 +1918,7 @@ class AudioController extends GetxController
         'oid': item.oid.toString(),
         'subId': this.subId.firstOrNull?.toString(),
         'progress': progress,
+        'progressSource': resolvedProgress.source,
       },
     );
     // 先由 _resetPlaybackProgressForSwitch 清理旧 seek，再按新列表项进度设置目标 seek。
@@ -1763,6 +2021,8 @@ class AudioController extends GetxController
       }
 
       _partProgress[_progressKey(currentOid, currentCid)] = progressSeconds;
+      _initialPlaylistProgress[_progressKey(currentOid, currentCid)] =
+          progressSeconds;
 
       // 单 P 列表项可继续同步 item-level 进度；多 P 由 per-subId map 隔离。
       if (index != null && playlist != null && index! < playlist!.length) {
@@ -1816,6 +2076,7 @@ class AudioController extends GetxController
       }
 
       _partProgress[_progressKey(currentOid, currentCid)] = -1;
+      _initialPlaylistProgress[_progressKey(currentOid, currentCid)] = -1;
 
       if (index != null && playlist != null && index! < playlist!.length) {
         final currentItem = playlist![index!];

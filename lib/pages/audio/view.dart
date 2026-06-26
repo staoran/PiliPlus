@@ -57,6 +57,7 @@ class AudioPage extends StatefulWidget {
     double? speed,
     String? audioUrl,
     int? extraId,
+    List<Map<String, int>>? playlistProgress,
   }) => Get.toNamed(
     '/audio',
     arguments: {
@@ -70,6 +71,7 @@ class AudioPage extends StatefulWidget {
       'speed': ?speed,
       'audioUrl': ?audioUrl,
       'extraId': ?extraId,
+      'playlistProgress': ?playlistProgress,
     },
   );
 }

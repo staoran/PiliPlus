@@ -12,8 +12,7 @@ import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
-import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart'
-    as pgc;
+import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
@@ -135,11 +134,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   Duration? _pendingAudioSyncPosition;
 
   Duration _audioPagePosition(AudioController audioController) {
-    final rawPosition = audioController.player?.state.position;
-    if (rawPosition != null && rawPosition > Duration.zero) {
-      return rawPosition;
-    }
-    return audioController.position.value;
+    return audioController.syncPosition;
   }
 
   bool get isFullScreen =>
