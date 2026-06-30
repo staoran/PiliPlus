@@ -13,6 +13,7 @@ import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
+import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/models_new/video/video_detail/ugc_season.dart';
@@ -42,12 +43,14 @@ import 'package:PiliPlus/pages/video/widgets/header_control.dart';
 import 'package:PiliPlus/pages/video/widgets/player_focus.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
+import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
+import 'package:PiliPlus/services/playback/completed_gate.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
     show shutdownTimerService;
@@ -118,6 +121,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   bool isShowing = true;
   Duration? _pendingAudioSyncPosition;
+  final CompletedGateScheduler _completedGateScheduler =
+      CompletedGateScheduler();
+  bool _completedProgressSynced = false;
 
   bool get isFullScreen =>
       videoDetailController.plPlayerController.isFullScreen.value;
@@ -181,9 +187,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoDetailController.queryVideoUrl(autoFullScreenFlag: true);
       if (videoDetailController.autoPlay) {
         plPlayerController = videoDetailController.plPlayerController;
-        plPlayerController!
-          ..addStatusLister(playerListener)
-          ..addPositionListener(positionListener);
+        _bindPlayerListeners();
       }
     });
   }
@@ -215,6 +219,237 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     videoDetailController.playedTime = position;
   }
 
+  void _bindPlayerListeners() {
+    plPlayerController ??= videoDetailController.plPlayerController;
+    final controller = plPlayerController;
+    if (controller == null) {
+      return;
+    }
+    controller
+      ..addStatusLister(playerListener)
+      ..addPositionListener(positionListener)
+      ..addSeekListener(_onPlayerSeek);
+  }
+
+  void _unbindPlayerListeners() {
+    final controller = plPlayerController;
+    if (controller == null) {
+      return;
+    }
+    controller
+      ..removeStatusLister(playerListener)
+      ..removePositionListener(positionListener)
+      ..removeSeekListener(_onPlayerSeek);
+  }
+
+  void _cancelPendingCompleted({required String reason}) {
+    final hadPending = _completedGateScheduler.cancel();
+    if (kDebugMode && (hadPending || reason != 'seek')) {
+      debugPrint('[VideoPage] cancel pending completed: reason=$reason');
+    }
+  }
+
+  void _onPlayerSeek(Duration _) {
+    _completedProgressSynced = false;
+    _cancelPendingCompleted(reason: 'seek');
+  }
+
+  void _syncCompletedProgress() {
+    if (_completedProgressSynced) {
+      return;
+    }
+    final controller = plPlayerController;
+    if (controller == null) {
+      return;
+    }
+    _completedProgressSynced = true;
+    controller.makeHeartBeat(
+      -1,
+      type: HeartBeatType.completed,
+      isManual: true,
+      aid: videoDetailController.aid,
+      bvid: videoDetailController.bvid,
+      cid: videoDetailController.cid.value,
+      epid: videoDetailController.isUgc ? null : videoDetailController.epId,
+      seasonId: videoDetailController.isUgc
+          ? null
+          : videoDetailController.seasonId,
+      pgcType: videoDetailController.isUgc
+          ? null
+          : videoDetailController.pgcType,
+      videoType: videoDetailController.videoType,
+    );
+  }
+
+  void _scheduleCompletedConsume() {
+    final controller = plPlayerController;
+    final player = controller?.videoPlayerController;
+    if (controller == null || player == null) {
+      return;
+    }
+    if (videoDetailController.isSwitchingVideo) {
+      return;
+    }
+
+    final remaining = CompletedGate.remaining(
+      total: player.state.duration,
+      position: player.state.position,
+    );
+    if (remaining == null) {
+      if (kDebugMode) {
+        debugPrint('[VideoPage] drop completed candidate: not near tail');
+      }
+      return;
+    }
+
+    if (remaining == Duration.zero) {
+      _completedGateScheduler.cancel();
+      _consumeCompletedPlayback();
+      return;
+    }
+
+    final completedAid = videoDetailController.aid;
+    final completedBvid = videoDetailController.bvid;
+    final completedCid = videoDetailController.cid.value;
+    final completedEpId = videoDetailController.epId;
+    final completedSeasonId = videoDetailController.seasonId;
+    final completedPgcType = videoDetailController.pgcType;
+    final completedVideoType = videoDetailController.videoType;
+    final completedSourceType = videoDetailController.sourceType;
+
+    final delay = CompletedGate.delay(
+      remaining,
+      minDelay: CompletedGate.videoMinDelay,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[VideoPage] pending completed consume: delay=${delay.inMilliseconds}ms',
+      );
+    }
+
+    _completedGateScheduler.schedule(delay, () {
+      if (!mounted || !isShowing) {
+        return;
+      }
+
+      final currentController = plPlayerController;
+      final currentPlayer = currentController?.videoPlayerController;
+      if (currentController == null ||
+          currentPlayer == null ||
+          !identical(currentController, controller) ||
+          !identical(currentPlayer, player)) {
+        return;
+      }
+
+      if (videoDetailController.isSwitchingVideo ||
+          videoDetailController.aid != completedAid ||
+          videoDetailController.bvid != completedBvid ||
+          videoDetailController.cid.value != completedCid ||
+          videoDetailController.epId != completedEpId ||
+          videoDetailController.seasonId != completedSeasonId ||
+          videoDetailController.pgcType != completedPgcType ||
+          videoDetailController.videoType != completedVideoType ||
+          videoDetailController.sourceType != completedSourceType ||
+          !currentController.playerStatus.isCompleted) {
+        return;
+      }
+
+      if (CompletedGate.remaining(
+            total: currentPlayer.state.duration,
+            position: currentPlayer.state.position,
+          ) ==
+          null) {
+        return;
+      }
+
+      _consumeCompletedPlayback();
+    });
+  }
+
+  void _consumeCompletedPlayback() {
+    final controller = plPlayerController;
+    if (controller == null) {
+      return;
+    }
+
+    _syncCompletedProgress();
+    bool exitFlag = true;
+    final skipCompletedRefresh = PlayerWindowService.isPlayerWindow;
+
+    /// 顺序播放 列表循环
+    if (shutdownTimerService.isWaiting) {
+      shutdownTimerService.handleWaiting();
+    } else {
+      switch (controller.playRepeat) {
+        case PlayRepeat.singleCycle:
+          exitFlag = false;
+          unawaited(controller.play(repeat: true));
+        case PlayRepeat.listOrder:
+        case PlayRepeat.listCycle:
+        case PlayRepeat.autoPlayRelated:
+          exitFlag = !introController.nextPlay();
+        case PlayRepeat.pause:
+      }
+    }
+
+    if (skipCompletedRefresh && exitFlag) {
+      videoDetailController.refreshPage();
+    }
+
+    if (exitFlag) {
+      if (autoExitFullscreen) {
+        controller.triggerFullScreen(status: false);
+        if (controller.controlsLock.value) {
+          controller.onLockControl(false);
+        }
+      } else {
+        if (controller.controlsLock.value &&
+            (!Platform.isAndroid || !AndroidHelper.isPipMode)) {
+          controller.onLockControl(false);
+        }
+      }
+    }
+  }
+
+  bool _persistCompletedProgressIfNeeded({required String reason}) {
+    final controller = plPlayerController;
+    final player = controller?.videoPlayerController;
+    if (controller == null ||
+        player == null ||
+        videoDetailController.isSwitchingVideo ||
+        !controller.playerStatus.isCompleted ||
+        CompletedGate.remaining(
+              total: player.state.duration,
+              position: player.state.position,
+            ) ==
+            null) {
+      return false;
+    }
+
+    final completedDuration = player.state.duration > Duration.zero
+        ? player.state.duration
+        : Duration(milliseconds: videoDetailController.data.timeLength ?? 0);
+    videoDetailController.playedTime = completedDuration;
+    _syncCompletedProgress();
+    final timeLength = videoDetailController.data.timeLength;
+    if (videoDetailController.sourceType != SourceType.normal &&
+        timeLength != null) {
+      videoDetailController.updateProgressForVideo(
+        videoAid: videoDetailController.aid,
+        videoBvid: videoDetailController.bvid,
+        videoCid: videoDetailController.cid.value,
+        progressSeconds: -1,
+        videoDuration: timeLength,
+      );
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '[VideoPage] persist completed progress before close: $reason',
+      );
+    }
+    return true;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final isResume = state == .resumed;
@@ -238,9 +473,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   Future<void>? playCallBack() {
     if (!isShowing) {
-      plPlayerController
-        ?..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
+      _bindPlayerListeners();
     }
     return PlPlayerController.instance?.play();
   }
@@ -251,6 +484,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     final isCompleted = status.isCompleted;
     final skipCompletedRefresh =
         isCompleted && PlayerWindowService.isPlayerWindow;
+    if (isPlaying) {
+      _completedProgressSynced = false;
+    }
     try {
       if (videoDetailController.scrollCtr.hasClients) {
         if (isPlaying) {
@@ -289,42 +525,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           return;
         }
       } catch (_) {}
-
-      bool exitFlag = true;
-
-      /// 顺序播放 列表循环
-      if (shutdownTimerService.isWaiting) {
-        shutdownTimerService.handleWaiting();
-      } else {
-        switch (plPlayerController!.playRepeat) {
-          case PlayRepeat.singleCycle:
-            exitFlag = false;
-            plPlayerController!.play(repeat: true);
-          case PlayRepeat.listOrder:
-          case PlayRepeat.listCycle:
-          case PlayRepeat.autoPlayRelated:
-            exitFlag = !introController.nextPlay();
-          case PlayRepeat.pause:
-        }
-      }
-
-      if (skipCompletedRefresh && exitFlag) {
-        videoDetailController.refreshPage();
-      }
-
-      if (exitFlag) {
-        if (autoExitFullscreen) {
-          plPlayerController!.triggerFullScreen(status: false);
-          if (plPlayerController!.controlsLock.value) {
-            plPlayerController!.onLockControl(false);
-          }
-        } else {
-          if (plPlayerController!.controlsLock.value &&
-              (!Platform.isAndroid || !AndroidHelper.isPipMode)) {
-            plPlayerController!.onLockControl(false);
-          }
-        }
-      }
+      _scheduleCompletedConsume();
     }
   }
 
@@ -352,9 +553,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     final plPlayerController = this.plPlayerController =
         videoDetailController.plPlayerController;
     videoDetailController.autoPlay = true;
-    plPlayerController
-      ..addStatusLister(playerListener)
-      ..addPositionListener(positionListener);
+    _bindPlayerListeners();
     if (plPlayerController.preInitPlayer) {
       if (plPlayerController.autoEnterFullScreen) {
         plPlayerController.triggerFullScreen();
@@ -399,9 +598,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ? Get.find<LocalIntroController>(tag: currentHeroTag)
         : null;
 
-    plPlayerController
-      ?..removeStatusLister(playerListener)
-      ..removePositionListener(positionListener);
+    final persistedCompleted = _persistCompletedProgressIfNeeded(
+      reason: 'dispose',
+    );
+    _cancelPendingCompleted(reason: 'dispose');
+    _unbindPlayerListeners();
 
     if (!videoDetailController.removeSafeArea) {
       showSystemBar();
@@ -411,7 +612,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
       videoPlayerServiceHandler?.clear(force: true);
       if (plPlayerController != null) {
-        videoDetailController.makeHeartBeat();
+        if (!persistedCompleted) {
+          videoDetailController.makeHeartBeat();
+        }
         PlPlayerController.updatePlayCount();
       } else {
         PlPlayerController.updatePlayCount();
@@ -474,6 +677,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void didPushNext() {
     super.didPushNext();
     isShowing = false;
+    final persistedCompleted = _persistCompletedProgressIfNeeded(
+      reason: 'route_push_next',
+    );
+    _cancelPendingCompleted(reason: 'route_push_next');
 
     removeObserverMobile(this);
 
@@ -493,11 +700,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           playerStatusBeforeNavigation ?? plPlayerController?.playerStatus.value
       ..brightness = plPlayerController?.brightness.value;
     if (plPlayerController != null) {
-      videoDetailController.makeHeartBeat();
-      plPlayerController!
-        ..pause()
-        ..removeStatusLister(playerListener)
-        ..removePositionListener(positionListener);
+      if (!persistedCompleted) {
+        videoDetailController.makeHeartBeat();
+      }
+      plPlayerController!.pause();
+      _unbindPlayerListeners();
       // 状态上报统一由 PlPlayerController 的流监听完成。
       // 这里不再手动 onStatusChange，避免与底层流回调重复写状态。
     }
@@ -568,9 +775,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         );
       }
       if (!mounted || !isShowing) return;
-      plPlayerController
-        ?..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
+      _bindPlayerListeners();
     }();
 
     super.didPopNext();
@@ -988,12 +1193,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                                             .videoPlayerController!
                                             .state
                                             .completed) {
-                                          await plPlayerController!
-                                              .videoPlayerController!
-                                              .seek(Duration.zero);
-                                          plPlayerController!
-                                              .videoPlayerController!
-                                              .play();
+                                          await plPlayerController!.play(
+                                            repeat: true,
+                                          );
                                         } else {
                                           plPlayerController!
                                               .videoPlayerController!

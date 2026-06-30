@@ -98,21 +98,34 @@ class PlayerWindowArguments extends WindowArguments {
       return null;
     }
 
+    int? readInt(String key) {
+      final value = json[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    String? readString(String key) {
+      final value = json[key];
+      return value?.toString();
+    }
+
     return PlayerWindowArguments(
-      aid: json['aid'] as int?,
-      bvid: json['bvid'] as String?,
-      cid: json['cid'] as int?,
-      seasonId: json['seasonId'] as int?,
-      epId: json['epId'] as int?,
-      pgcType: json['pgcType'] as int?,
-      cover: json['cover'] as String?,
-      title: json['title'] as String?,
-      progress: json['progress'] as int?,
-      progressAid: json['progressAid'] as int?,
-      progressBvid: json['progressBvid'] as String?,
-      progressCid: json['progressCid'] as int?,
+      aid: readInt('aid'),
+      bvid: readString('bvid'),
+      cid: readInt('cid'),
+      seasonId: readInt('seasonId'),
+      epId: readInt('epId'),
+      pgcType: readInt('pgcType'),
+      cover: (json['cover'] ?? json['pic'])?.toString(),
+      title: readString('title'),
+      progress: readInt('progress'),
+      progressAid: readInt('progressAid'),
+      progressBvid: readString('progressBvid'),
+      progressCid: readInt('progressCid'),
       videoType: videoTypeStr,
-      roomId: json['roomId'] as int?,
+      roomId: readInt('roomId'),
       extraArguments: convertMap(json['extraArguments']),
       settings: convertMap(json['settings']),
     );

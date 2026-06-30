@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/debug_log_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/playback/completed_gate.dart';
 import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
@@ -117,10 +118,13 @@ class AudioController extends GetxController
   BiliDownloadEntryInfo? currentLocalEntry;
   static const _switchProtectionWarmupThreshold = Duration(seconds: 6);
   int _switchGeneration = 0;
+  int _switchProtectionToken = 0;
   bool _pendingSwitchProtection = false;
   bool _switchProtectionWarmupStarted = false;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
+  final CompletedGateScheduler _completedGateScheduler =
+      CompletedGateScheduler();
   bool get _isAppInForeground =>
       SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
@@ -248,6 +252,10 @@ class AudioController extends GetxController
   }
 
   Future<void>? onSeek(Duration duration) {
+    _cancelPendingCompleted(reason: 'seek');
+    if (_pendingSwitchProtection && !_isSwitchingAudio) {
+      unawaited(_finishSwitchProtection(success: false, reason: 'seek'));
+    }
     return player?.seek(duration);
   }
 
@@ -335,7 +343,42 @@ class AudioController extends GetxController
     }
   }
 
+  void _cancelPendingCompleted({required String reason}) {
+    final hadPending = _completedGateScheduler.cancel();
+    if (hadPending || reason != 'seek') {
+      DebugLogService.log(
+        'audio.completed',
+        'cancel pending completed',
+        extra: {
+          'reason': reason,
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+        },
+      );
+    }
+  }
+
+  bool _isSameCompletedPlayback({
+    required Player currentPlayer,
+    required int switchGeneration,
+    required int currentOid,
+    required Int64? currentSubId,
+    required int? currentIndex,
+    required DetailItem? currentItem,
+  }) {
+    return !isClosed &&
+        !_isSwitchingAudio &&
+        _switchGeneration == switchGeneration &&
+        identical(player, currentPlayer) &&
+        oid.toInt() == currentOid &&
+        subId.firstOrNull == currentSubId &&
+        index == currentIndex &&
+        identical(audioItem.value, currentItem) &&
+        currentPlayer.state.completed;
+  }
+
   int _beginSwitch() {
+    _cancelPendingCompleted(reason: 'switch');
     final generation = ++_switchGeneration;
     DebugLogService.log(
       'audio.switch',
@@ -464,11 +507,26 @@ class AudioController extends GetxController
     if (!_isInBackground) {
       return;
     }
+    final protectionToken = ++_switchProtectionToken;
     _pendingSwitchProtection = true;
     await PlaybackForegroundService.start(
       title: 'PiliPlus 后台播放',
       text: text ?? '正在准备下一条音频…',
     );
+    if (protectionToken != _switchProtectionToken) {
+      if (!_pendingSwitchProtection && PlaybackForegroundService.isRunning) {
+        await PlaybackForegroundService.stop();
+      }
+      return;
+    }
+    if (!_pendingSwitchProtection || !_isInBackground) {
+      _pendingSwitchProtection = false;
+      _switchProtectionWarmupStarted = false;
+      if (PlaybackForegroundService.isRunning) {
+        await PlaybackForegroundService.stop();
+      }
+      return;
+    }
     DebugLogService.log(
       'audio.switch',
       'ensure switch protection',
@@ -483,9 +541,10 @@ class AudioController extends GetxController
     required bool success,
     required String reason,
   }) async {
+    _switchProtectionToken += 1;
     _pendingSwitchProtection = false;
     _switchProtectionWarmupStarted = false;
-    if (!_isAppInForeground && PlaybackForegroundService.isRunning) {
+    if (PlaybackForegroundService.isRunning) {
       await PlaybackForegroundService.update(
         title: 'PiliPlus 后台播放',
         text: success ? '切换完成' : '切换失败',
@@ -900,6 +959,122 @@ class AudioController extends GetxController
       );
       return;
     }
+    final currentPlayer = player;
+    if (currentPlayer == null) {
+      return;
+    }
+
+    final remaining = CompletedGate.remaining(
+      total: currentPlayer.state.duration,
+      position: currentPlayer.state.position,
+    );
+    if (remaining == null) {
+      DebugLogService.log(
+        'audio.completed',
+        'drop completed candidate',
+        extra: {
+          'oid': oid.toString(),
+          'subId': subId.firstOrNull?.toString(),
+          'position': currentPlayer.state.position.inMilliseconds,
+          'duration': currentPlayer.state.duration.inMilliseconds,
+        },
+      );
+      return;
+    }
+
+    if (remaining == Duration.zero) {
+      _completedGateScheduler.cancel();
+      _consumePlaybackCompleted();
+      return;
+    }
+
+    final completedOid = oid.toInt();
+    final completedSubId = subId.firstOrNull;
+    final completedIndex = index;
+    final completedItem = audioItem.value;
+    final completedSwitchGeneration = _switchGeneration;
+
+    final delay = CompletedGate.delay(
+      remaining,
+      minDelay: CompletedGate.audioMinDelay,
+    );
+    if (_isInBackground && _hasNextSwitchTarget) {
+      unawaited(
+        _ensureSwitchProtection(
+          reason: 'completed_gate',
+          text: '正在准备下一条音频…',
+        ),
+      );
+    }
+    DebugLogService.log(
+      'audio.completed',
+      'schedule completed gate',
+      extra: {
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+        'delayMs': delay.inMilliseconds,
+        'remainingMs': remaining.inMilliseconds,
+        'switchGeneration': completedSwitchGeneration,
+        'playMode': playMode.value.name,
+      },
+    );
+
+    _completedGateScheduler.schedule(delay, () {
+      final currentPlayer = player;
+      if (currentPlayer == null ||
+          !_isSameCompletedPlayback(
+            currentPlayer: currentPlayer,
+            switchGeneration: completedSwitchGeneration,
+            currentOid: completedOid,
+            currentSubId: completedSubId,
+            currentIndex: completedIndex,
+            currentItem: completedItem,
+          ) ||
+          CompletedGate.remaining(
+                total: currentPlayer.state.duration,
+                position: currentPlayer.state.position,
+              ) ==
+              null) {
+        return;
+      }
+
+      _consumePlaybackCompleted();
+    });
+  }
+
+  bool _persistCompletedProgressIfNeeded({required String reason}) {
+    final currentPlayer = player;
+    if (_isSwitchingAudio ||
+        currentPlayer == null ||
+        !currentPlayer.state.completed ||
+        CompletedGate.remaining(
+              total: currentPlayer.state.duration,
+              position: currentPlayer.state.position,
+            ) ==
+            null) {
+      return false;
+    }
+
+    final completedDuration = currentPlayer.state.duration > Duration.zero
+        ? currentPlayer.state.duration
+        : duration.value;
+    _syncCompletedProgress();
+    if (_shouldSyncVideoDetailMetadata && completedDuration > Duration.zero) {
+      _videoDetailController?.playedTime = completedDuration;
+    }
+    DebugLogService.log(
+      'audio.completed',
+      'persist completed progress before close',
+      extra: {
+        'reason': reason,
+        'oid': oid.toString(),
+        'subId': subId.firstOrNull?.toString(),
+      },
+    );
+    return true;
+  }
+
+  void _consumePlaybackCompleted() {
     DebugLogService.log(
       'audio.completed',
       'handle playback completed',
@@ -928,24 +1103,30 @@ class AudioController extends GetxController
         case PlayRepeat.pause:
           break;
         case PlayRepeat.listOrder:
-          playNext(nextPart: true);
+          playNext(nextPart: true, skipSaveProgress: true);
           break;
         case PlayRepeat.singleCycle:
           _enqueueSwitch(() async {
             if (player case final currentPlayer?) {
-              await currentPlayer.seek(Duration.zero);
+              final seekFuture = onSeek(Duration.zero);
+              if (seekFuture != null) {
+                await seekFuture;
+              }
               await currentPlayer.play();
             }
           });
           break;
         case PlayRepeat.listCycle:
-          if (playNext(nextPart: true)) {
+          if (playNext(nextPart: true, skipSaveProgress: true)) {
           } else if (index != null && index != 0 && playlist != null) {
-            playIndex(0);
+            playIndex(0, skipSaveProgress: true);
           } else {
             _enqueueSwitch(() async {
               if (player case final currentPlayer?) {
-                await currentPlayer.seek(Duration.zero);
+                final seekFuture = onSeek(Duration.zero);
+                if (seekFuture != null) {
+                  await seekFuture;
+                }
                 await currentPlayer.play();
               }
             });
@@ -1214,7 +1395,7 @@ class AudioController extends GetxController
   void playOrPause() {
     if (player case final player?) {
       if ((duration.value - position.value).inMilliseconds < 50) {
-        player.seek(Duration.zero).whenComplete(player.play);
+        onSeek(Duration.zero)?.whenComplete(player.play);
       } else {
         player.playOrPause();
       }
@@ -1238,7 +1419,7 @@ class AudioController extends GetxController
     return false;
   }
 
-  bool playNext({bool nextPart = false}) {
+  bool playNext({bool nextPart = false, bool skipSaveProgress = false}) {
     if (nextPart) {
       if (audioItem.value case final currentItem?) {
         final parts = currentItem.parts;
@@ -1251,7 +1432,10 @@ class AudioController extends GetxController
                 reason: 'play_next_part',
                 text: '正在切换下一段音频…',
               );
-              await _playNextPartInternal(nextIndex);
+              await _playNextPartInternal(
+                nextIndex,
+                skipSaveProgress: skipSaveProgress,
+              );
             });
             return true;
           }
@@ -1266,7 +1450,7 @@ class AudioController extends GetxController
             reason: 'play_next',
             text: '正在切换下一条音频…',
           );
-          await _playIndexInternal(next, skipSaveProgress: false);
+          await _playIndexInternal(next, skipSaveProgress: skipSaveProgress);
         });
         return true;
       }
@@ -1294,7 +1478,10 @@ class AudioController extends GetxController
     );
   }
 
-  Future<void> _playNextPartInternal(int nextPartIndex) async {
+  Future<void> _playNextPartInternal(
+    int nextPartIndex, {
+    bool skipSaveProgress = false,
+  }) async {
     final currentItem = audioItem.value;
     if (currentItem == null) {
       return;
@@ -1304,7 +1491,9 @@ class AudioController extends GetxController
       return;
     }
 
-    _saveCurrentProgress();
+    if (!skipSaveProgress) {
+      _saveCurrentProgress();
+    }
     final generation = _beginSwitch();
     final nextPart = parts[nextPartIndex];
     DebugLogService.log(
@@ -1670,9 +1859,12 @@ class AudioController extends GetxController
   @override
   void onClose() {
     // 退出听视频时保存最后的进度
-    if (!_isSwitchingAudio) {
+    final persistedCompleted = _persistCompletedProgressIfNeeded(
+      reason: 'controller_closed',
+    );
+    if (!persistedCompleted && !_isSwitchingAudio) {
       _saveCurrentProgress();
-    } else {
+    } else if (!persistedCompleted) {
       DebugLogService.log(
         'audio.progress',
         'skip save progress on close while switching',
@@ -1682,6 +1874,8 @@ class AudioController extends GetxController
         },
       );
     }
+
+    _cancelPendingCompleted(reason: 'controller_closed');
 
     if (_pendingSwitchProtection) {
       unawaited(

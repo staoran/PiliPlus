@@ -168,7 +168,7 @@ class VideoDetailController extends GetxController
     required String reason,
   }) async {
     _pendingVideoSwitchProtection = false;
-    if (!isAppInForeground && PlaybackForegroundService.isRunning) {
+    if (PlaybackForegroundService.isRunning) {
       await PlaybackForegroundService.update(
         title: 'PiliPlus 后台播放',
         text: success ? '视频切换完成' : '视频切换失败',

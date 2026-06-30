@@ -114,35 +114,10 @@ class PlayerWindowManager {
       );
     }
 
-    // Handle videoType being either a String or VideoType enum
-    final rawVideoType = json['videoType'];
-    String videoTypeStr;
-    if (rawVideoType is String) {
-      videoTypeStr = rawVideoType;
-    } else if (rawVideoType != null) {
-      videoTypeStr = rawVideoType.toString().split('.').last;
-    } else {
-      videoTypeStr = 'ugc';
-    }
-
-    return PlayerWindowArguments(
-      aid: json['aid'] as int?,
-      bvid: json['bvid'] as String?,
-      cid: json['cid'] as int?,
-      seasonId: json['seasonId'] as int?,
-      epId: json['epId'] as int?,
-      pgcType: json['pgcType'] as int?,
-      cover: (json['cover'] ?? json['pic']) as String?,
-      title: json['title'] as String?,
-      progress: json['progress'] as int?,
-      progressAid: json['progressAid'] as int?,
-      progressBvid: json['progressBvid'] as String?,
-      progressCid: json['progressCid'] as int?,
-      videoType: videoTypeStr,
-      roomId: json['roomId'] as int?,
-      extraArguments: extraArgs.isNotEmpty ? extraArgs : null,
-      settings: json['settings'] as Map<String, dynamic>?,
-    );
+    return PlayerWindowArguments.fromJson({
+      ...json,
+      'extraArguments': extraArgs.isNotEmpty ? extraArgs : null,
+    });
   }
 
   /// 在主窗口打开一个路由（播放器窗口向主窗口请求导航）

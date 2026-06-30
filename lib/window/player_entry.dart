@@ -12,6 +12,8 @@ import 'package:PiliPlus/pages/live_room/view.dart';
 import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
+import 'package:PiliPlus/services/multi_window/player_window_identity.dart';
+import 'package:PiliPlus/services/multi_window/window_arguments.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:collection/collection.dart';
@@ -181,6 +183,18 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   Map<String, dynamic> _buildVideoArguments(Map args) {
+    final playerArgs = PlayerWindowArguments.fromJson(
+      Map<String, dynamic>.from(
+        args.map((key, value) => MapEntry(key.toString(), value)),
+      ),
+    );
+    final aid = playerArgs.aid;
+    final cid = playerArgs.cid;
+    final seasonId = playerArgs.seasonId;
+    final epId = playerArgs.epId;
+    final pgcType = playerArgs.pgcType;
+    final bvid = playerArgs.bvid;
+
     final videoTypeArg = args['videoType'];
     VideoType videoType = VideoType.ugc;
     if (videoTypeArg is VideoType) {
@@ -238,18 +252,30 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
     return {
       'videoType': videoType,
-      'aid': args['aid'],
-      'bvid': args['bvid'],
-      'cid': args['cid'],
-      if (args['seasonId'] != null) 'seasonId': args['seasonId'],
-      if (args['epId'] != null) 'epId': args['epId'],
-      if (args['pgcType'] != null) 'pgcType': args['pgcType'],
+      'aid': aid ?? args['aid'],
+      'bvid': bvid,
+      'cid': cid ?? args['cid'],
+      if (seasonId != null || args['seasonId'] != null)
+        'seasonId': seasonId ?? args['seasonId'],
+      if (epId != null || args['epId'] != null) 'epId': epId ?? args['epId'],
+      if (pgcType != null || args['pgcType'] != null)
+        'pgcType': pgcType ?? args['pgcType'],
       if (args['cover'] != null) 'pic': args['cover'],
-      'heroTag': 'playerWindow_${args['bvid'] ?? args['aid']}',
-      if (args['progress'] != null) 'progress': args['progress'],
-      if (args['progressAid'] != null) 'progressAid': args['progressAid'],
-      if (args['progressBvid'] != null) 'progressBvid': args['progressBvid'],
-      if (args['progressCid'] != null) 'progressCid': args['progressCid'],
+      'heroTag': PlayerWindowIdentity.heroTag(
+        aid: aid,
+        bvid: bvid,
+        cid: cid,
+        seasonId: seasonId,
+        epId: epId,
+        pgcType: pgcType,
+        videoType: videoType,
+        sourceType: sourceType,
+      ),
+      if (playerArgs.progress != null) 'progress': playerArgs.progress,
+      if (playerArgs.progressAid != null) 'progressAid': playerArgs.progressAid,
+      if (playerArgs.progressBvid != null)
+        'progressBvid': playerArgs.progressBvid,
+      if (playerArgs.progressCid != null) 'progressCid': playerArgs.progressCid,
       'sourceType': ?sourceType,
       ...extraArgs,
     };
@@ -592,7 +618,16 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
     return currentArgs['aid'] == nextArgs['aid'] &&
         currentArgs['bvid'] == nextArgs['bvid'] &&
-        currentArgs['cid'] == nextArgs['cid'];
+        currentArgs['cid'] == nextArgs['cid'] &&
+        currentArgs['epId'] == nextArgs['epId'] &&
+        currentArgs['seasonId'] == nextArgs['seasonId'] &&
+        currentArgs['pgcType'] == nextArgs['pgcType'] &&
+        currentArgs['videoType'] == nextArgs['videoType'] &&
+        currentArgs['sourceType'] == nextArgs['sourceType'] &&
+        currentArgs['progress'] == nextArgs['progress'] &&
+        currentArgs['progressAid'] == nextArgs['progressAid'] &&
+        currentArgs['progressBvid'] == nextArgs['progressBvid'] &&
+        currentArgs['progressCid'] == nextArgs['progressCid'];
   }
 
   bool _isSameLiveRoute(Map<String, dynamic> nextArgs) {
@@ -838,11 +873,11 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 /// 播放器窗口路由观察者
 /// 拦截非播放页面的路由，在主窗口中打开
 class _PlayerWindowRouteObserver extends NavigatorObserver {
-  static const _playerRoutes = ['/videoV', '/live', '/bangumi', '/audioPlayer'];
+  static const _playerRoutes = {'/videoV', '/liveRoom'};
 
   bool _isPlayerRoute(String? routeName) {
     if (routeName == null) return false;
-    return _playerRoutes.any((r) => routeName.startsWith(r));
+    return _playerRoutes.contains(routeName);
   }
 
   @override

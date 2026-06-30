@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer, unawaited;
+import 'dart:async' show Completer, StreamSubscription, Timer, unawaited;
 import 'dart:convert' show ascii;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
@@ -100,6 +100,7 @@ class PlPlayerController with BlockConfigMixin {
 
   /// 视频时长
   final Rx<Duration> duration = Rx(Duration.zero);
+  static const Duration _seekDurationWaitTimeout = Duration(milliseconds: 500);
 
   /// 视频缓冲
   final Rx<Duration> buffered = Rx(Duration.zero);
@@ -172,6 +173,9 @@ class PlPlayerController with BlockConfigMixin {
   Timer? _timerForSeek;
   Timer? _timerForShowingVolume;
   StreamSubscription<Duration>? _subForSeek;
+  Completer<void>? _pendingSeekCompleter;
+  Timer? _pendingSeekTimer;
+  int _seekGeneration = 0;
 
   Box setting = GStorage.setting;
 
@@ -620,18 +624,8 @@ class PlPlayerController with BlockConfigMixin {
   /// true 期间 stream.error 抛出的事件属于媒体切换噪音，应静默丢弃
   bool _isSwitchingMedia = false;
 
-  _PlaybackIdentitySnapshot get _playbackIdentitySnapshot =>
-      _PlaybackIdentitySnapshot(
-        aid: _aid,
-        bvid: _bvid,
-        cid: cid,
-        epid: _epid,
-        seasonId: _seasonId,
-        pgcType: _pgcType,
-        videoType: _videoType,
-      );
-
   int _beginMediaSwitch() {
+    _cancelSubForSeek();
     _isSwitchingMedia = true;
     return ++_mediaSwitchGeneration;
   }
@@ -1038,6 +1032,7 @@ class PlPlayerController with BlockConfigMixin {
       );
     }
 
+    _cancelSubForSeek();
     _removeListeners();
     _videoPlayerController = null;
     _videoController = null;
@@ -1118,6 +1113,7 @@ class PlPlayerController with BlockConfigMixin {
 
   List<StreamSubscription>? _subscriptions;
   final Set<ValueChanged<Duration>> _positionListeners = {};
+  final Set<ValueChanged<Duration>> _seekListeners = {};
   final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
 
   /// 播放事件监听
@@ -1157,26 +1153,10 @@ class PlPlayerController with BlockConfigMixin {
       }),
       stream.completed.listen((event) {
         if (!event || _isSwitchingMedia) return;
-        final completedIdentity = _playbackIdentitySnapshot;
-        final completedPosition = position;
-        final completedDuration = duration.value;
         if (kDebugMode) {
           debugPrint('PlPlayerController: 播放完成，准备切换下一个');
         }
         playerStatus.value = PlayerStatus.completed;
-        makeHeartBeat(
-          completedPosition.inSeconds,
-          type: HeartBeatType.completed,
-          aid: completedIdentity.aid,
-          bvid: completedIdentity.bvid,
-          cid: completedIdentity.cid,
-          epid: completedIdentity.epid,
-          seasonId: completedIdentity.seasonId,
-          pgcType: completedIdentity.pgcType,
-          videoType: completedIdentity.videoType,
-          completedPosition: completedPosition,
-          completedDuration: completedDuration,
-        );
 
         /// 触发回调事件
         for (final element in _statusListeners) {
@@ -1315,10 +1295,21 @@ class PlPlayerController with BlockConfigMixin {
     _subscriptions = null;
   }
 
-  void _cancelSubForSeek() {
-    if (_subForSeek != null) {
-      _subForSeek!.cancel();
-      _subForSeek = null;
+  void _cancelSubForSeek({
+    bool completePending = true,
+    bool invalidateSeek = true,
+  }) {
+    if (invalidateSeek) {
+      _seekGeneration += 1;
+    }
+    _subForSeek?.cancel();
+    _subForSeek = null;
+    _pendingSeekTimer?.cancel();
+    _pendingSeekTimer = null;
+    final completer = _pendingSeekCompleter;
+    _pendingSeekCompleter = null;
+    if (completePending && completer != null && !completer.isCompleted) {
+      completer.complete();
     }
   }
 
@@ -1333,32 +1324,104 @@ class PlPlayerController with BlockConfigMixin {
     if (position < Duration.zero) {
       position = Duration.zero;
     }
+    final targetPlayer = _videoPlayerController;
+    if (targetPlayer == null) {
+      return;
+    }
+    final completedSeekStatus = playerStatus.isCompleted
+        ? targetPlayer.state.playing
+              ? PlayerStatus.playing
+              : PlayerStatus.paused
+        : null;
+    if (completedSeekStatus != null) {
+      playerStatus.value = completedSeekStatus;
+    }
+    final seekGeneration = ++_seekGeneration;
+    bool isCurrentSeek() =>
+        seekGeneration == _seekGeneration &&
+        identical(_videoPlayerController, targetPlayer);
+    for (final listener in _seekListeners) {
+      listener(position);
+    }
     this.position = position;
     updatePositionSecond();
     _heartDuration = position.inSeconds;
+    var completedSeekStatusPublished = false;
 
-    Future<void> seek() async {
+    void publishCompletedSeekStatus() {
+      if (completedSeekStatus == null || completedSeekStatusPublished) {
+        return;
+      }
+      completedSeekStatusPublished = true;
+      videoPlayerServiceHandler?.onStatusChange(
+        completedSeekStatus,
+        isBuffering.value,
+        isLive,
+      );
+      for (final listener in _statusListeners) {
+        listener(completedSeekStatus);
+      }
+    }
+
+    Future<bool> seek() async {
+      if (!isCurrentSeek()) {
+        return false;
+      }
       if (isSeek) {
         /// 拖动进度条调节时，不等待第一帧，防止抖动
-        await _videoPlayerController?.stream.buffer.first;
+        await targetPlayer.stream.buffer.first.timeout(
+          _seekDurationWaitTimeout,
+          onTimeout: () => targetPlayer.state.buffer,
+        );
+        if (!isCurrentSeek()) {
+          return false;
+        }
+      }
+      if (!isCurrentSeek()) {
+        return false;
       }
       danmakuController?.clear();
       try {
-        await _videoPlayerController?.seek(position);
+        if (!isCurrentSeek()) {
+          return false;
+        }
+        await targetPlayer.seek(position);
+        return true;
       } catch (e) {
         if (kDebugMode) debugPrint('seek failed: $e');
+        return false;
       }
     }
 
     if (duration.value != Duration.zero) {
-      seek();
+      if (await seek()) {
+        publishCompletedSeekStatus();
+      }
     } else {
       // if (kDebugMode) debugPrint('seek duration else');
-      _subForSeek?.cancel();
-      _subForSeek = duration.listen((_) {
-        seek();
-        _cancelSubForSeek();
+      _cancelSubForSeek(invalidateSeek: false);
+      final completer = Completer<void>();
+      _pendingSeekCompleter = completer;
+      _pendingSeekTimer = Timer(_seekDurationWaitTimeout, () {
+        if (isCurrentSeek() && !completer.isCompleted) {
+          completer.complete();
+        }
       });
+      _subForSeek = duration.listen((value) {
+        if (isCurrentSeek() &&
+            value != Duration.zero &&
+            !completer.isCompleted) {
+          completer.complete();
+        }
+      });
+      await completer.future;
+      if (!identical(_pendingSeekCompleter, completer) || !isCurrentSeek()) {
+        return;
+      }
+      _cancelSubForSeek(completePending: false, invalidateSeek: false);
+      if (await seek()) {
+        publishCompletedSeekStatus();
+      }
     }
   }
 
@@ -1573,8 +1636,7 @@ class PlPlayerController with BlockConfigMixin {
   // 双击播放、暂停
   Future<void> onDoubleTapCenter() async {
     if (!isLive && _isCompleted) {
-      await videoPlayerController!.seek(Duration.zero);
-      videoPlayerController!.play();
+      await play(repeat: true);
     } else {
       videoPlayerController!.playOrPause();
     }
@@ -1733,6 +1795,14 @@ class PlPlayerController with BlockConfigMixin {
   void removePositionListener(ValueChanged<Duration> listener) =>
       _positionListeners.remove(listener);
 
+  void addSeekListener(ValueChanged<Duration> listener) {
+    if (_playerCount == 0) return;
+    _seekListeners.add(listener);
+  }
+
+  void removeSeekListener(ValueChanged<Duration> listener) =>
+      _seekListeners.remove(listener);
+
   void addStatusLister(ValueChanged<PlayerStatus> listener) {
     if (_playerCount == 0) return;
     _statusListeners.add(listener);
@@ -1880,8 +1950,10 @@ class PlPlayerController with BlockConfigMixin {
       windowManager.setAlwaysOnTop(false);
     }
 
+    _cancelSubForSeek();
     _removeListeners();
     _positionListeners.clear();
+    _seekListeners.clear();
     _statusListeners.clear();
     if (playerStatus.isPlaying) {
       WakelockPlus.disable();
@@ -2038,24 +2110,4 @@ class PlPlayerController with BlockConfigMixin {
     }
     Get.back();
   }
-}
-
-class _PlaybackIdentitySnapshot {
-  const _PlaybackIdentitySnapshot({
-    required this.aid,
-    required this.bvid,
-    required this.cid,
-    required this.epid,
-    required this.seasonId,
-    required this.pgcType,
-    required this.videoType,
-  });
-
-  final dynamic aid;
-  final dynamic bvid;
-  final dynamic cid;
-  final dynamic epid;
-  final dynamic seasonId;
-  final dynamic pgcType;
-  final VideoType videoType;
 }
