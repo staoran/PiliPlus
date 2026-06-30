@@ -121,6 +121,7 @@ class AudioController extends GetxController
   int _switchProtectionToken = 0;
   bool _pendingSwitchProtection = false;
   bool _switchProtectionWarmupStarted = false;
+  bool _audioSwitchOpenReady = false;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
   final CompletedGateScheduler _completedGateScheduler =
@@ -140,6 +141,20 @@ class AudioController extends GetxController
   int get _currentSubId => (subId.firstOrNull ?? oid).toInt();
 
   String _progressKey(int aid, int subId) => '$aid:$subId';
+
+  Duration get syncPosition {
+    final currentPlayer = player;
+    if (currentPlayer != null) {
+      final rawPosition = _rawAudioPosition(currentPlayer);
+      if (rawPosition > Duration.zero) {
+        return rawPosition;
+      }
+    }
+    if (_start case final start? when start > Duration.zero) {
+      return start;
+    }
+    return position.value;
+  }
 
   bool _isSinglePart(DetailItem item) => item.parts.length <= 1;
 
@@ -377,6 +392,16 @@ class AudioController extends GetxController
         currentPlayer.state.completed;
   }
 
+  Duration _rawAudioPosition(Player currentPlayer) {
+    final statePosition = currentPlayer.state.position;
+    return statePosition > Duration.zero ? statePosition : position.value;
+  }
+
+  Duration _rawAudioDuration(Player currentPlayer) {
+    final stateDuration = currentPlayer.state.duration;
+    return stateDuration > Duration.zero ? stateDuration : duration.value;
+  }
+
   int _beginSwitch() {
     _cancelPendingCompleted(reason: 'switch');
     final generation = ++_switchGeneration;
@@ -411,6 +436,7 @@ class AudioController extends GetxController
   void _clearAudioSwitching({required String reason}) {
     if (!_isSwitchingAudio) return;
     _isSwitchingAudio = false;
+    _audioSwitchOpenReady = false;
     DebugLogService.log(
       'audio.switch',
       'clear audio switching',
@@ -429,10 +455,26 @@ class AudioController extends GetxController
     });
   }
 
+  void _settleAudioSwitchingOnValidState({
+    Duration? position,
+    Duration? duration,
+  }) {
+    if (!_isSwitchingAudio) return;
+    final hasValidPosition = position != null && position > Duration.zero;
+    final hasValidDuration = duration != null && duration > Duration.zero;
+    if (!hasValidPosition && !hasValidDuration) return;
+    _clearAudioSwitching(
+      reason: hasValidPosition
+          ? 'first_valid_position'
+          : 'first_valid_duration',
+    );
+  }
+
   void _resetPlaybackProgressForSwitch() {
     position.value = Duration.zero;
     duration.value = Duration.zero;
     _start = null;
+    _audioSwitchOpenReady = false;
     videoPlayerServiceHandler?.onPositionChange(Duration.zero);
     DebugLogService.log(
       'audio.switch',
@@ -822,12 +864,17 @@ class AudioController extends GetxController
       await player!.play();
       player!.setRate(speed);
       if (openGeneration == _switchGeneration) {
-        final stateDuration = player!.state.duration;
+        _audioSwitchOpenReady = true;
+        final currentPlayer = player!;
+        final statePosition = _rawAudioPosition(currentPlayer);
+        final stateDuration = _rawAudioDuration(currentPlayer);
         if (stateDuration > Duration.zero) {
           duration.value = stateDuration;
         }
         if (_start case final start? when start > Duration.zero) {
           position.value = start;
+        } else if (statePosition > Duration.zero) {
+          position.value = statePosition;
         }
         _start = null;
         _scheduleClearAudioSwitching(openGeneration);
@@ -895,19 +942,24 @@ class AudioController extends GetxController
     _subscriptions = [
       stream.position.listen((position) {
         if (isDragging) return;
-        if (_isSwitchingAudio) return;
-        if (position.inSeconds != this.position.value.inSeconds) {
+        if (_isSwitchingAudio && !_audioSwitchOpenReady) return;
+        final shouldUpdatePosition =
+            position.inSeconds != this.position.value.inSeconds ||
+            (this.position.value == Duration.zero && position > Duration.zero);
+        if (shouldUpdatePosition) {
           this.position.value = position;
           if (_shouldSyncVideoDetailMetadata) {
             _videoDetailController?.playedTime = position;
           }
           videoPlayerServiceHandler?.onPositionChange(position);
         }
+        _settleAudioSwitchingOnValidState(position: position);
         _maybeStartSwitchProtectionWarmup(position);
       }),
       stream.duration.listen((duration) {
-        if (_isSwitchingAudio) return;
+        if (_isSwitchingAudio && !_audioSwitchOpenReady) return;
         this.duration.value = duration;
+        _settleAudioSwitchingOnValidState(duration: duration);
       }),
       stream.playing.listen((playing) {
         final PlayerStatus playerStatus;
@@ -1676,15 +1728,18 @@ class AudioController extends GetxController
       return;
     }
 
+    final currentPlayer = player;
+    if (currentPlayer == null) return;
+
     try {
-      final currentPosition = position.value;
+      final currentPosition = _rawAudioPosition(currentPlayer);
       if (currentPosition == Duration.zero) return;
 
       // 获取听视频当前播放的视频信息
       final currentOid = oid.toInt();
       final currentCid = _currentSubId;
       final currentBvid = IdUtils.av2bv(currentOid);
-      final currentDuration = duration.value.inSeconds;
+      final currentDuration = _rawAudioDuration(currentPlayer).inSeconds;
       final progressSeconds = currentPosition.inSeconds;
 
       if (kDebugMode) {
@@ -1735,10 +1790,12 @@ class AudioController extends GetxController
     if (_videoDetailController == null) return;
 
     try {
+      final currentPlayer = player;
+      if (currentPlayer == null) return;
       final currentOid = oid.toInt();
       final currentCid = _currentSubId;
       final currentBvid = IdUtils.av2bv(currentOid);
-      final currentDuration = duration.value.inSeconds;
+      final currentDuration = _rawAudioDuration(currentPlayer).inSeconds;
 
       if (currentDuration <= 0) {
         return;
