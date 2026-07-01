@@ -126,6 +126,7 @@ class AudioController extends GetxController
   bool _pendingSwitchProtection = false;
   bool _switchProtectionWarmupStarted = false;
   bool _audioSwitchOpenReady = false;
+  int? _audioSwitchZeroPositionGuardGeneration;
   bool _isInBackground = false;
   bool _isSwitchingAudio = false;
   final CompletedGateScheduler _completedGateScheduler =
@@ -460,6 +461,21 @@ class AudioController extends GetxController
     });
   }
 
+  void _armAudioSwitchZeroPositionGuard(int generation) {
+    _audioSwitchZeroPositionGuardGeneration = generation;
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (_audioSwitchZeroPositionGuardGeneration == generation) {
+        _audioSwitchZeroPositionGuardGeneration = null;
+      }
+    });
+  }
+
+  bool _shouldIgnoreAudioSwitchZeroPosition(Duration position) {
+    return position == Duration.zero &&
+        this.position.value > Duration.zero &&
+        _audioSwitchZeroPositionGuardGeneration == _switchGeneration;
+  }
+
   void _settleAudioSwitchingOnValidState({
     Duration? position,
     Duration? duration,
@@ -480,6 +496,7 @@ class AudioController extends GetxController
     duration.value = Duration.zero;
     _start = null;
     _audioSwitchOpenReady = false;
+    _audioSwitchZeroPositionGuardGeneration = null;
     videoPlayerServiceHandler?.onPositionChange(Duration.zero);
     DebugLogService.log(
       'audio.switch',
@@ -1107,8 +1124,10 @@ class AudioController extends GetxController
         }
         if (_start case final start? when start > Duration.zero) {
           position.value = start;
+          _armAudioSwitchZeroPositionGuard(openGeneration);
         } else if (statePosition > Duration.zero) {
           position.value = statePosition;
+          _armAudioSwitchZeroPositionGuard(openGeneration);
         }
         _start = null;
         _scheduleClearAudioSwitching(openGeneration);
@@ -1177,6 +1196,7 @@ class AudioController extends GetxController
       stream.position.listen((position) {
         if (isDragging) return;
         if (_isSwitchingAudio && !_audioSwitchOpenReady) return;
+        if (_shouldIgnoreAudioSwitchZeroPosition(position)) return;
         final shouldUpdatePosition =
             position.inSeconds != this.position.value.inSeconds ||
             (this.position.value == Duration.zero && position > Duration.zero);
@@ -1946,9 +1966,14 @@ class AudioController extends GetxController
     try {
       final mediaList = _videoDetailController!.mediaList;
       final item = mediaList.firstWhereOrNull(
-        (e) =>
-            e.aid == aid &&
-            (e.pages?.any((page) => page.id == cid) ?? e.cid == cid),
+        (e) {
+          if (e.aid != aid) return false;
+          final pages = e.pages;
+          if (pages != null && pages.isNotEmpty) {
+            return pages.length == 1 && pages.first.id == cid;
+          }
+          return e.cid == cid;
+        },
       );
       if (item != null && item.progress != null && item.progress! > 0) {
         return item.progress!;
