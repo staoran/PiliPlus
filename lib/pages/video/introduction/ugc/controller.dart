@@ -580,6 +580,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         defaultST: progressToPass,
         fromSwitch: true,
       );
+      if (videoDetailCtr.bvid != bvid || videoDetailCtr.cid.value != cid) {
+        return false;
+      }
 
       if (this.bvid != bvid) {
         reload = true;

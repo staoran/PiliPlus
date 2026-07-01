@@ -373,6 +373,11 @@ class PgcIntroController extends CommonIntroController {
         defaultST: progressToPass,
         fromSwitch: true,
       );
+      if (videoDetailCtr.epId != epId ||
+          videoDetailCtr.bvid != bvid ||
+          videoDetailCtr.cid.value != cid) {
+        return false;
+      }
 
       if (cover != null && cover.isNotEmpty) {
         videoDetailCtr.cover.value = cover;

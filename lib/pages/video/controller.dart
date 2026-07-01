@@ -1188,10 +1188,9 @@ class VideoDetailController extends GetxController
     if (seek == null || seek == Duration.zero) {
       seek = getFirstSegment();
     }
-    if (isCurrentQuery?.call() == false) return;
-    await _queuePlayerInit(() async {
-      if (isCurrentQuery?.call() == false) return;
-      await plPlayerController.setDataSource(
+    final currentQuery = isCurrentQuery;
+    Future<void> setDataSource() {
+      return plPlayerController.setDataSource(
         source,
         seekTo: seek,
         duration:
@@ -1211,7 +1210,7 @@ class VideoDetailController extends GetxController
         pgcType: isUgc ? null : pgcType,
         videoType: videoType,
         onInit: () {
-          if (isCurrentQuery?.call() == false) return;
+          if (currentQuery?.call() == false) return;
           videoState.value = true;
           setSubtitle(vttSubtitlesIndex.value);
           // 离线视频：监听视频尺寸变化来更新竖屏状态
@@ -1233,8 +1232,18 @@ class VideoDetailController extends GetxController
         volume: volume ?? this.volume,
         autoFullScreenFlag: autoFullScreenFlag,
       );
-    });
-    if (isCurrentQuery?.call() == false) return;
+    }
+
+    if (currentQuery?.call() == false) return;
+    if (currentQuery == null) {
+      await setDataSource();
+    } else {
+      await _queuePlayerInit(() async {
+        if (!currentQuery()) return;
+        await setDataSource();
+      });
+      if (!currentQuery()) return;
+    }
 
     if (_pendingVideoSwitchProtection) {
       await finishVideoSwitchProtection(
