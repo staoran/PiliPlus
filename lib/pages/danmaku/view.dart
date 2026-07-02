@@ -108,15 +108,11 @@ class _PlDanmakuState extends State<PlDanmaku> {
     if (currentPosition == latestAddedPosition) {
       return;
     }
+    latestAddedPosition = currentPosition;
 
     List<DanmakuElem>? currentDanmakuList = _plDanmakuController
         .getCurrentDanmaku(currentPosition);
-    if (currentDanmakuList == null) {
-      return;
-    }
-
-    latestAddedPosition = currentPosition;
-    if (currentDanmakuList.isNotEmpty) {
+    if (currentDanmakuList != null) {
       final blockColorful = DanmakuOptions.blockColorful;
       for (DanmakuElem e in currentDanmakuList) {
         if (e.mode == 7) {
@@ -184,11 +180,6 @@ class _PlDanmakuState extends State<PlDanmaku> {
         child: DanmakuScreen<DanmakuExtra>(
           createdController: (e) {
             playerController.danmakuController = _controller = e;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _controller != null) {
-                videoPositionListen(playerController.position);
-              }
-            });
           },
           option: option,
           size: widget.size,
