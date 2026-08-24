@@ -6,7 +6,6 @@ import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/common/widgets/video_card/watch_later_button.dart';
 import 'package:PiliPlus/http/search.dart';
-import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
@@ -17,9 +16,9 @@ import 'package:PiliPlus/utils/extension/dimension_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:intl/intl.dart';
+import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 垂直布局
 class VideoCardV extends StatefulWidget {
@@ -117,6 +116,7 @@ class _VideoCardVState extends State<VideoCardV> {
               onTap: onPushDetail,
               onLongPress: onLongPress,
               onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
+              borderRadius: const .all(.circular(12)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -134,6 +134,7 @@ class _VideoCardVState extends State<VideoCardV> {
                               width: maxWidth,
                               height: maxHeight,
                               type: .emote,
+                              borderRadius: const .vertical(top: .circular(12)),
                             ),
                             if (videoItem.duration > 0)
                               PBadge(
@@ -195,21 +196,19 @@ class _VideoCardVState extends State<VideoCardV> {
     final theme = Theme.of(context);
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
+        padding: const .fromLTRB(6, 5, 6, 5),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: .start,
           children: [
             Expanded(
               child: Text(
-                "${videoItem.title}\n",
+                videoItem.title,
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  height: 1.38,
-                ),
+                overflow: .ellipsis,
+                style: const TextStyle(height: 1.38),
               ),
             ),
-            videoStat(context, theme),
+            videoStat(theme),
             Row(
               spacing: 2,
               children: [
@@ -248,7 +247,7 @@ class _VideoCardVState extends State<VideoCardV> {
                   child: Text(
                     videoItem.owner.name.toString(),
                     maxLines: 1,
-                    overflow: TextOverflow.clip,
+                    overflow: .clip,
                     semanticsLabel: 'UP：${videoItem.owner.name}',
                     style: TextStyle(
                       height: 1.5,
@@ -266,17 +265,17 @@ class _VideoCardVState extends State<VideoCardV> {
     );
   }
 
-  Widget videoStat(BuildContext context, ThemeData theme) {
+  Widget videoStat(ThemeData theme) {
     return Row(
       children: [
         StatWidget(
-          type: StatType.play,
+          type: .play,
           value: videoItem.stat.view,
         ),
         if (videoItem.goto != 'picture') ...[
           const SizedBox(width: 4),
           StatWidget(
-            type: StatType.danmaku,
+            type: .danmaku,
             value: videoItem.stat.danmu,
           ),
         ],
@@ -298,23 +297,6 @@ class _VideoCardVState extends State<VideoCardV> {
           ),
           const SizedBox(width: 2),
         ],
-        // deprecated
-        //  else if (videoItem is RcmdVideoItemAppModel &&
-        //     videoItem.desc != null &&
-        //     videoItem.desc!.contains(' · ')) ...[
-        //   const Spacer(),
-        //   Text.rich(
-        //     maxLines: 1,
-        //     TextSpan(
-        //         style: TextStyle(
-        //           fontSize: theme.textTheme.labelSmall!.fontSize,
-        //           color: theme.colorScheme.outline.withValues(alpha: 0.8),
-        //         ),
-        //         text: Utils.shortenChineseDateString(
-        //             videoItem.desc!.split(' · ').last)),
-        //   ),
-        //   const SizedBox(width: 2),
-        // ]
       ],
     );
   }

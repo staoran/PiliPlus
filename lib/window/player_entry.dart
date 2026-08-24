@@ -16,19 +16,21 @@ import 'package:PiliPlus/services/multi_window/player_window_identity.dart';
 import 'package:PiliPlus/services/multi_window/window_arguments.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
+import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:collection/collection.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    show GlobalCupertinoLocalizations, GlobalWidgetsLocalizations;
+import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoThemeData;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -85,7 +87,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   late final int _customColor;
   late final bool _dynamicColor;
   late final int _schemeVariant;
-  late final ThemeMode _themeMode;
   late final double _textScale;
   late bool _alwaysOnTop;
   late final String _initialRoute;
@@ -153,7 +154,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _customColor = _settings?['customColor'] as int? ?? 0;
     _dynamicColor = _settings?['dynamicColor'] as bool? ?? false;
     _schemeVariant = _settings?['schemeVariant'] as int? ?? 0;
-    _themeMode = ThemeMode.values[_settings?['themeMode'] as int? ?? 0];
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
   }
@@ -771,49 +771,38 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     Color brandColor = colorThemeTypes[_customColor].color;
     FlexSchemeVariant variant = FlexSchemeVariant.values[_schemeVariant];
 
-    return DynamicColorBuilder(
-      builder: ((ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        ColorScheme? lightColorScheme;
-        ColorScheme? darkColorScheme;
-        if (lightDynamic != null && darkDynamic != null && _dynamicColor) {
-          lightColorScheme = lightDynamic.harmonized();
-          darkColorScheme = darkDynamic.harmonized();
-        } else {
-          lightColorScheme = SeedColorScheme.fromSeeds(
-            primaryKey: brandColor,
-            brightness: Brightness.light,
-            variant: variant,
-          );
-          darkColorScheme = SeedColorScheme.fromSeeds(
-            primaryKey: brandColor,
-            brightness: Brightness.dark,
-            variant: variant,
-          );
-        }
+    // 动态色方案直接复用主窗口已构建的主题缓存；无缓存或未开启动态色时按自定义色 seed。
+    final hasDynamic = _dynamicColor && Pref.dynamicColor;
+    final ColorScheme lightColorScheme = hasDynamic
+        ? ThemeUtils.lightTheme.colorScheme
+        : brandColor.asColorSchemeSeed(variant, .light);
+    final ColorScheme darkColorScheme = hasDynamic
+        ? ThemeUtils.darkTheme.colorScheme
+        : brandColor.asColorSchemeSeed(variant, .dark);
 
-        final lightTheme = _buildThemeData(
-          colorScheme: lightColorScheme,
-          isDynamic: lightDynamic != null && _dynamicColor,
-        );
-        final darkTheme = _buildThemeData(
-          colorScheme: darkColorScheme,
-          isDynamic: darkDynamic != null && _dynamicColor,
-          isDark: true,
-        );
-        ThemeUtils.lightTheme = lightTheme;
-        ThemeUtils.darkTheme = darkTheme;
-        ThemeUtils.themeMode = _themeMode;
+    final lightTheme = _buildThemeData(
+      colorScheme: lightColorScheme,
+      isDynamic: hasDynamic,
+    );
+    final darkTheme = _buildThemeData(
+      colorScheme: darkColorScheme,
+      isDynamic: hasDynamic,
+      isDark: true,
+    );
+    ThemeUtils.lightTheme = lightTheme;
+    ThemeUtils.darkTheme = darkTheme;
+    ThemeUtils.themeMode = Pref.themeMode;
 
-        return GetMaterialApp(
-          title: '${Constants.appName} - 播放器',
-          theme: lightTheme,
-          darkTheme: darkTheme,
-          themeMode: _themeMode,
-          localizationsDelegates: const [
-            GlobalCupertinoLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
+    return GetMaterialApp(
+      title: '${Constants.appName} - 播放器',
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: Pref.themeMode,
+      localizationsDelegates: const [
+        GlobalCupertinoLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
           locale: const Locale("zh", "CN"),
           supportedLocales: const [Locale("zh", "CN"), Locale("en", "US")],
           fallbackLocale: const Locale("zh", "CN"),
@@ -872,8 +861,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
             },
           ),
         );
-      }),
-    );
   }
 }
 

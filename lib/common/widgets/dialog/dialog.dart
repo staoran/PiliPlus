@@ -2,8 +2,8 @@ import 'dart:async' show FutureOr;
 
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/button_loading.dart';
-import 'package:flutter/material.dart' hide PopScope;
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart' hide PopScope;
 
 Future<bool> showConfirmDialog({
   required BuildContext context,

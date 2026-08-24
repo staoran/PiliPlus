@@ -21,9 +21,8 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
-import 'package:flutter/foundation.dart' show clampDouble;
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart' show clampDouble;import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 
 class MainController extends GetxController
     with GetSingleTickerProviderStateMixin, AccountMixin {
@@ -106,7 +105,7 @@ class MainController extends GetxController
 
     hasDyn = navigationBars.contains(NavigationBarType.dynamics);
     if (dynamicBadgeMode != DynamicBadgeMode.hidden) {
-      if (hasDyn) {
+      if (hasDyn && navigationBars[selectedIndex.value] != .dynamics) {
         if (checkDynamic) {
           _lastCheckDynamicAt = DateTime.now().millisecondsSinceEpoch;
         }

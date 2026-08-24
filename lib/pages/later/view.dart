@@ -1,13 +1,12 @@
 import 'package:PiliPlus/common/widgets/appbar/appbar.dart';
-import 'package:PiliPlus/common/widgets/flutter/page/tabs.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart';
+import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:PiliPlus/common/widgets/scroll_physics.dart'
+    show tabBarScrollPhysics;
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
-import 'package:PiliPlus/pages/common/fab_mixin.dart'
-    show NoRightMarginFabLocation;
 import 'package:PiliPlus/pages/later/base_controller.dart';
 import 'package:PiliPlus/pages/later/controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -15,10 +14,9 @@ import 'package:PiliPlus/utils/download_dialog_utils.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:flutter/material.dart' hide TabBarView;
-import 'package:get/get.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 
 class LaterPage extends StatefulWidget {
   const LaterPage({super.key});
@@ -65,6 +63,7 @@ class _LaterPageState extends State<LaterPage>
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     return Obx(
       () {
         final enableMultiSelect = _baseCtr.enableMultiSelect.value;
@@ -75,12 +74,13 @@ class _LaterPageState extends State<LaterPage>
               currCtr().handleSelect();
             }
           },
-          child: Scaffold(
-            resizeToAvoidBottomInset: false,
+          child: SimpleScaffold(
             appBar: _buildAppbar(enableMultiSelect),
-            floatingActionButtonLocation: const NoRightMarginFabLocation(),
-            floatingActionButton: Padding(
-              padding: const .only(right: kFloatingActionButtonMargin),
+            fab: Padding(
+              padding: .only(
+                right: kFloatingActionButtonMargin + padding.right,
+                bottom: kFloatingActionButtonMargin + padding.bottom,
+              ),
               child: Obx(
                 () => currCtr().loadingState.value.isSuccess
                     ? AnimatedSlide(
@@ -133,10 +133,10 @@ class _LaterPageState extends State<LaterPage>
                     },
                   ),
                   Expanded(
-                    child: TabBarView<CustomHorizontalDragGestureRecognizer>(
+                    child: TabBarView(
                       physics: enableMultiSelect
                           ? const NeverScrollableScrollPhysics()
-                          : clampingScrollPhysics,
+                          : tabBarScrollPhysics,
                       controller: _tabController,
                       horizontalDragGestureRecognizer:
                           CustomHorizontalDragGestureRecognizer.new,

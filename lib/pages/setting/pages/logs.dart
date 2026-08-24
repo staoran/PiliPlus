@@ -1,9 +1,10 @@
-import 'dart:async';
-import 'dart:convert';
+import 'dart:async' show Timer;
+import 'dart:convert' show jsonDecode;
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/selection_text.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -14,8 +15,8 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:catcher_2/utils/log_printer.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _snackBarDisplayDuration = Duration(seconds: 1);
 
@@ -108,7 +109,6 @@ class _LogsPageState extends State<LogsPage> {
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     return Scaffold(
-      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('日志'),
         actions: [
@@ -376,7 +376,7 @@ class _ReportCard extends StatelessWidget {
             borderRadius: const .all(.circular(8)),
             border: .all(color: colorScheme.outline.withValues(alpha: 0.5)),
           ),
-          child: SelectableText(
+          child: SelectionText(
             report.item.error.toString(),
             style: TextStyle(
               fontFamily: 'Monospace',
@@ -403,7 +403,7 @@ class _ReportCard extends StatelessWidget {
               borderRadius: const .all(.circular(8)),
               border: .all(color: colorScheme.outline.withValues(alpha: 0.5)),
             ),
-            child: SelectableText.rich(
+            child: SelectionText.rich(
               TextSpan(
                 children: stackTrace
                     .map(

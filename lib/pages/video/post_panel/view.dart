@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
+import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/models/common/sponsor_block/action_type.dart';
@@ -15,12 +16,11 @@ import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/post_panel/popup_menu_text.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PostPanel extends CommonSlidePage {
   const PostPanel({
@@ -188,62 +188,85 @@ class _PostPanelState extends State<PostPanel>
 
   double currentPos() => plPlayerController.positionInMilliseconds / 1000;
 
+  late double bottom;
+
   @override
   Widget buildPage(ThemeData theme) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        primary: false,
-        toolbarHeight: 45,
-        automaticallyImplyLeading: false,
-        titleSpacing: 16,
-        title: const Text('提交片段'),
-        actions: [
-          iconButton(
-            size: 32,
-            context: context,
-            tooltip: '添加片段',
-            onPressed: () {
-              setState(() {
-                list.insert(
-                  0,
-                  PostSegmentModel(
-                    segment: Pair(
-                      first: 0,
-                      second: currentPos(),
+    return SimpleScaffold(
+      appBar: SizedBox(
+        height: 45,
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            const Expanded(child: Text('提交片段', style: TextStyle(fontSize: 16))),
+            iconButton(
+              size: 32,
+              context: context,
+              tooltip: '添加片段',
+              onPressed: () {
+                setState(() {
+                  list.insert(
+                    0,
+                    PostSegmentModel(
+                      segment: Pair(
+                        first: 0,
+                        second: currentPos(),
+                      ),
+                      category: SegmentType.sponsor,
+                      actionType: ActionType.skip,
                     ),
-                    category: SegmentType.sponsor,
-                    actionType: ActionType.skip,
-                  ),
-                );
-              });
-            },
-            icon: const Icon(Icons.add),
-          ),
-          const SizedBox(width: 10),
-          iconButton(
-            size: 32,
-            context: context,
-            tooltip: '关闭',
-            onPressed: Get.back,
-            icon: const Icon(Icons.close),
-          ),
-          const SizedBox(width: 16),
-        ],
+                  );
+                });
+              },
+              icon: const Icon(Icons.add),
+            ),
+            const SizedBox(width: 10),
+            iconButton(
+              size: 32,
+              context: context,
+              tooltip: '关闭',
+              onPressed: Get.back,
+              icon: const Icon(Icons.close),
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
       ),
       body: enableSlide ? slideList(theme) : buildList(theme),
+      fab: list.isEmpty
+          ? null
+          : Padding(
+              padding: .only(
+                right: kFloatingActionButtonMargin,
+                bottom: kFloatingActionButtonMargin + bottom,
+              ),
+              child: FloatingActionButton(
+                tooltip: '提交',
+                onPressed: () async {
+                  final submitted = await showAsyncConfirmDialog(
+                    context: context,
+                    title: const Text('确定无误再提交'),
+                    confirmText: '确定提交',
+                    onConfirm: _onPost,
+                  );
+                  if (submitted && list.isEmpty && context.mounted) {
+                    Get.back();
+                  }
+                },
+                child: const Icon(Icons.check),
+              ),
+            ),
     );
   }
 
   late Key _key;
-  late bool _isNested;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final controller = PrimaryScrollController.of(context);
-    _isNested = controller is ExtendedNestedScrollController;
     _key = ValueKey(controller.hashCode);
+    bottom = MediaQuery.viewPaddingOf(context).bottom;
   }
 
   @override
@@ -251,8 +274,7 @@ class _PostPanelState extends State<PostPanel>
     if (list.isEmpty) {
       return scrollableError;
     }
-    final bottom = MediaQuery.viewPaddingOf(context).bottom;
-    Widget child = ListView.builder(
+    return ListView.builder(
       key: _key,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.only(bottom: 88 + bottom),
@@ -260,37 +282,6 @@ class _PostPanelState extends State<PostPanel>
       itemBuilder: (context, index) {
         return _buildItem(theme, index, list[index]);
       },
-    );
-    if (_isNested) {
-      child = ExtendedVisibilityDetector(
-        uniqueKey: const ValueKey(PostPanel),
-        child: child,
-      );
-    }
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        child,
-        Positioned(
-          right: kFloatingActionButtonMargin,
-          bottom: kFloatingActionButtonMargin + bottom,
-          child: FloatingActionButton(
-            tooltip: '提交',
-            onPressed: () async {
-              final submitted = await showAsyncConfirmDialog(
-                context: context,
-                title: const Text('确定无误再提交'),
-                confirmText: '确定提交',
-                onConfirm: _onPost,
-              );
-              if (submitted && list.isEmpty && context.mounted) {
-                Get.back();
-              }
-            },
-            child: const Icon(Icons.check),
-          ),
-        ),
-      ],
     );
   }
 
