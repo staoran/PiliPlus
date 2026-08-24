@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models/user/danmaku_rule_adapter.dart';
@@ -12,6 +11,7 @@ import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/set_int_adapter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as path;
 
@@ -94,13 +94,29 @@ abstract final class GStorage {
     Hive.init(path.join(appSupportPath, 'hive_subwindow'));
     regAdapter();
 
+    Future<Box<T>> openSubBox<T>(String name) async {
+      try {
+        return await Hive.openBox<T>(name);
+      } catch (e) {
+        // 残留 .lock 文件（如上次窗口异常退出）会导致 errno 33 锁冲突，
+        // 降级为纯内存 Box（bytes 为空且不落盘），保证子窗口可用。
+        if (kDebugMode) {
+          debugPrint('openBox($name) locked, fallback to memory: $e');
+        }
+        return await Hive.openBox<T>(
+          '${name}_subwindow_mem',
+          bytes: Uint8List(0),
+        );
+      }
+    }
+
     // Open boxes (separate Hive instance, no name conflicts)
-    setting = await Hive.openBox('setting');
-    video = await Hive.openBox('video');
-    localCache = await Hive.openBox('localCache');
-    watchProgress = await Hive.openBox<int>('watchProgress');
-    historyWord = await Hive.openBox('historyWord');
-    userInfo = await Hive.openBox<UserInfoData>('userInfo');
+    setting = await openSubBox('setting');
+    video = await openSubBox('video');
+    localCache = await openSubBox('localCache');
+    watchProgress = await openSubBox<int>('watchProgress');
+    historyWord = await openSubBox('historyWord');
+    userInfo = await openSubBox<UserInfoData>('userInfo');
     reply = null;
 
     // Initialize accounts for sub-window with account data from main window
