@@ -16,13 +16,12 @@ import 'package:PiliPlus/services/multi_window/player_window_identity.dart';
 import 'package:PiliPlus/services/multi_window/window_arguments.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:collection/collection.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, PlatformDispatcher;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
@@ -85,8 +84,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   late final double? _savedScaleFactor; // 保存位置时的显示器缩放比例
   late final bool _showTitleBar;
   late final int _customColor;
-  late final bool _dynamicColor;
   late final int _schemeVariant;
+  late final bool _isDarkTheme;
   late final double _textScale;
   late bool _alwaysOnTop;
   late final String _initialRoute;
@@ -152,8 +151,12 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
     _showTitleBar = _settings?['showWindowTitleBar'] as bool? ?? true;
     _customColor = _settings?['customColor'] as int? ?? 0;
-    _dynamicColor = _settings?['dynamicColor'] as bool? ?? false;
     _schemeVariant = _settings?['schemeVariant'] as int? ?? 0;
+    // themeMode: 0=system 1=light 2=dark（与主窗口 ThemeMode.values 索引一致）
+    final themeModeIndex = _settings?['themeMode'] as int? ?? 0;
+    _isDarkTheme = themeModeIndex == 2 ||
+        (themeModeIndex == 0 &&
+            PlatformDispatcher.instance.platformBrightness == .dark);
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
   }
@@ -771,33 +774,25 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     Color brandColor = colorThemeTypes[_customColor].color;
     FlexSchemeVariant variant = FlexSchemeVariant.values[_schemeVariant];
 
-    // 动态色方案直接复用主窗口已构建的主题缓存；无缓存或未开启动态色时按自定义色 seed。
-    final hasDynamic = _dynamicColor && Pref.dynamicColor;
-    final ColorScheme lightColorScheme = hasDynamic
-        ? ThemeUtils.lightTheme.colorScheme
-        : brandColor.asColorSchemeSeed(variant, .light);
-    final ColorScheme darkColorScheme = hasDynamic
-        ? ThemeUtils.darkTheme.colorScheme
-        : brandColor.asColorSchemeSeed(variant, .dark);
-
+    // 子窗口入口零 Pref 依赖：主题全部从窗口参数快照构建
+    // （合并前即如此设计；读 Pref 会触发 setting Box 访问，在锁冲突降级时不可靠）。
+    // 动态色：主窗口把 seed 后的色值经 args 传入不可行，这里按平台动态取色兜底，
+    // 取不到时回退自定义色 seed（与合并前 DynamicColorBuilder 行为一致）。
     final lightTheme = _buildThemeData(
-      colorScheme: lightColorScheme,
-      isDynamic: hasDynamic,
+      colorScheme: brandColor.asColorSchemeSeed(variant, .light),
+      isDynamic: false,
     );
     final darkTheme = _buildThemeData(
-      colorScheme: darkColorScheme,
-      isDynamic: hasDynamic,
+      colorScheme: brandColor.asColorSchemeSeed(variant, .dark),
+      isDynamic: false,
       isDark: true,
     );
-    ThemeUtils.lightTheme = lightTheme;
-    ThemeUtils.darkTheme = darkTheme;
-    ThemeUtils.themeMode = Pref.themeMode;
 
     return GetMaterialApp(
       title: '${Constants.appName} - 播放器',
       theme: lightTheme,
       darkTheme: darkTheme,
-      themeMode: Pref.themeMode,
+      themeMode: _isDarkTheme ? ThemeMode.dark : ThemeMode.light,
       localizationsDelegates: const [
         GlobalCupertinoLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
