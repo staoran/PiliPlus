@@ -316,6 +316,14 @@ abstract final class Pref {
     return _platformDefaultPreferCodecs;
   }
 
+  static List<VideoDecodeFormatType> get preferCodecsCellular {
+    final codecs = _setting.get(SettingBoxKey.preferCodecsCellular);
+    if (codecs is List) {
+      return codecs.map((i) => VideoDecodeFormatType.values.byName(i)).toList();
+    }
+    return preferCodecs;
+  }
+
   static String get hardwareDecoding => _setting.get(
     SettingBoxKey.hardwareDecoding,
     defaultValue: Platform.isAndroid
@@ -795,6 +803,12 @@ abstract final class Pref {
   static bool get showBottomLabel =>
       _setting.get(SettingBoxKey.showBottomLabel, defaultValue: true);
 
+  static ReplySortType get reply2SortType =>
+      ReplySortType.values[_setting.get(
+        SettingBoxKey.reply2SortType,
+        defaultValue: ReplySortType.time.index,
+      )];
+
   static DynamicBadgeMode get dynamicBadgeMode =>
       DynamicBadgeMode.values[_setting.get(
         SettingBoxKey.dynamicBadgeMode,
@@ -1109,4 +1123,6 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.maxVolume, defaultValue: 2.0);
 
   static List? get liveStream => _setting.get(SettingBoxKey.liveStream);
+
+  static String? get appFont => _setting.get(SettingBoxKey.appFont);
 }
