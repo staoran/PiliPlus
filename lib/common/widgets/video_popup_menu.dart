@@ -61,11 +61,6 @@ class VideoPopupMenu extends StatelessWidget {
       itemBuilder: (context) =>
           [
                 if (videoItem.bvid?.isNotEmpty == true) ...[
-                  _VideoCustomAction(
-                    videoItem.bvid!,
-                    const Icon(CustomIcons.identifier_circle, size: 16),
-                    () => Utils.copyText(videoItem.bvid!),
-                  ),
                   if (Accounts.main.isLogin)
                     _VideoCustomAction(
                       '稍后再看',
