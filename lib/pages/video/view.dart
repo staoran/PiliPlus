@@ -1293,10 +1293,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     Widget? introWidget,
     bool needIndicator = true,
   }) {
-    return Scaffold(
+    return MiniScaffold(
       key: videoDetailController.childKey,
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.transparent,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

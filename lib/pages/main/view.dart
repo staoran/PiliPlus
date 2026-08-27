@@ -481,13 +481,13 @@ class _MainAppState extends PopScopeState<MainApp>
           child: MediaQuery.removePadding(
             context: context,
             removeRight: true,
-            child: DrawerTheme(
-              data: DrawerThemeData(
-                width: (_mainController.showBottomLabel.value ? 130 : 80) +
-                    _padding.left,
-              ),
-              child: Obx(
-                () => NavigationDrawer(
+            child: Obx(
+              () => DrawerTheme(
+                data: DrawerThemeData(
+                  width: (_mainController.showBottomLabel.value ? 130 : 80) +
+                      _padding.left,
+                ),
+                child: NavigationDrawer(
                   /// apply `lib/scripts/navigation_drawer.patch`
                   flex: 5,
                   backgroundColor: Colors.transparent,
@@ -501,11 +501,9 @@ class _MainAppState extends PopScopeState<MainApp>
                   children: _mainController.navigationBars
                       .map(
                         (e) => NavigationDrawerDestination(
-                          label: Obx(
-                            () => _mainController.showBottomLabel.value
-                                ? Text(e.label)
-                                : const SizedBox.shrink(),
-                          ),
+                          label: _mainController.showBottomLabel.value
+                              ? Text(e.label)
+                              : const SizedBox.shrink(),
                           icon: _buildIcon(type: e),
                           selectedIcon: _buildIcon(
                             type: e,

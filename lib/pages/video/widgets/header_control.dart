@@ -1761,8 +1761,7 @@ class HeaderControlState extends State<HeaderControl>
                   size: 15,
                   color: Colors.white,
                 ),
-                onPressed: () =>
-                    plPlayerController.onPopInvokedWithResult(false, null),
+                onPressed: _handleWindowBack,
               ),
             ),
             if (!plPlayerController.isDesktopPip &&
@@ -1772,23 +1771,6 @@ class HeaderControlState extends State<HeaderControl>
                 height: btnHeight,
                 child: IconButton(
                   tooltip: '返回主页',
-                  style: btnStyle,
-                  icon: const Icon(
-                    FontAwesomeIcons.house,
-                    size: 15,
-                    color: Colors.white,
-                  ),
-                  onPressed: _handleWindowBack,
-                ),
-              ),
-            if (PlatformUtils.isDesktop &&
-                !plPlayerController.isDesktopPip &&
-                !PlayerWindowService.isPlayerWindow)
-              SizedBox(
-                width: btnWidth,
-                height: btnHeight,
-                child: IconButton(
-                  tooltip: '关闭播放器',
                   style: btnStyle,
                   icon: const Icon(
                     FontAwesomeIcons.house,
