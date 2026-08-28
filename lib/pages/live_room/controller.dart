@@ -705,6 +705,8 @@ class LiveRoomController extends GetxController {
         },
         transitionDuration: fromEmote
             ? const Duration(milliseconds: 400)
+            : PlatformUtils.isDesktop
+            ? const Duration(milliseconds: 350)
             : const Duration(milliseconds: 500),
       ),
     );
@@ -719,6 +721,8 @@ class LiveRoomController extends GetxController {
       Get.context!,
       ban: false,
       ReportOptions.liveDanmakuReport,
+      withContent: ReportOptions.liveDanmakuReportCheck,
+      contentRequired: ReportOptions.liveDanmakuReportCheck,
       (reasonType, reasonDesc, banUid) {
         return LiveHttp.superChatReport(
           id: item.id,
