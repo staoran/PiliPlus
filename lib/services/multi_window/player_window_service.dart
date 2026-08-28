@@ -7,6 +7,7 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart';
 
 /// 播放器窗口服务
@@ -46,9 +47,10 @@ class PlayerWindowService {
     _isPreCreating = true;
     try {
       // 创建带有设置快照但无视频参数的空播放器窗口
+      final settingsSnapshot = await _getSettingsSnapshot();
       final preCreateArgs = PlayerWindowArguments(
         settings: {
-          ..._getSettingsSnapshot(),
+          ...settingsSnapshot,
           'businessId': WindowArguments.businessIdPlayer,
         },
       );
@@ -150,6 +152,7 @@ class PlayerWindowService {
       }
 
       // 添加设置快照到参数中
+      final settingsSnapshot = await _getSettingsSnapshot();
       final argsWithSettings = PlayerWindowArguments(
         aid: arguments.aid,
         bvid: arguments.bvid,
@@ -167,7 +170,7 @@ class PlayerWindowService {
         videoType: arguments.videoType,
         extraArguments: arguments.extraArguments,
         settings: {
-          ..._getSettingsSnapshot(),
+          ...settingsSnapshot,
           'businessId':
               WindowArguments.businessIdPlayer, // Add businessId to settings
         },
@@ -195,12 +198,9 @@ class PlayerWindowService {
   }
 
   /// 获取需要传递给子窗口的设置快照
-  Map<String, dynamic> _getSettingsSnapshot() {
+  Future<Map<String, dynamic>> _getSettingsSnapshot() async {
     return {
-      'customColor': Pref.customColor,
-      'dynamicColor': Pref.dynamicColor,
-      'schemeVariant': Pref.schemeVariant.index,
-      'themeMode': Pref.themeMode.index,
+      ...await _getThemeSettingsSnapshot(),
       'showWindowTitleBar': Pref.showWindowTitleBar,
       'defaultTextScale': Pref.defaultTextScale,
       'playerWindowSize': [
@@ -217,6 +217,33 @@ class PlayerWindowService {
       // Export account data for sub-window
       'accountData': _exportAccountData(),
     };
+  }
+
+  /// 获取主题设置和动态色 seed，不读取子窗口存储。
+  Future<Map<String, dynamic>> _getThemeSettingsSnapshot() async {
+    final dynamicColor = Pref.dynamicColor;
+    final snapshot = <String, dynamic>{
+      'customColor': Pref.customColor,
+      'dynamicColor': dynamicColor,
+      'schemeVariant': Pref.schemeVariant.index,
+      'themeMode': Pref.themeMode.index,
+      'dynamicColorSeed': null,
+    };
+
+    if (dynamicColor) {
+      try {
+        final accentColor = await DynamicColorPlugin.getAccentColor();
+        snapshot['dynamicColorSeed'] = accentColor?.toARGB32();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+            '[PlayerWindowService] Failed to read dynamic color seed: $e',
+          );
+        }
+      }
+    }
+
+    return snapshot;
   }
 
   /// Export account data as JSON for sub-window
@@ -240,6 +267,12 @@ class PlayerWindowService {
     WindowController controller,
     PlayerWindowArguments arguments,
   ) async {
+    // 复用/预创建窗口只在启动时收到过一次参数，播放前先刷新主题快照。
+    await controller.invokeMethod(
+      'syncPlayerSettings',
+      await _getThemeSettingsSnapshot(),
+    );
+
     // 使用 WindowController.invokeMethod 向特定窗口发送消息
     // 根据参数类型决定发送playVideo还是playLive
     final method = arguments.roomId != null ? 'playLive' : 'playVideo';
