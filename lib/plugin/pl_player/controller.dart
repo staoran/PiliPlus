@@ -306,8 +306,7 @@ class PlPlayerController with BlockConfigMixin {
   }
 
   void enterPip({bool autoEnter = false}) {
-    if (videoPlayerController != null) {
-      final state = videoPlayerController!.state;
+    if (videoPlayerController case NativePlayer(:final state)) {
       PageUtils.enterPip(
         autoEnter: autoEnter,
         width: state.width == 0 ? width : state.width,
@@ -850,7 +849,6 @@ class PlPlayerController with BlockConfigMixin {
     final opt = {
       'video-sync': Pref.videoSync,
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
-      'stream-lavf-o': 'reconnect=1',
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
@@ -1423,15 +1421,6 @@ class PlPlayerController with BlockConfigMixin {
               });
             },
           );
-        } else if (event.contains('Invalid NAL unit size') ||
-            event.contains('Error splitting the input into NAL') ||
-            event.contains('Stream ends prematurely')) {
-          EasyThrottle.throttle(
-            'controllerStream.nal.error',
-            const Duration(milliseconds: 5000),
-            refreshPlayer,
-          );
-          Utils.reportError(event);
         } else if (event.startsWith('Could not open codec')) {
           if (Platform.isAndroid) {
             try {

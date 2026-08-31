@@ -1,24 +1,127 @@
 import 'dart:ffi';
-import 'dart:io';
+import 'dart:io' show File;
+import 'dart:typed_data';
+import 'dart:ui' show loadFontFromList;
 
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/fontconfig.g.dart';
+import 'package:PiliPlus/utils/path_utils.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:ffi/ffi.dart';
-import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'
+    show kDebugMode, defaultTargetPlatform, debugPrint;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:jni/jni.dart';
+import 'package:path/path.dart' as path;
 import 'package:win32/win32.dart';
+
+typedef AppFont = ({String? fontFamily, bool isCustom});
 
 abstract final class FontUtils {
   static final _fonts = <String>{};
   static bool _initialized = false;
 
+  static const _kFontExts = ['ttf', 'ttc', 'otf'];
+
+  static AppFont _appFont = _initAppFont();
+  static AppFont get appFont => _appFont;
+  static set appFont(AppFont value) {
+    assert(isCustom == _isCutsomFont(fontFamily));
+    _appFont = value;
+  }
+
+  static bool _isCutsomFont(String? fontFamily) {
+    return fontFamily?.contains('/') ?? false;
+  }
+
+  static AppFont _initAppFont() {
+    final appFont = GStorage.setting.get(SettingBoxKey.appFont);
+    if (_isCutsomFont(appFont)) {
+      if (fontFile.existsSync()) {
+        return (fontFamily: appFont, isCustom: true);
+      } else {
+        GStorage.setting.delete(SettingBoxKey.appFont);
+        return (fontFamily: null, isCustom: false);
+      }
+    } else {
+      return (fontFamily: appFont, isCustom: false);
+    }
+  }
+
+  static String? get fontFamily => _appFont.fontFamily;
+  static bool get isCustom => _appFont.isCustom;
+
+  static final fontFile = File(path.join(appSupportDirPath, 'customFont.otf'));
+
+  static Future<void>? init() {
+    if (isCustom) {
+      return _readAndLoad();
+    }
+    return null;
+  }
+
+  @pragma('vm:notify-debugger-on-exception')
+  static Future<void> _readAndLoad() async {
+    try {
+      final bytes = await fontFile.readAsBytes();
+      await _loadFont(bytes, fontFamily: fontFamily!);
+    } catch (_) {}
+  }
+
+  static void removeFontIfExists() {
+    final file = fontFile;
+    if (file.existsSync()) {
+      file.delete();
+    }
+  }
+
+  @pragma('vm:notify-debugger-on-exception')
+  static Future<void> _loadFont(
+    Uint8List bytes, {
+    required String fontFamily,
+  }) async {
+    try {
+      await loadFontFromList(bytes, fontFamily: fontFamily);
+    } catch (_) {}
+  }
+
+  @pragma('vm:notify-debugger-on-exception')
+  static Future<Map<String, Uint8List>?> pickFonts() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: .custom,
+        allowedExtensions: _kFontExts,
+      );
+      if (files.isNotEmpty) {
+        final Map<String, Uint8List> fonts = {};
+        final now = DateTime.now().millisecondsSinceEpoch.toString();
+        await Future.wait(
+          files.map((file) async {
+            final name = '$now/${path.basenameWithoutExtension(file.name)}';
+            final bytes = await file.readAsBytes();
+            await _loadFont(bytes, fontFamily: name);
+            fonts[name] = bytes;
+          }),
+        );
+        return fonts;
+      }
+    } catch (_) {
+      if (kDebugMode) rethrow;
+    }
+    return null;
+  }
+
   static Set<String> getFont() {
     if (_initialized) return _fonts;
     _initialized = true;
-    if (!((Platform.isAndroid && _initAndroid()) ||
-        (Platform.isWindows && _initWindows()) ||
-        (Platform.isLinux && _initLinux()))) {
+    if (!switch (defaultTargetPlatform) {
+      .android => _initAndroid(),
+      .windows => _initWindows(),
+      .linux => _initLinux(),
+      _ => true,
+    }) {
       // TODO: ios/macos CTFontManagerCopyAvailableFontFamilyNames
       SmartDialog.showToast('加载系统字体失败');
     }

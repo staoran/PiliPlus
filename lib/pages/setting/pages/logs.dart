@@ -282,7 +282,7 @@ class _InfoCard extends StatelessWidget {
                 null,
                 DateTime(1970),
                 info.item.$1,
-                info.item.$1,
+                info.item.$2,
                 info.item.$3,
                 null,
               ).formatInfo();

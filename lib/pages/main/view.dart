@@ -235,19 +235,29 @@ class _MainAppState extends PopScopeState<MainApp>
     }
   }
 
+  double? _opacity;
+
+  Future<void>? _setOpacity(double opacity) {
+    if (Platform.isWindows && _opacity != opacity) {
+      _opacity = opacity;
+      return windowManager.setOpacity(opacity);
+    }
+    return null;
+  }
+
+  @override
+  Future<void>? onWindowFocus() {
+    return _setOpacity(1.0);
+  }
+
   /// https://github.com/leanflutter/window_manager/issues/571
   Future<void> _hide() async {
-    if (Platform.isWindows) {
-      await windowManager.setOpacity(0.0);
-    }
+    await _setOpacity(0.0);
     await windowManager.hide();
   }
 
-  Future<void> _show() async {
-    if (Platform.isWindows) {
-      await windowManager.setOpacity(1.0);
-    }
-    await windowManager.show();
+  Future<void> _show() {
+    return windowManager.show();
   }
 
   @override
