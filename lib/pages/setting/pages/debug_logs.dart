@@ -4,8 +4,8 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:material_ui/material_ui.dart';
 
 class DebugLogsPage extends StatefulWidget {
   const DebugLogsPage({super.key});
@@ -28,7 +28,9 @@ class _DebugLogsPageState extends State<DebugLogsPage> {
 
   Future<void> _loadLogs() async {
     logs = await DebugLogService.readAll();
-    logsText = logs.isEmpty ? '' : logs.map((item) => item.toString()).join('\n\n');
+    logsText = logs.isEmpty
+        ? ''
+        : logs.map((item) => item.toString()).join('\n\n');
     if (mounted) setState(() {});
   }
 
@@ -83,7 +85,8 @@ class _DebugLogsPageState extends State<DebugLogsPage> {
                 child: const Text('复制日志'),
               ),
               PopupMenuItem(
-                onTap: () => PageUtils.launchURL('${Constants.sourceCodeUrl}/issues'),
+                onTap: () =>
+                    PageUtils.launchURL('${Constants.sourceCodeUrl}/issues'),
                 child: const Text('问题反馈'),
               ),
               PopupMenuItem(
