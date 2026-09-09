@@ -12,8 +12,8 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - lib/grpc/bilibili/**
+    - lib/**/*.g.dart
     - lib/common/widgets/flutter/**
-    - lib/utils/android/bindings.g.dart
     - android/**
     - ios/**
     - linux/**

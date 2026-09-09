@@ -1,7 +1,5 @@
-import 'dart:async';
-
+import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/button_loading.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/live.dart';
 import 'package:PiliPlus/models/common/publish_panel_type.dart';
@@ -51,7 +49,6 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ViewSafeArea(
       child: Align(
         alignment: Alignment.bottomCenter,
@@ -64,8 +61,8 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ...buildInputView(theme),
-              Flexible(child: buildPanelContainer(theme, Colors.transparent)),
+              buildInputView(),
+              Flexible(child: buildPanelContainer(Colors.transparent)),
             ],
           ),
         ),
@@ -74,88 +71,97 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
   }
 
   @override
-  Widget? get customPanel => LiveEmotePanel(
-    onChoose: onChooseEmote,
-    roomId: liveRoomController.roomId,
-    onSendEmoticonUnique: (emote) {
-      onCustomPublish(
-        message: emote.emoticonUnique!,
-        dmType: 1,
-        emoticonOptions: '[object Object]',
-      );
-    },
+  Widget? get customPanel => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border(
+        top: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+    ),
+    child: LiveEmotePanel(
+      onChoose: onChooseEmote,
+      roomId: liveRoomController.roomId,
+      onSendEmoticonUnique: (emote) {
+        onCustomPublish(
+          message: emote.emoticonUnique!,
+          dmType: 1,
+          emoticonOptions: '[object Object]',
+        );
+      },
+    ),
   );
 
-  List<Widget> buildInputView(ThemeData theme) {
-    return [
-      Padding(
-        padding: const EdgeInsets.only(
-          top: 12,
-          right: 15,
-          left: 15,
-          bottom: 10,
-        ),
-        child: Listener(
-          onPointerUp: (event) {
-            if (readOnly.value) {
-              updatePanelType(PanelType.keyboard);
-            }
-          },
-          child: Obx(
-            () => RichTextField(
-              key: key,
-              controller: editController,
-              minLines: 1,
-              maxLines: 2,
-              autofocus: false,
-              readOnly: readOnly.value,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              focusNode: focusNode,
-              decoration: const InputDecoration(
-                hintText: "输入弹幕内容",
-                border: InputBorder.none,
-                hintStyle: TextStyle(fontSize: 14),
+  Widget buildInputView() {
+    return Padding(
+      padding: const .only(left: 8, top: 2, right: 8),
+      child: Row(
+        children: [
+          Obx(
+            () {
+              final isEmoji = panelType.value == .emoji;
+              return iconButton(
+                tooltip: '表情',
+                onPressed: () => updatePanelType(isEmoji ? .keyboard : .emoji),
+                iconSize: 22,
+                icon: const Icon(Icons.emoji_emotions_outlined),
+                iconColor: isEmoji
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Obx(
+              () => RichTextField(
+                key: key,
+                textInputAction: .send,
+                controller: editController,
+                autofocus: false,
+                readOnly: readOnly.value,
+                onChanged: onChanged,
+                onSubmitted: onSubmitted,
+                focusNode: focusNode,
+                decoration: const InputDecoration(
+                  hintText: "输入弹幕内容",
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(fontSize: 14),
+                ),
+                style: theme.textTheme.bodyLarge,
+                // inputFormatters: [LengthLimitingTextInputFormatter(20)],
               ),
-              style: theme.textTheme.bodyLarge,
-              // inputFormatters: [LengthLimitingTextInputFormatter(20)],
             ),
           ),
-        ),
-      ),
-      Divider(
-        height: 1,
-        color: theme.dividerColor.withValues(alpha: 0.1),
-      ),
-      Container(
-        height: 52,
-        padding: const .symmetric(horizontal: 12),
-        child: Row(
-          mainAxisAlignment: .spaceBetween,
-          children: [
-            emojiBtn,
-            Obx(
-              () {
-                final loading = isPublishing.value;
-                return FilledButton.tonal(
-                  onPressed: enablePublish.value && !loading
-                      ? onPublishThrottle
-                      : null,
-                  style: FilledButton.styleFrom(
-                    visualDensity: .compact,
-                    padding: const .symmetric(horizontal: 20, vertical: 10),
-                  ),
-                  child: LoadingButtonChild(
-                    isLoading: loading,
-                    child: const Text('发送'),
-                  ),
-                );
-              },
+          Obx(
+            () => enablePublish.value
+                ? iconButton(
+                    iconSize: 22,
+                    iconColor: theme.colorScheme.onSurfaceVariant,
+                    onPressed: () {
+                      editController.clear();
+                      enablePublish.value = false;
+                    },
+                    icon: const Icon(Icons.clear),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 12),
+          Obx(
+            () => iconButton(
+              tooltip: '发送',
+              iconSize: 22,
+              iconColor: enablePublish.value
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+              onPressed: enablePublish.value ? onPublishThrottle : null,
+              isLoading: isPublishing.value,
+              icon: const Icon(Icons.send),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    ];
+    );
   }
 
   @override

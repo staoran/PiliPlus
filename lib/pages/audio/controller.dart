@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show File, Platform;
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
@@ -22,6 +22,8 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
+import 'package:PiliPlus/models/common/audio_normalization.dart';
+import 'package:PiliPlus/models/video/play/url.dart' as http_model show Volume;
 import 'package:PiliPlus/pages/common/common_intro_controller.dart'
     show FavMixin, IntroAction;
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
@@ -108,7 +110,8 @@ class AudioController extends GetxController
         FavMixin,
         BlockConfigMixin,
         BlockMixin,
-        WidgetsBindingObserver {
+        WidgetsBindingObserver,
+        AudioNormalizationMixin {
   late final Map args;
   late Int64 id;
   late Int64 oid;
@@ -285,6 +288,7 @@ class AudioController extends GetxController
               audioUrl,
               ua: BrowserUa.pc,
               referer: HttpString.baseUrl,
+              volume: _videoDetailController?.volume,
             ),
           );
         }
@@ -1746,6 +1750,19 @@ class AudioController extends GetxController
   Future<bool> _onPlay(PlayURLResp data) {
     final PlayInfo? playInfo = data.playerInfo.values.firstOrNull;
     if (playInfo != null) {
+      http_model.Volume? volume;
+      if (playInfo.hasVolume()) {
+        final volumeInfo = playInfo.volume;
+        volume = http_model.Volume(
+          measuredI: volumeInfo.measuredI,
+          measuredLra: volumeInfo.measuredLra,
+          measuredTp: volumeInfo.measuredTp,
+          measuredThreshold: volumeInfo.measuredThreshold,
+          targetOffset: volumeInfo.targetOffset,
+          targetI: volumeInfo.targetI,
+          targetTp: volumeInfo.targetTp,
+        );
+      }
       if (playInfo.hasPlayDash()) {
         final playDash = playInfo.playDash;
         final audios = playDash.audio;
@@ -1759,6 +1776,7 @@ class AudioController extends GetxController
         );
         return _onOpenMedia(
           VideoUtils.getCdnUrl(audio.playUrls, isAudio: true),
+          volume: volume,
         );
       } else if (playInfo.hasPlayUrl()) {
         final playUrl = playInfo.playUrl;
@@ -1768,7 +1786,10 @@ class AudioController extends GetxController
         }
         final durl = durls.first;
         position.value = Duration.zero;
-        return _onOpenMedia(VideoUtils.getCdnUrl(durl.playUrls, isAudio: true));
+        return _onOpenMedia(
+          VideoUtils.getCdnUrl(durl.playUrls, isAudio: true),
+          volume: volume,
+        );
       }
     }
     return Future.value(false);
@@ -1778,6 +1799,7 @@ class AudioController extends GetxController
     String url, {
     String ua = Constants.userAgentApp,
     String? referer,
+    http_model.Volume? volume,
   }) async {
     final openGeneration = _switchGeneration;
     DebugLogService.log(
@@ -1809,6 +1831,7 @@ class AudioController extends GetxController
         Media(
           url,
           start: _start,
+          extras: audioFilterExtras(volume),
         ),
         play: false,
       );
@@ -1878,6 +1901,7 @@ class AudioController extends GetxController
     player = await Player.create(
       configuration: PlayerConfiguration(
         options: {
+          if (Platform.isAndroid) 'ao': Pref.audioOutput,
           'volume': PlatformUtils.isDesktop
               ? (desktopVolume.value * 100).toString()
               : Pref.playerVolume.toString(),

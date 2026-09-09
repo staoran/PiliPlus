@@ -481,7 +481,6 @@ abstract final class PageUtils {
 
   static Future<void> handleWebview(
     String url, {
-    bool off = false,
     bool inApp = false,
     Map? parameters,
   }) async {
@@ -490,12 +489,7 @@ abstract final class PageUtils {
         launchURL(url);
       }
     } else {
-      Get.offOrToNamed(
-        '/webview',
-        parameters: {'url': url, ...?parameters},
-        preventDuplicates: off,
-        off: off,
-      );
+      PiliScheme.routePushFromUrl(url, parameters: parameters);
     }
   }
 
