@@ -662,37 +662,28 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               tooltip: '翻译',
               requestFocus: false,
               initialValue: videoDetailController.currLang.value,
+              onSelected: videoDetailController.setLanguage,
               color: Colors.black.withValues(alpha: 0.8),
-              itemBuilder: (context) {
-                return [
-                  PopupMenuItem<String>(
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  height: 35,
+                  value: '',
+                  child: Text(
+                    "关闭翻译",
+                    style: TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ),
+                ...list.map(
+                  (e) => PopupMenuItem<String>(
                     height: 35,
-                    value: '',
-                    onTap: () => videoDetailController.setLanguage(''),
-                    child: const Text(
-                      "关闭翻译",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                      ),
+                    value: e.lang,
+                    child: Text(
+                      e.title!,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
                     ),
                   ),
-                  ...list.map((e) {
-                    return PopupMenuItem<String>(
-                      height: 35,
-                      value: e.lang,
-                      onTap: () => videoDetailController.setLanguage(e.lang!),
-                      child: Text(
-                        e.title!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                        ),
-                      ),
-                    );
-                  }),
-                ];
-              },
+                ),
+              ],
               child: SizedBox(
                 width: widgetWidth,
                 height: 30,
@@ -958,13 +949,13 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onHorizontalDragStart() {
-    plPlayerController.isSeeking.value = true;
+    plPlayerController.onSeekStart(plPlayerController.position);
   }
 
   void _onHorizontalDragUpdate(double dx) {
     final curPos =
         plPlayerController.seekToPos?.inMilliseconds ??
-        plPlayerController.positionInMilliseconds;
+        plPlayerController.seekPosition.value.inMilliseconds;
     final posDelta = (plPlayerController.sliderScale * dx / maxWidth).round();
     final newPos = (curPos + posDelta).clamp(
       0,
@@ -974,10 +965,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     final position = Duration(milliseconds: newPos);
     plPlayerController
       ..seekToPos = position
-      ..position = position
-      ..sliderPosition = position
-      ..updatePositionSecond()
-      ..updateSliderPositionSecond();
+      ..seekPosition.value = position;
     if (!plPlayerController.isFileSource &&
         plPlayerController.showSeekPreview) {
       plPlayerController.updatePreviewIndex(seconds);
@@ -985,10 +973,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onHorizontalDragEnd() {
-    plPlayerController.onSeekEnd();
     if (plPlayerController.seekToPos case final seekToPos?) {
       plPlayerController
+        ..sliderPosition = seekToPos
+        ..updateSliderPositionSecond()
         ..seekTo(seekToPos, isSeek: false)
+        ..onSeekEnd()
         ..seekToPos = null;
     } else {
       final position =
@@ -999,6 +989,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ..sliderPosition = position
         ..updatePositionSecond()
         ..updateSliderPositionSecond();
+      plPlayerController.onSeekEnd();
     }
   }
 
@@ -1065,11 +1056,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           }
           SmartDialog.showAttach(
             targetContext: context,
-            alignment: Alignment.center,
-            animationTime: const Duration(milliseconds: 200),
-            animationType: SmartAnimationType.fade,
-            displayTime: const Duration(milliseconds: 1500),
+            alignment: .center,
+            usePenetrate: true,
+            animationType: .fade,
             maskColor: Colors.transparent,
+            displayTime: const Duration(milliseconds: 1500),
+            animationTime: const Duration(milliseconds: 200),
             builder: (context) => Container(
               padding: const .symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -1463,7 +1455,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                           Obx(
                             () => Text(
                               DurationUtils.formatDuration(
-                                plPlayerController.positionSeconds.value,
+                                plPlayerController.progress,
                               ),
                               style: textStyle,
                             ),
@@ -1730,8 +1722,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     children: [
                       Obx(
                         () => ProgressBar(
-                          progress:
-                              plPlayerController.sliderPositionSeconds.value,
+                          progress: plPlayerController.progress,
                           buffered: plPlayerController.bufferedSeconds.value,
                           total: plPlayerController.duration.value.inSeconds,
                           progressBarColor: primary,

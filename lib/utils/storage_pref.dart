@@ -1144,4 +1144,7 @@ abstract final class Pref {
 
   static bool get enableDocProvider =>
       _setting.get(SettingBoxKey.enableDocProvider, defaultValue: false);
+
+  static bool get enableEmoteTooltip =>
+      _setting.get(SettingBoxKey.enableEmoteTooltip, defaultValue: false);
 }

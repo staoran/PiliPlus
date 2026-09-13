@@ -54,6 +54,7 @@ class MainController extends GetxController
   late bool hasHome = false;
   late final homeController = Get.putOrFind(HomeController.new);
 
+  late final disableLikeMsg = Pref.disableLikeMsg;
   late DynamicBadgeMode msgBadgeMode = Pref.msgBadgeMode;
   late Set<MsgUnReadType> msgUnReadTypes = Pref.msgUnReadTypeV2;
   late final RxnString msgUnReadCount = RxnString(null);
@@ -157,7 +158,7 @@ class MainController extends GetxController
               count += response.at;
               break;
             case MsgUnReadType.like:
-              count += response.like;
+              if (!disableLikeMsg) count += response.like;
               break;
             case MsgUnReadType.sysMsg:
               count += response.sysMsg;
@@ -238,7 +239,7 @@ class MainController extends GetxController
       navigationBars = NavigationBarType.values;
     } else {
       navigationBars = navBarSort
-          .map((i) => NavigationBarType.values[i])
+          .map(NavigationBarType.values.elementAt)
           .toList();
     }
     this.navigationBars = navigationBars;

@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
+import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:get/get.dart';
@@ -26,13 +27,7 @@ class BottomControl extends StatelessWidget {
 
   void onDragStart(ThumbDragDetails duration) {
     feedBack();
-    final position = Duration(seconds: duration.seconds);
-    controller
-      ..position = position
-      ..sliderPosition = position
-      ..updatePositionSecond()
-      ..updateSliderPositionSecond()
-      ..isSeeking.value = true;
+    controller.onSeekStart(Duration(seconds: duration.seconds));
   }
 
   void onDragUpdate(ThumbDragDetails duration) {
@@ -40,27 +35,31 @@ class BottomControl extends StatelessWidget {
     if (!controller.isFileSource && controller.showSeekPreview) {
       controller.updatePreviewIndex(duration.seconds);
     }
-    controller
-      ..position = position
-      ..sliderPosition = position
-      ..updatePositionSecond()
-      ..updateSliderPositionSecond();
+    controller.seekPosition.value = position;
   }
 
   void onSeek(int milliseconds) {
+    final position = Duration(milliseconds: milliseconds);
     controller
+      ..seekToPos = position
+      ..sliderPosition = position
+      ..updateSliderPositionSecond()
+      ..seekTo(position, isSeek: false)
       ..onSeekEnd()
-      ..seekTo(Duration(milliseconds: milliseconds), isSeek: false);
+      ..seekToPos = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFFFF6699);
+    final colorScheme = ColorScheme.of(context);
+    final primary = colorScheme.isLight
+        ? colorScheme.inversePrimary
+        : colorScheme.primary;
     final thumbGlowColor = primary.withAlpha(80);
     final bufferedBarColor = primary.withValues(alpha: 0.4);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      padding: const .symmetric(horizontal: 10, vertical: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -75,7 +74,7 @@ class BottomControl extends StatelessWidget {
                   children: [
                     Obx(
                       () => ProgressBar(
-                        progress: controller.sliderPositionSeconds.value,
+                        progress: controller.progress,
                         buffered: controller.bufferedSeconds.value,
                         total: controller.duration.value.inSeconds,
                         progressBarColor: primary,

@@ -161,7 +161,8 @@ abstract final class SettingBoxKey {
       removeSafeArea = 'removeSafeArea',
       angleDegrees = 'angleDegrees',
       liveStream = 'liveStream',
-      enableDocProvider = 'enableDocProvider';
+      enableDocProvider = 'enableDocProvider',
+      enableEmoteTooltip = 'enableEmoteTooltip';
 
   static const String enableDebugLog = 'enableDebugLog';
 
