@@ -9,6 +9,7 @@ import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/pages/live_room/view.dart';
+import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/player_window_manager.dart';
@@ -684,18 +685,36 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     if (currentArgs is! Map) {
       return false;
     }
-    return currentArgs['aid'] == nextArgs['aid'] &&
-        currentArgs['bvid'] == nextArgs['bvid'] &&
-        currentArgs['cid'] == nextArgs['cid'] &&
-        currentArgs['epId'] == nextArgs['epId'] &&
-        currentArgs['seasonId'] == nextArgs['seasonId'] &&
-        currentArgs['pgcType'] == nextArgs['pgcType'] &&
-        currentArgs['videoType'] == nextArgs['videoType'] &&
-        currentArgs['sourceType'] == nextArgs['sourceType'] &&
-        currentArgs['progress'] == nextArgs['progress'] &&
-        currentArgs['progressAid'] == nextArgs['progressAid'] &&
-        currentArgs['progressBvid'] == nextArgs['progressBvid'] &&
-        currentArgs['progressCid'] == nextArgs['progressCid'];
+
+    Object? currentVideoType;
+    int? currentAid;
+    String? currentBvid;
+    int? currentCid;
+    int? currentEpId;
+    final currentHeroTag = currentArgs['heroTag'];
+    if (currentHeroTag is String &&
+        Get.isRegistered<VideoDetailController>(tag: currentHeroTag)) {
+      final videoDetailController = Get.find<VideoDetailController>(
+        tag: currentHeroTag,
+      );
+      if (!videoDetailController.isFileSource) {
+        currentVideoType = videoDetailController.videoType;
+        currentAid = videoDetailController.aid;
+        currentBvid = videoDetailController.bvid;
+        currentCid = videoDetailController.cid.value;
+        currentEpId = videoDetailController.epId;
+      }
+    }
+
+    return PlayerWindowIdentity.shouldSkipVideoNavigation(
+      routeArguments: currentArgs,
+      nextArguments: nextArgs,
+      currentVideoType: currentVideoType,
+      currentAid: currentAid,
+      currentBvid: currentBvid,
+      currentCid: currentCid,
+      currentEpId: currentEpId,
+    );
   }
 
   bool _isSameLiveRoute(Map<String, dynamic> nextArgs) {

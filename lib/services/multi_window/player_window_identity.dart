@@ -25,6 +25,44 @@ class PlayerWindowIdentity {
     return parts.join('|');
   }
 
+  static bool shouldSkipVideoNavigation({
+    required Map routeArguments,
+    required Map nextArguments,
+    Object? currentVideoType,
+    int? currentAid,
+    String? currentBvid,
+    int? currentCid,
+    int? currentEpId,
+  }) {
+    final hasCurrentVideoIdentity =
+        currentVideoType != null &&
+        currentAid != null &&
+        currentBvid != null &&
+        currentCid != null;
+    final currentVideoArguments = hasCurrentVideoIdentity
+        ? <String, dynamic>{
+            'videoType': currentVideoType,
+            'aid': currentAid,
+            'bvid': currentBvid,
+            'cid': currentCid,
+            'epId': currentEpId,
+          }
+        : routeArguments;
+
+    return currentVideoArguments['aid'] == nextArguments['aid'] &&
+        currentVideoArguments['bvid'] == nextArguments['bvid'] &&
+        currentVideoArguments['cid'] == nextArguments['cid'] &&
+        currentVideoArguments['epId'] == nextArguments['epId'] &&
+        routeArguments['seasonId'] == nextArguments['seasonId'] &&
+        routeArguments['pgcType'] == nextArguments['pgcType'] &&
+        currentVideoArguments['videoType'] == nextArguments['videoType'] &&
+        routeArguments['sourceType'] == nextArguments['sourceType'] &&
+        routeArguments['progress'] == nextArguments['progress'] &&
+        routeArguments['progressAid'] == nextArguments['progressAid'] &&
+        routeArguments['progressBvid'] == nextArguments['progressBvid'] &&
+        routeArguments['progressCid'] == nextArguments['progressCid'];
+  }
+
   static String _identityPart(Object? value) {
     if (value == null) {
       return '';
