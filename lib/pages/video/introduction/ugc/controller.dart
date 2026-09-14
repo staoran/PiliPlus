@@ -762,9 +762,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
             return false;
           }
           try {
-            Get.find<RelatedController>(tag: heroTag)
-              ..bvid = bvid
-              ..queryData();
+            Get.find<RelatedController>(tag: heroTag).loadForBvid(bvid);
           } catch (_) {}
         }
 
@@ -1008,12 +1006,16 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   }
 
   bool playRelated() {
+    final String currentBvid = videoDetailCtr.bvid;
     RelatedController relatedCtr;
     if (Get.isRegistered<RelatedController>(tag: heroTag)) {
       relatedCtr = Get.find<RelatedController>(tag: heroTag);
     } else {
-      relatedCtr = Get.put(RelatedController(autoQuery: false), tag: heroTag)
-        ..queryData().whenComplete(playRelated);
+      relatedCtr = Get.put(RelatedController(), tag: heroTag);
+    }
+
+    if (relatedCtr.bvid != currentBvid) {
+      relatedCtr.loadForBvid(currentBvid).whenComplete(playRelated);
       return false;
     }
 
