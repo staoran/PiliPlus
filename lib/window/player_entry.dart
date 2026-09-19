@@ -324,16 +324,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       if (pgcType != null || args['pgcType'] != null)
         'pgcType': pgcType ?? args['pgcType'],
       if (args['cover'] != null) 'pic': args['cover'],
-      'heroTag': PlayerWindowIdentity.heroTag(
-        aid: aid,
-        bvid: bvid,
-        cid: cid,
-        seasonId: seasonId,
-        epId: epId,
-        pgcType: pgcType,
-        videoType: videoType,
-        sourceType: sourceType,
-      ),
       if (playerArgs.progress != null) 'progress': playerArgs.progress,
       if (playerArgs.progressAid != null) 'progressAid': playerArgs.progressAid,
       if (playerArgs.progressBvid != null)
@@ -342,6 +332,20 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       'sourceType': ?sourceType,
       ...extraArgs,
     };
+  }
+
+  void _assignVideoPageTag(Map<String, dynamic> args) {
+    // Allocate only for an actual new route; incoming tags are not page owners.
+    args['heroTag'] = PlayerWindowIdentity.heroTag(
+      aid: args['aid'],
+      bvid: args['bvid'],
+      cid: args['cid'],
+      seasonId: args['seasonId'],
+      epId: args['epId'],
+      pgcType: args['pgcType'],
+      videoType: args['videoType'],
+      sourceType: args['sourceType'],
+    );
   }
 
   Future<void> _initWindow() async {
@@ -594,6 +598,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       );
     } else if (_initialRoute == '/videoV' && _initialArguments != null) {
       windowManager.setTitle('${Constants.appName} - 播放器');
+      _assignVideoPageTag(_initialArguments);
       Get.offAllNamed(
         '/videoV',
         arguments: _initialArguments,
@@ -732,13 +737,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     final currentArgs = Get.arguments;
     final currentHeroTag = currentArgs is Map ? currentArgs['heroTag'] : null;
     final nextArgs = _buildVideoArguments(args);
-    final nextHeroTag = nextArgs['heroTag'];
-
-    if (kDebugMode) {
-      debugPrint(
-        '[PlayerWindow] navigateToVideo currentHeroTag=$currentHeroTag nextHeroTag=$nextHeroTag aid=${args['aid']} bvid=${args['bvid']} cid=${args['cid']}',
-      );
-    }
 
     // Update window title for video
     windowManager.setTitle('${Constants.appName} - 播放器');
@@ -751,6 +749,13 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     }
 
     await _pauseCurrentPlayerBeforeNavigation();
+    if (!mounted) return;
+    _assignVideoPageTag(nextArgs);
+    if (kDebugMode) {
+      debugPrint(
+        '[PlayerWindow] navigateToVideo currentHeroTag=$currentHeroTag nextHeroTag=${nextArgs['heroTag']} aid=${nextArgs['aid']} bvid=${nextArgs['bvid']} cid=${nextArgs['cid']}',
+      );
+    }
 
     if (Get.currentRoute == '/videoV' &&
         (Get.key.currentState?.canPop() ?? false)) {
@@ -765,6 +770,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         arguments: nextArgs,
       );
     }
+    // Let route/controller registration finish before consuming queued requests.
+    await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _navigateToLiveInternal(Map<String, dynamic> args) async {

@@ -10,6 +10,8 @@ import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
 import 'package:PiliPlus/grpc/dm.dart';
+import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart'
+    show DmViewReply;
 import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/init.dart';
@@ -38,6 +40,7 @@ import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/models_new/video/video_pbp/data.dart';
 import 'package:PiliPlus/models_new/video/video_play_info/subtitle.dart';
+import 'package:PiliPlus/models_new/video/video_play_info/data.dart';
 import 'package:PiliPlus/models_new/video/video_stein_edgeinfo/data.dart';
 import 'package:PiliPlus/pages/audio/view.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
@@ -151,8 +154,77 @@ class VideoDetailController extends GetxController
   final videoPlayerKey = GlobalKey();
   final childKey = GlobalKey<MiniScaffoldState>();
 
-  final plPlayerController = PlPlayerController.getInstance()
-    ..brightness.value = -1;
+  VideoDetailController({PlPlayerController? playerController})
+    : plPlayerController =
+          playerController ?? PlPlayerController.getInstance() {
+    plPlayerController.brightness.value = -1;
+  }
+
+  final PlPlayerController plPlayerController;
+  bool _playbackPageActive = true;
+  int _pageActivityGeneration = 0;
+  bool get canStartPlayback => _playbackPageActive && !isClosed;
+
+  bool Function() capturePageActivity() {
+    final generation = _pageActivityGeneration;
+    return () => canStartPlayback && generation == _pageActivityGeneration;
+  }
+
+  void setPlaybackPageActive(bool active) {
+    if (_playbackPageActive == active) return;
+    _playbackPageActive = active;
+    _pageActivityGeneration++;
+    if (!active) {
+      _videoUrlQueryGeneration++;
+      isQuerying = false;
+      plPlayerController.deactivatePlayback(heroTag);
+      final generation = _activeVideoSwitchGeneration;
+      if (generation != null) {
+        unawaited(
+          cancelVideoSwitch(
+            switchGeneration: generation,
+            reason: 'page_inactive',
+          ),
+        );
+      }
+    }
+  }
+
+  bool Function() _captureMediaRequest() {
+    final isActive = capturePageActivity();
+    final generation = _videoUrlQueryGeneration;
+    final requestBvid = bvid;
+    final requestCid = cid.value;
+    final requestEpId = epId;
+    final requestSeasonId = seasonId;
+    return () =>
+        isActive() &&
+        _isCurrentVideoUrlQuery(
+          generation: generation,
+          bvid: requestBvid,
+          cid: requestCid,
+          epId: requestEpId,
+          seasonId: requestSeasonId,
+        );
+  }
+
+  bool Function() _captureSubtitleRequest() {
+    final mediaIsCurrent = _captureMediaRequest();
+    final playbackIsCurrent = plPlayerController.playbackGuard(heroTag);
+    return () =>
+        mediaIsCurrent() && playbackIsCurrent() && canReadPlaybackProgress;
+  }
+
+  bool get ownsPlayback => plPlayerController.ownsPlayback(heroTag);
+
+  bool get canReadPlaybackProgress => plPlayerController.hasPlaybackProgressFor(
+    ownerTag: heroTag,
+    aid: aid,
+    bvid: bvid,
+    cid: cid.value,
+    videoType: videoType,
+    epId: isUgc ? null : epId,
+  );
   bool get setSystemBrightness => plPlayerController.setSystemBrightness;
 
   bool get isAppInForeground =>
@@ -298,7 +370,7 @@ class VideoDetailController extends GetxController
     required int? epId,
     required int? seasonId,
   }) {
-    return !isClosed &&
+    return canStartPlayback &&
         generation == _videoUrlQueryGeneration &&
         this.bvid == bvid &&
         this.cid.value == cid &&
@@ -660,6 +732,7 @@ class VideoDetailController extends GetxController
 
   late final watchProgress = GStorage.watchProgress;
   void cacheLocalProgress() {
+    if (!canReadPlaybackProgress) return;
     if (plPlayerController.playerStatus.isCompleted) {
       watchProgress.put(cid.value.toString(), entry.totalTimeMilli);
     } else if (playedTime case final playedTime?) {
@@ -1328,6 +1401,9 @@ class VideoDetailController extends GetxController
     bool autoFullScreenFlag = false,
     bool Function()? isCurrentQuery,
   }) async {
+    final mediaIsCurrent = _captureMediaRequest();
+    bool currentQuery() => mediaIsCurrent() && (isCurrentQuery?.call() ?? true);
+    if (!currentQuery()) return;
     final onlyPlayAudio = plPlayerController.onlyPlayAudio.value;
 
     final bool playFromLocal = localEntry != null;
@@ -1388,7 +1464,6 @@ class VideoDetailController extends GetxController
     if (seek == null || seek == Duration.zero) {
       seek = getFirstSegment();
     }
-    final currentQuery = isCurrentQuery;
     Future<void> setDataSource() {
       return plPlayerController.setDataSource(
         source,
@@ -1409,8 +1484,10 @@ class VideoDetailController extends GetxController
         seasonId: isUgc ? null : seasonId,
         pgcType: isUgc ? null : pgcType,
         videoType: videoType,
+        ownerTag: heroTag,
+        isCurrent: currentQuery,
         onInit: () {
-          if (currentQuery?.call() == false) return;
+          if (!currentQuery()) return;
           videoState.value = true;
           setSubtitle(vttSubtitlesIndex.value);
           // 离线视频：监听视频尺寸变化来更新竖屏状态
@@ -1434,18 +1511,11 @@ class VideoDetailController extends GetxController
       );
     }
 
-    if (currentQuery?.call() == false) return;
-    if (currentQuery == null) {
-      await setDataSource();
-    } else {
-      await _queuePlayerInit(() async {
-        if (!currentQuery()) return;
-        await setDataSource();
-      });
+    await _queuePlayerInit(() async {
       if (!currentQuery()) return;
-    }
-
-    if (isClosed) return;
+      await setDataSource();
+    });
+    if (!currentQuery() || !ownsPlayback) return;
 
     if (!isFileSource) {
       if (plPlayerController.enableBlock) {
@@ -1571,9 +1641,12 @@ class VideoDetailController extends GetxController
     bool fromSwitch = false,
     int? switchGeneration,
   }) async {
+    if (!canStartPlayback) return;
+    final pageIsActive = capturePageActivity();
     // switchGeneration 为空表示普通刷新；带 generation 的请求必须随视频切换一起失效。
     bool isCurrentSwitch() =>
-        switchGeneration == null || isCurrentVideoSwitch(switchGeneration);
+        pageIsActive() &&
+        (switchGeneration == null || isCurrentVideoSwitch(switchGeneration));
 
     if (isFileSource) {
       if (!isCurrentSwitch()) return;
@@ -2015,33 +2088,40 @@ class VideoDetailController extends GetxController
   late final showVP = true.obs;
   late final viewPointList = <ViewPointSegment>[].obs;
 
+  @protected
+  Future<String?> requestSubtitle(String url) => VideoHttp.getSubtitles(url);
+
   // 设定字幕轨道
-  Future<void> setSubtitle(int index) async {
+  Future<void> setSubtitle(int index, {bool Function()? isCurrent}) async {
+    final requestIsCurrent = _captureSubtitleRequest();
+    bool canApply() => requestIsCurrent() && (isCurrent?.call() ?? true);
+    if (!canApply()) return;
+    final player = plPlayerController.videoPlayerController;
     if (index <= 0) {
-      await plPlayerController.videoPlayerController?.setSubtitleTrack(.no());
-      vttSubtitlesIndex.value = index;
+      await player?.setSubtitleTrack(.no());
+      if (canApply()) vttSubtitlesIndex.value = index;
       return;
     }
 
+    if (index > subtitles.length) return;
+    final sub = subtitles[index - 1];
     Future<void> setSub(({bool isData, String id}) subtitle) async {
-      final sub = subtitles[index - 1];
+      if (!canApply()) return;
 
       String subUri = subtitle.id;
       if (subtitle.isData) {
         subUri = 'memory://$subUri';
       }
-      await plPlayerController.videoPlayerController?.setSubtitleTrack(
+      await player?.setSubtitleTrack(
         SubtitleTrack(subUri, sub.lanDoc, sub.lan, uri: true),
       );
-      vttSubtitlesIndex.value = index;
+      if (canApply()) vttSubtitlesIndex.value = index;
     }
 
     var subtitle = vttSubtitles[index - 1];
     if (subtitle == null) {
-      final result = await VideoHttp.getSubtitles(
-        subtitles[index - 1].subtitleUrl!,
-      );
-      if (!isClosed && result != null) {
+      final result = await requestSubtitle(sub.subtitleUrl!);
+      if (canApply() && result != null) {
         subtitle = (isData: true, id: result);
         vttSubtitles[index - 1] = subtitle;
       } else {
@@ -2081,18 +2161,39 @@ class VideoDetailController extends GetxController
 
   late bool continuePlayingPart = Pref.continuePlayingPart;
 
+  @protected
+  Future<LoadingState<PlayInfoData>> requestPlayInfo({
+    required String bvid,
+    required int cid,
+    int? seasonId,
+    int? epId,
+  }) =>
+      VideoHttp.playInfo(bvid: bvid, cid: cid, seasonId: seasonId, epId: epId);
+
+  @protected
+  Future<LoadingState<DmViewReply>> requestDmView(int aid, int cid) =>
+      DmGrpc.dmView(aid, cid);
+
   Future<void> _queryPlayInfo() async {
+    final isCurrent = _captureSubtitleRequest();
+    if (!isCurrent()) return;
+    final requestAid = aid;
+    final requestBvid = bvid;
+    final requestCid = cid.value;
+    final requestEpId = epId;
+    final requestSeasonId = seasonId;
     vttSubtitles.clear();
     vttSubtitlesIndex.value = 0;
     if (plPlayerController.showViewPoints) {
       viewPointList.clear();
     }
-    final res = await VideoHttp.playInfo(
-      bvid: bvid,
-      cid: cid.value,
-      seasonId: seasonId,
-      epId: epId,
+    final res = await requestPlayInfo(
+      bvid: requestBvid,
+      cid: requestCid,
+      seasonId: requestSeasonId,
+      epId: requestEpId,
     );
+    if (!isCurrent()) return;
     if (res case Success(:final response)) {
       // interactive video
       late final introCtr = Get.find<UgcIntroController>(tag: heroTag);
@@ -2140,13 +2241,14 @@ class VideoDetailController extends GetxController
       }
 
       if (response.subtitle?.subtitles case final sub? when (sub.isNotEmpty)) {
-        _setSubtitle(sub);
+        await _setSubtitle(sub, isCurrent: isCurrent);
       } else if (!Accounts.main.isLogin) {
-        final res = await DmGrpc.dmView(aid, cid.value);
+        final res = await requestDmView(requestAid, requestCid);
+        if (!isCurrent()) return;
         if (res case Success(:final response)) {
           if (response.hasSubtitle() &&
               response.subtitle.subtitles.isNotEmpty) {
-            _setSubtitle(
+            await _setSubtitle(
               response.subtitle.subtitles
                   .map(
                     (i) => Subtitle(
@@ -2161,6 +2263,7 @@ class VideoDetailController extends GetxController
                   )
                   .toList()
                 ..sort(),
+              isCurrent: isCurrent,
             );
           }
         } else {
@@ -2170,7 +2273,11 @@ class VideoDetailController extends GetxController
     }
   }
 
-  Future<void> _setSubtitle(List<Subtitle> sub) async {
+  Future<void> _setSubtitle(
+    List<Subtitle> sub, {
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) return;
     subtitles.value = sub;
     final idx = switch (Pref.subtitlePreferenceV2) {
       .off => 0,
@@ -2183,7 +2290,8 @@ class VideoDetailController extends GetxController
             ? 1
             : 0,
     };
-    await setSubtitle(idx);
+    if (!isCurrent()) return;
+    await setSubtitle(idx, isCurrent: isCurrent);
   }
 
   void updateMediaListHistory(int aid) {
@@ -2226,7 +2334,7 @@ class VideoDetailController extends GetxController
   }
 
   void syncCompletedProgressForCurrentVideo({Duration? fallbackDuration}) {
-    if (sourceType == SourceType.normal) return;
+    if (!canReadPlaybackProgress || sourceType == SourceType.normal) return;
 
     final currentDuration = _currentVideoDurationSeconds(
       fallbackDuration: fallbackDuration,
@@ -2243,6 +2351,7 @@ class VideoDetailController extends GetxController
   }
 
   void makeHeartBeat() {
+    if (!canReadPlaybackProgress) return;
     if (plPlayerController.enableHeart &&
         !plPlayerController.playerStatus.isCompleted &&
         playedTime != null) {
@@ -2294,7 +2403,8 @@ class VideoDetailController extends GetxController
 
   /// 在切换视频前保存当前视频的进度（确保旧视频进度被保存）
   void saveProgressBeforeChange() {
-    if (sourceType == SourceType.normal ||
+    if (!canReadPlaybackProgress ||
+        sourceType == SourceType.normal ||
         plPlayerController.position == Duration.zero ||
         data.timeLength == null) {
       return;
@@ -2563,7 +2673,8 @@ class VideoDetailController extends GetxController
     // 注意：如果正在切换视频，跳过保存进度，因为：
     // 1. 旧视频的进度已经在 saveProgressBeforeChange() 中正确保存了
     // 2. 新视频还在加载中，播放器位置还是旧视频的值，保存会导致错误
-    if (!_isSwitchingVideo &&
+    if (canReadPlaybackProgress &&
+        !_isSwitchingVideo &&
         sourceType != SourceType.normal &&
         plPlayerController.position != Duration.zero &&
         data.timeLength != null) {
@@ -2598,10 +2709,14 @@ class VideoDetailController extends GetxController
     } else if (_isSwitchingVideo && kDebugMode) {
       debugPrint('🚪 窗口关闭，正在切换视频中，跳过保存进度（已在切换前保存）');
     }
-    cid.close();
     if (isFileSource) {
       cacheLocalProgress();
     }
+    setPlaybackPageActive(false);
+    // GetX can delete route dependencies before descendant Obx widgets unmount.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!cid.subject.isClosed) cid.close();
+    });
     if (_pendingVideoSwitchProtection) {
       _pendingVideoSwitchProtectionGeneration = null;
       // 控制器销毁时不再等待通知服务停止，避免 onClose 被异步清理阻塞。

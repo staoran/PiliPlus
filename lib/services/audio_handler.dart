@@ -414,8 +414,17 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   void onVideoDetailDispose(String herotag) {
     if (!enableBackgroundPlay) return;
 
+    final wasCurrent = mediaItem.value?.id.endsWith(herotag) ?? false;
+
     if (_item.isNotEmpty) {
       _item.removeWhere((item) => item.id.endsWith(herotag));
+    }
+
+    // An old route may finish disposing after the new media is already active.
+    if (!wasCurrent) return;
+    if (_item.isEmpty) {
+      clear(force: true);
+      return;
     }
 
     if (_item.isNotEmpty) {

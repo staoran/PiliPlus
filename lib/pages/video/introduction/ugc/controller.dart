@@ -17,6 +17,7 @@ import 'package:PiliPlus/models_new/member_card_info/data.dart';
 import 'package:PiliPlus/models_new/relation/data.dart';
 import 'package:PiliPlus/models_new/video/video_ai_conclusion/model_result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
+import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart';
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/models_new/video/video_detail/section.dart';
@@ -86,9 +87,46 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     videoDetail.value.title = Get.arguments['title'] ?? '';
   }
 
+  @override
+  void onClose() {
+    super.onClose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!videoDetail.subject.isClosed) videoDetail.close();
+    });
+  }
+
   // 获取视频简介&分p
   @override
   Future<void> queryVideoIntro() => _queryVideoIntro();
+
+  /// A canceled switch may have updated the player identity before this intro.
+  /// Call after audio has handed back its final media identity.
+  Future<void> restorePlaybackIdentity() async {
+    if (isClosed || !videoDetailCtr.canStartPlayback) return;
+    final targetBvid = videoDetailCtr.bvid;
+    final targetCid = videoDetailCtr.cid.value;
+    final needsQuery =
+        bvid != targetBvid ||
+        cid.value != targetCid ||
+        videoDetail.value.bvid != targetBvid;
+    if (bvid != targetBvid) {
+      reload = true;
+      aiConclusionResult = null;
+      hasLater.value = videoDetailCtr.sourceType == SourceType.watchLater;
+    }
+    bvid = targetBvid;
+    cid.value = targetCid;
+    if (needsQuery) {
+      await queryVideoIntro();
+    } else {
+      videoPlayerServiceHandler?.onVideoDetailChange(
+        videoDetail.value,
+        targetCid,
+        heroTag,
+      );
+      restoreListControlMode();
+    }
+  }
 
   Future<void> queryVideoIntroForSwitch(int switchGeneration) {
     return _queryVideoIntro(
@@ -96,14 +134,24 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     );
   }
 
+  @protected
+  Future<LoadingState<VideoDetailData>> requestVideoIntro(String bvid) =>
+      VideoHttp.videoIntro(bvid: bvid);
+
   // 简介和标签请求可能晚于分 P 切换返回，isCurrent 用来防止旧 bvid/cid 回写。
   Future<void> _queryVideoIntro({bool Function()? isCurrent}) async {
-    bool isCurrentIntro() => isCurrent?.call() ?? true;
+    final pageIsActive = videoDetailCtr.capturePageActivity();
+    final requestBvid = bvid;
+    bool isCurrentIntro() =>
+        !isClosed &&
+        pageIsActive() &&
+        bvid == requestBvid &&
+        videoDetailCtr.bvid == requestBvid &&
+        (isCurrent?.call() ?? true);
     if (!isCurrentIntro()) return;
     // 请求发出时记录 bvid，避免 await 期间控制器已经切到另一个视频。
-    final requestBvid = bvid;
     queryVideoTags(isCurrent: isCurrentIntro);
-    final res = await VideoHttp.videoIntro(bvid: requestBvid);
+    final res = await requestVideoIntro(requestBvid);
     if (!isCurrentIntro() || bvid != requestBvid) {
       return;
     }
@@ -168,6 +216,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         title: videoDetail.value.title,
         subTitle: partTitle,
       );
+      if (!isCurrentIntro()) return;
       queryUserStat(response.staff);
 
       // 更新媒体通知列表控制模式
@@ -185,6 +234,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
   /// 更新媒体通知列表控制模式
   void _updateListControlMode() {
+    if (isClosed || !videoDetailCtr.canStartPlayback) return;
     final data = videoDetail.value;
     // 检查是否有多P、合集或播放列表
     final hasMultiParts = (data.pages?.length ?? 0) > 1;

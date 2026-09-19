@@ -52,7 +52,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:archive/archive.dart' show getCrc32;
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:easy_debounce/easy_throttle.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter/services.dart' show HapticFeedback, DeviceOrientation;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -154,6 +154,61 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   VideoType _videoType = VideoType.ugc;
   int _heartDuration = 0;
   int _mediaSwitchGeneration = 0;
+  String? _ownerTag;
+  int? _progressGeneration;
+  Future<void> _mediaInitQueue = Future<void>.value();
+  bool _disposed = false;
+
+  /// Capture before an asynchronous page operation; same-media reopens also
+  /// invalidate this guard.
+  bool Function() playbackGuard(String ownerTag) {
+    final generation = _mediaSwitchGeneration;
+    return () =>
+        !_disposed &&
+        generation == _mediaSwitchGeneration &&
+        ownsPlayback(ownerTag);
+  }
+
+  void deactivatePlayback(String ownerTag) {
+    if (!ownsPlayback(ownerTag)) return;
+    // Audio uses a separate Player: the paused video's settled position stops
+    // being authoritative even when no video initialization is in flight.
+    _progressGeneration = null;
+    if (_processing) {
+      _mediaSwitchGeneration++;
+      _processing = false;
+      _scheduleClearMediaSwitch(_mediaSwitchGeneration);
+    }
+  }
+
+  @visibleForTesting
+  PlPlayerController.test(Player player) : _videoPlayerController = player {
+    // Keep the injected native player across opens, including on Windows.
+    _playerCount = 2;
+  }
+
+  bool ownsPlayback(String ownerTag) => _ownerTag == ownerTag;
+
+  /// Media fields change before open completes. Only settled progress can be
+  /// consumed by the page which opened this media, including same-media routes.
+  bool hasPlaybackProgressFor({
+    required String ownerTag,
+    required int aid,
+    required String bvid,
+    required int cid,
+    required VideoType videoType,
+    int? epId,
+  }) =>
+      ownsPlayback(ownerTag) &&
+      _progressGeneration == _mediaSwitchGeneration &&
+      !_processing &&
+      dataStatus.value == DataStatus.loaded &&
+      !isLive &&
+      _aid == aid &&
+      _bvid == bvid &&
+      this.cid == cid &&
+      _videoType == videoType &&
+      _epid == epId;
   int? width;
   int? height;
 
@@ -627,6 +682,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   bool _isSwitchingMedia = false;
 
   int _beginMediaSwitch() {
+    _progressGeneration = null;
     _cancelPendingCompleted(reason: 'media_switch');
     _cancelSubForSeek();
     _isSwitchingMedia = true;
@@ -698,93 +754,100 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     int? seasonId,
     int? pgcType,
     VideoType? videoType,
+    String? ownerTag,
+    bool Function()? isCurrent,
     VoidCallback? onInit,
     Volume? volume,
     bool autoFullScreenFlag = false,
   }) async {
+    if (_disposed || isCurrent?.call() == false) return;
     final switchGeneration = _beginMediaSwitch();
-    var clearSwitchScheduled = false;
-    try {
-      _processing = true;
-      this.isLive = isLive;
-      _videoType = videoType ?? VideoType.ugc;
-      this.width = width;
-      this.height = height;
-      this.dataSource = dataSource;
-      _autoPlay = autoplay;
-      // 初始化视频倍速
-      // _playbackSpeed.value = speed;
-      // 初始化数据加载状态
-      dataStatus.value = DataStatus.loading;
-      // 初始化全屏方向
-      _isVertical = isVertical ?? false;
-      debugPrint(
-        '[PlPlayerController] setPlayer: isVertical param=$isVertical, _isVertical=$_isVertical, width=$width, height=$height',
-      );
-      _aid = aid;
-      _bvid = bvid;
-      this.cid = cid;
-      _epid = epid;
-      _seasonId = seasonId;
-      _pgcType = pgcType;
+    _ownerTag = ownerTag;
+    _processing = true;
+    bool isCurrentInit() =>
+        !_disposed &&
+        _playerCount > 0 &&
+        switchGeneration == _mediaSwitchGeneration &&
+        (isCurrent?.call() ?? true);
+    final run = _mediaInitQueue.then((_) async {
+      try {
+        if (!isCurrentInit()) return;
+        this.isLive = isLive;
+        _videoType = videoType ?? VideoType.ugc;
+        this.width = width;
+        this.height = height;
+        this.dataSource = dataSource;
+        _autoPlay = autoplay;
+        // 初始化视频倍速
+        // _playbackSpeed.value = speed;
+        // 初始化数据加载状态
+        dataStatus.value = DataStatus.loading;
+        // 初始化全屏方向
+        _isVertical = isVertical ?? false;
+        debugPrint(
+          '[PlPlayerController] setPlayer: isVertical param=$isVertical, _isVertical=$_isVertical, width=$width, height=$height',
+        );
+        _aid = aid;
+        _bvid = bvid;
+        this.cid = cid;
+        _epid = epid;
+        _seasonId = seasonId;
+        _pgcType = pgcType;
 
-      if (showSeekPreview) {
-        _clearPreview();
-      }
-      cancelLongPressTimer();
-      if (_videoPlayerController != null &&
-          _videoPlayerController!.state.playing) {
-        await pause(notify: false);
-      }
+        if (showSeekPreview) {
+          _clearPreview();
+        }
+        cancelLongPressTimer();
+        if (_videoPlayerController != null &&
+            _videoPlayerController!.state.playing) {
+          await pause(notify: false);
+        }
 
-      if (_playerCount == 0) {
-        return;
-      }
-      // 配置Player 音轨、字幕等等
-      await _createVideoController(
-        dataSource,
-        seekTo,
-        volume,
-        switchGeneration,
-      );
-      clearSwitchScheduled = true;
+        if (!isCurrentInit()) return;
+        // 配置Player 音轨、字幕等等
+        await _createVideoController(
+          dataSource,
+          seekTo,
+          volume,
+          isCurrentInit,
+        );
+        if (!isCurrentInit()) return;
 
-      if (_playerCount == 0) {
-        _removeListeners();
-        _videoPlayerController?.dispose();
-        _videoPlayerController = null;
-        _videoController = null;
-        return;
-      }
+        updateDuration(duration ?? _videoPlayerController!.state.duration);
+        position = seekTo ?? Duration.zero;
+        sliderPosition = position;
+        buffered.value = Duration.zero;
+        updatePositionSecond();
+        updateSliderPositionSecond();
+        updateBufferedSecond();
 
-      updateDuration(duration ?? _videoPlayerController!.state.duration);
-      position = seekTo ?? Duration.zero;
-      sliderPosition = position;
-      buffered.value = Duration.zero;
-      updatePositionSecond();
-      updateSliderPositionSecond();
-      updateBufferedSecond();
+        dataStatus.value = .loaded;
 
-      dataStatus.value = .loaded;
+        if (autoFullScreenFlag && autoEnterFullScreen) {
+          triggerFullScreen(status: true);
+        }
 
-      if (autoFullScreenFlag && autoEnterFullScreen) {
-        triggerFullScreen(status: true);
-      }
-
-      await _initializePlayer();
-      onInit?.call();
-    } catch (err, stackTrace) {
-      dataStatus.value = DataStatus.error;
-      if (kDebugMode) {
-        debugPrint(stackTrace.toString());
-        debugPrint('plPlayer err:  $err');
-      }
-    } finally {
-      if (!clearSwitchScheduled) {
+        await _initializePlayer(isCurrentInit);
+        if (!isCurrentInit()) return;
+        _progressGeneration = switchGeneration;
+        _processing = false;
+        onInit?.call();
+      } catch (err, stackTrace) {
+        if (!isCurrentInit()) return;
+        dataStatus.value = DataStatus.error;
+        if (kDebugMode) {
+          debugPrint(stackTrace.toString());
+          debugPrint('plPlayer err:  $err');
+        }
+      } finally {
         _scheduleClearMediaSwitch(switchGeneration);
+        if (switchGeneration == _mediaSwitchGeneration) {
+          _processing = false;
+        }
       }
-      _processing = false;
-    }
+    });
+    _mediaInitQueue = run.catchError((_) {});
+    await run;
   }
 
   String? shadersDirPath;
@@ -840,7 +903,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  Future<Player> _initPlayer() async {
+  Future<Player?> _initPlayer(bool Function() isCurrent) async {
     assert(_videoPlayerController == null);
     final opt = {
       'video-sync': Pref.videoSync,
@@ -865,16 +928,31 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
+    if (!isCurrent()) {
+      await player.dispose();
+      return null;
+    }
     assert(_videoController == null);
 
-    _videoController = await VideoController.create(
-      player,
-      configuration: VideoControllerConfiguration(
-        enableHardwareAcceleration: hwdec != null,
-        androidAttachSurfaceAfterVideoParameters: false,
-        hwdec: hwdec,
-      ),
-    );
+    final VideoController videoController;
+    try {
+      videoController = await VideoController.create(
+        player,
+        configuration: VideoControllerConfiguration(
+          enableHardwareAcceleration: hwdec != null,
+          androidAttachSurfaceAfterVideoParameters: false,
+          hwdec: hwdec,
+        ),
+      );
+    } catch (_) {
+      await player.dispose();
+      rethrow;
+    }
+    if (!isCurrent()) {
+      await player.dispose();
+      return null;
+    }
+    _videoController = videoController;
 
     player.setMediaHeader(
       userAgent: BrowserUa.pc,
@@ -894,8 +972,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     DataSource dataSource,
     Duration? seekTo,
     Volume? volume,
-    int switchGeneration,
+    bool Function() isCurrent,
   ) async {
+    if (!isCurrent()) return;
     isBuffering.value = false;
     _heartDuration = 0;
     danmakuController?.clear();
@@ -915,12 +994,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         );
       }
       await _disposeCurrentPlayer();
+      if (!isCurrent()) return;
       player = null;
     }
 
     if (player == null) {
-      player = await _initPlayer();
-      if (_playerCount == 0) {
+      player = await _initPlayer(isCurrent);
+      if (player == null) return;
+      if (!isCurrent()) {
         _removeListeners();
         await player.dispose();
         player = null;
@@ -938,6 +1019,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }
     }
 
+    if (!isCurrent()) return;
     final Map<String, String> extras = {
       if (dataSource is FileSource)
         'cache': 'no'
@@ -966,24 +1048,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     assert(!isLive || seekTo == null);
-    try {
-      if (kDebugMode && Platform.isWindows) {
-        debugPrint(
-          '[PlPlayerController] opening media video=${dataSource.videoSource} audio=${dataSource.audioSource} seekTo=$seekTo',
-        );
-      }
-      await player.open(
-        Media(
-          video,
-          start: seekTo,
-          extras: extras.isEmpty ? null : extras,
-        ),
-        play: false,
+    if (kDebugMode && Platform.isWindows) {
+      debugPrint(
+        '[PlPlayerController] opening media video=${dataSource.videoSource} audio=${dataSource.audioSource} seekTo=$seekTo',
       );
-    } finally {
-      // mpv 在 open 完成后可能还会短暂发出旧 stream 的 error 事件，延迟重置
-      _scheduleClearMediaSwitch(switchGeneration);
     }
+    await player.open(
+      Media(
+        video,
+        start: seekTo,
+        extras: extras.isEmpty ? null : extras,
+      ),
+      play: false,
+    );
   }
 
   Future<void> _disposeCurrentPlayer() async {
@@ -1057,8 +1134,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   // 开始播放
-  Future<void> _initializePlayer() async {
-    if (_instance == null) return;
+  Future<void> _initializePlayer(bool Function() isCurrent) async {
+    if (!isCurrent()) return;
     // 设置倍速
     if (isLive) {
       await setPlaybackSpeed(1.0);
@@ -1067,6 +1144,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         await setPlaybackSpeed(_playbackSpeed.value);
       }
     }
+    if (!isCurrent()) return;
     _initVideoFit();
     // 跳转播放
     // if (seekTo != Duration.zero) {
@@ -1075,7 +1153,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     // 自动播放
     if (_autoPlay) {
-      playIfExists();
+      await play(isCurrent: isCurrent);
       // await play(duration: duration);
     }
   }
@@ -1605,8 +1683,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   /// 播放视频
-  Future<void> play({bool repeat = false, bool hideControls = true}) async {
-    if (_playerCount == 0) return;
+  Future<void> play({
+    bool repeat = false,
+    bool hideControls = true,
+    bool Function()? isCurrent,
+  }) async {
+    if (_playerCount == 0 || isCurrent?.call() == false) return;
     _cancelPendingCompleted(reason: 'play');
     // 播放时自动隐藏控制条
     controls = !hideControls;
@@ -1617,6 +1699,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     await _videoPlayerController?.play();
+
+    if (_disposed || isCurrent?.call() == false) return;
 
     audioSessionHandler?.setActive(true);
 
@@ -2056,6 +2140,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     _playerCount = 0;
+    _disposed = true;
+    _mediaSwitchGeneration++;
+    _ownerTag = null;
+    _progressGeneration = null;
     if (removeSafeArea) {
       showSystemBar();
     }

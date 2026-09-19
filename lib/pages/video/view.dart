@@ -186,9 +186,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   // 获取视频资源，初始化播放器
   void videoSourceInit() {
-    // 先让当前页子树完成 unmount，再销毁 tagged controllers，
-    // 避免 Obx/TabBar 还在订阅或绘制时流已经被关闭。
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !isShowing || videoDetailController.isClosed) return;
       videoDetailController.queryVideoUrl(autoFullScreenFlag: true);
       if (videoDetailController.autoPlay) {
         plPlayerController = videoDetailController.plPlayerController;
@@ -218,7 +217,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   void positionListener(Duration position) {
-    if (videoDetailController.isSwitchingVideo) {
+    if (videoDetailController.isSwitchingVideo ||
+        !videoDetailController.canReadPlaybackProgress) {
       return;
     }
     videoDetailController.playedTime = position;
@@ -260,7 +260,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   void _syncCompletedProgress() {
-    if (_completedProgressSynced) {
+    if (_completedProgressSynced ||
+        !videoDetailController.canReadPlaybackProgress) {
       return;
     }
     final controller = plPlayerController;
@@ -413,6 +414,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   bool _persistCompletedProgressIfNeeded({required String reason}) {
+    if (!videoDetailController.canReadPlaybackProgress) return false;
     final controller = plPlayerController;
     final player = controller?.videoPlayerController;
     // Close-time persistence should not mark completed from a stale completed
@@ -570,27 +572,19 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         Get.isRegistered<HorizontalMemberPageController>(tag: currentHeroTag)
         ? Get.find<HorizontalMemberPageController>(tag: currentHeroTag)
         : null;
-    final currentVideoReplyController =
-        videoDetailController.showReply &&
-            Get.isRegistered<VideoReplyController>(tag: currentHeroTag)
-        ? Get.find<VideoReplyController>(tag: currentHeroTag)
+    final currentVideoReplyController = videoDetailController.showReply
+        ? _videoReplyController
         : null;
     final currentUgcIntroController =
-        !videoDetailController.isFileSource &&
-            videoDetailController.isUgc &&
-            Get.isRegistered<UgcIntroController>(tag: currentHeroTag)
-        ? Get.find<UgcIntroController>(tag: currentHeroTag)
+        !videoDetailController.isFileSource && videoDetailController.isUgc
+        ? ugcIntroController
         : null;
     final currentPgcIntroController =
-        !videoDetailController.isFileSource &&
-            !videoDetailController.isUgc &&
-            Get.isRegistered<PgcIntroController>(tag: currentHeroTag)
-        ? Get.find<PgcIntroController>(tag: currentHeroTag)
+        !videoDetailController.isFileSource && !videoDetailController.isUgc
+        ? pgcIntroController
         : null;
-    final currentLocalIntroController =
-        videoDetailController.isFileSource &&
-            Get.isRegistered<LocalIntroController>(tag: currentHeroTag)
-        ? Get.find<LocalIntroController>(tag: currentHeroTag)
+    final currentLocalIntroController = videoDetailController.isFileSource
+        ? localIntroController
         : null;
 
     final persistedCompleted = _persistCompletedProgressIfNeeded(
@@ -598,6 +592,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     );
     _cancelPendingCompleted(reason: 'dispose');
     _unbindPlayerListeners();
+    if (!persistedCompleted) videoDetailController.saveProgressBeforeChange();
+    if (videoDetailController.isFileSource) {
+      videoDetailController.cacheLocalProgress();
+    }
 
     if (!videoDetailController.removeSafeArea) {
       showSystemBar();
@@ -605,7 +603,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     if (!videoDetailController.plPlayerController.isCloseAll) {
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
-      videoPlayerServiceHandler?.clear(force: true);
       if (plPlayerController != null) {
         if (!persistedCompleted) {
           videoDetailController.makeHeartBeat();
@@ -615,6 +612,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         PlPlayerController.updatePlayCount();
       }
     }
+    videoDetailController.setPlaybackPageActive(false);
     removeObserverMobile(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -629,14 +627,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         );
       }
       if (currentUgcIntroController != null) {
-        currentUgcIntroController.cancelTimer();
-        currentUgcIntroController.videoDetail.close();
         _deleteControllerIfSame<UgcIntroController>(
           currentHeroTag,
           currentUgcIntroController,
         );
       } else if (currentPgcIntroController != null) {
-        currentPgcIntroController.cancelTimer();
         _deleteControllerIfSame<PgcIntroController>(
           currentHeroTag,
           currentPgcIntroController,
@@ -695,6 +690,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           playerStatusBeforeNavigation ?? plPlayerController?.playerStatus.value
       ..brightness = plPlayerController?.brightness.value;
     if (plPlayerController != null) {
+      if (!persistedCompleted) videoDetailController.saveProgressBeforeChange();
+      if (videoDetailController.isFileSource) {
+        videoDetailController.cacheLocalProgress();
+      }
       if (!persistedCompleted) {
         videoDetailController.makeHeartBeat();
       }
@@ -703,6 +702,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       // 状态上报统一由 PlPlayerController 的流监听完成。
       // 这里不再手动 onStatusChange，避免与底层流回调重复写状态。
     }
+    videoDetailController.setPlaybackPageActive(false);
   }
 
   @override
@@ -715,6 +715,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     isShowing = true;
+    videoDetailController.setPlaybackPageActive(true);
+    final pageIsActive = videoDetailController.capturePageActivity();
 
     addObserverMobile(this);
 
@@ -725,14 +727,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     PlPlayerController.setPlayCallBack(playCallBack);
-
-    introController
-      ..startTimer()
-      // 恢复媒体通知列表控制模式（从听视频页返回时需要）
-      ..restoreListControlMode();
-
-    // 同步听视频返回时的状态
-    final didSwitchFromAudio = _syncAudioPageState();
 
     if (mounted &&
         Platform.isAndroid &&
@@ -753,10 +747,17 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     () async {
+      // Capture audio state while its route controller is still registered,
+      // then wait for an episode switch before restoring the intro identity.
+      final didSwitchFromAudio = await _syncAudioPageState();
+      if (!mounted || !pageIsActive()) return;
       final syncedPosition = _pendingAudioSyncPosition;
       _pendingAudioSyncPosition = null;
       if (!didSwitchFromAudio) {
-        if (videoDetailController.autoPlay) {
+        if (!videoDetailController.isFileSource &&
+            videoDetailController.videoUrl == null) {
+          await videoDetailController.queryVideoUrl(defaultST: syncedPosition);
+        } else if (videoDetailController.autoPlay) {
           await videoDetailController.playerInit(
             autoplay: videoDetailController.playerStatus?.isPlaying ?? false,
             localEntry: videoDetailController.currentLocalEntry,
@@ -780,15 +781,22 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           }
         }
       }
-      if (!mounted || !isShowing) return;
+      if (!mounted || !pageIsActive()) return;
       _bindPlayerListeners();
+      if (!videoDetailController.isFileSource && videoDetailController.isUgc) {
+        await ugcIntroController.restorePlaybackIdentity();
+      } else {
+        introController.restoreListControlMode();
+      }
+      if (!mounted || !pageIsActive()) return;
+      introController.startTimer();
     }();
 
     super.didPopNext();
   }
 
   /// 同步听视频页面的状态
-  bool _syncAudioPageState() {
+  Future<bool> _syncAudioPageState() async {
     try {
       // 检查是否有 AudioController 实例
       if (!Get.isRegistered<AudioController>(tag: heroTag)) {
@@ -891,12 +899,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           }
 
           if (targetItem != null) {
-            ugcIntroController.onChangeEpisode(
+            return await ugcIntroController.onChangeEpisode(
               targetItem,
               fromAudioPage: true,
               audioPosition: audioPosition,
             );
-            return true;
           }
         } else {
           pgc.EpisodeItem? targetItem;
@@ -918,12 +925,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           }
 
           if (targetItem != null) {
-            pgcIntroController.onChangeEpisode(
+            return await pgcIntroController.onChangeEpisode(
               targetItem,
               fromAudioPage: true,
               audioPosition: audioPosition,
             );
-            return true;
           }
         }
       } else {

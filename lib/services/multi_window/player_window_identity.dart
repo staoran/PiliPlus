@@ -1,6 +1,8 @@
 class PlayerWindowIdentity {
   const PlayerWindowIdentity._();
 
+  static int _pageSequence = 0;
+
   static String heroTag({
     int? aid,
     String? bvid,
@@ -21,6 +23,7 @@ class PlayerWindowIdentity {
       'pgc:${pgcType ?? 0}',
       'video:${_identityPart(videoType)}',
       'source:${_identityPart(sourceType)}',
+      'page:${++_pageSequence}',
     ];
     return parts.join('|');
   }
