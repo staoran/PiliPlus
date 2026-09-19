@@ -148,6 +148,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   final videoReplyPanelKey = GlobalKey();
   final videoRelatedKey = GlobalKey();
   final videoIntroKey = GlobalKey();
+  final _playerContentKey = GlobalKey();
 
   @override
   void initState() {
@@ -1813,50 +1814,43 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     required double width,
     required double height,
     bool isPipMode = false,
-  }) => popScope(
-    key: videoDetailController.videoPlayerKey,
-    canPop:
-        !isFullScreen &&
-        !videoDetailController.plPlayerController.isDesktopPip &&
-        (videoDetailController.horizontalScreen || isPortrait),
-    onPopInvokedWithResult:
-        videoDetailController.plPlayerController.onPopInvokedWithResult,
-    child: Obx(
-      () =>
-          !videoDetailController.videoState.value ||
-              !videoDetailController.autoPlay ||
-              plPlayerController?.videoController == null
-          ? const SizedBox.shrink()
-          : PLVideoPlayer(
-              maxWidth: width,
-              maxHeight: height,
-              plPlayerController: plPlayerController!,
-              videoDetailController: videoDetailController,
-              introController: introController,
-              headerControl: HeaderControl(
-                key: videoDetailController.headerCtrKey,
-                isPortrait: isPortrait,
-                controller: videoDetailController.plPlayerController,
-                videoDetailCtr: videoDetailController,
-                heroTag: heroTag,
-              ),
-              danmuWidget: isPipMode && pipNoDanmaku
-                  ? null
-                  : Obx(
-                      () => PlDanmaku(
-                        key: ValueKey(videoDetailController.cid.value),
-                        isPipMode: isPipMode,
-                        cid: videoDetailController.cid.value,
-                        playerController: plPlayerController!,
-                        isFullScreen: plPlayerController!.isFullScreen.value,
-                        isFileSource: videoDetailController.isFileSource,
-                        size: Size(width, height),
-                      ),
-                    ),
-              showEpisodes: showEpisodes,
-              showViewPoints: showViewPoints,
+  }) => Obx(
+    // Preserve player state when the responsive layout moves this subtree.
+    key: _playerContentKey,
+    () =>
+        !videoDetailController.videoState.value ||
+            !videoDetailController.autoPlay ||
+            plPlayerController?.videoController == null
+        ? const SizedBox.shrink()
+        : PLVideoPlayer(
+            maxWidth: width,
+            maxHeight: height,
+            plPlayerController: plPlayerController!,
+            videoDetailController: videoDetailController,
+            introController: introController,
+            headerControl: HeaderControl(
+              key: videoDetailController.headerCtrKey,
+              isPortrait: isPortrait,
+              controller: videoDetailController.plPlayerController,
+              videoDetailCtr: videoDetailController,
+              heroTag: heroTag,
             ),
-    ),
+            danmuWidget: isPipMode && pipNoDanmaku
+                ? null
+                : Obx(
+                    () => PlDanmaku(
+                      key: ValueKey(videoDetailController.cid.value),
+                      isPipMode: isPipMode,
+                      cid: videoDetailController.cid.value,
+                      playerController: plPlayerController!,
+                      isFullScreen: plPlayerController!.isFullScreen.value,
+                      isFileSource: videoDetailController.isFileSource,
+                      size: Size(width, height),
+                    ),
+                  ),
+            showEpisodes: showEpisodes,
+            showViewPoints: showViewPoints,
+          ),
   );
 
   late ThemeData theme;
@@ -1897,9 +1891,22 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         child: child,
       );
     }
-    return videoDetailController.plPlayerController.darkVideoPage
+    final page = videoDetailController.plPlayerController.darkVideoPage
         ? Theme(data: theme, child: child)
         : child;
+    // Keep route registration outside the responsive player layouts.
+    return Obx(
+      () => popScope(
+        key: videoDetailController.videoPlayerKey,
+        canPop:
+            !isFullScreen &&
+            !videoDetailController.plPlayerController.isDesktopPip &&
+            (videoDetailController.horizontalScreen || isPortrait),
+        onPopInvokedWithResult:
+            videoDetailController.plPlayerController.onPopInvokedWithResult,
+        child: page,
+      ),
+    );
   }
 
   Widget buildTabBar({
