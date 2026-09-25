@@ -182,7 +182,7 @@ class PgcIntroController extends CommonIntroController {
   @override
   void actionShareVideo(BuildContext context) {
     String videoUrl =
-        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos}';
+        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos(false)}';
     showDialog(
       context: context,
       builder: (_) => SimpleDialog(
@@ -563,8 +563,6 @@ class PgcIntroController extends CommonIntroController {
       if (nextIndex >= episodes.length) {
         if (playRepeat == PlayRepeat.listCycle) {
           nextIndex = 0;
-        } else if (playRepeat == PlayRepeat.autoPlayRelated) {
-          return false;
         } else {
           return false;
         }

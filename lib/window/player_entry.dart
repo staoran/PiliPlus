@@ -153,11 +153,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         ?.toDouble();
 
     _showTitleBar = _settings?['showWindowTitleBar'] as bool? ?? true;
-    _customColor = _readIndex(
-      _settings?['customColor'],
-      colorThemeTypes.length,
-      0,
-    );
+    _customColor = _readInt(_settings?['customColor']) ?? 0;
     _dynamicColor = _settings?['dynamicColor'] as bool? ?? false;
     _schemeVariant = _readIndex(
       _settings?['schemeVariant'],
@@ -188,11 +184,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   void _applyThemeSettings(Map<String, dynamic> settings) {
-    final customColor = _readIndex(
-      settings['customColor'],
-      colorThemeTypes.length,
-      _customColor,
-    );
+    final customColor = _readInt(settings['customColor']) ?? _customColor;
     final dynamicColor = settings['dynamicColor'] as bool? ?? _dynamicColor;
     final schemeVariant = _readIndex(
       settings['schemeVariant'],
@@ -203,7 +195,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     final dynamicColorSeed = settings.containsKey('dynamicColorSeed')
         ? _readInt(settings['dynamicColorSeed'])
         : _dynamicColorSeed;
-    final changed = customColor != _customColor ||
+    final changed =
+        customColor != _customColor ||
         dynamicColor != _dynamicColor ||
         schemeVariant != _schemeVariant ||
         themeMode != _themeMode ||
@@ -861,7 +854,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    final brandColor = colorThemeTypes[_customColor].color;
+    final brandColor =
+        colorThemeTypes.elementAtOrNull(_customColor)?.color ??
+        Color(_customColor);
     final variant = FlexSchemeVariant.values[_schemeVariant];
     final dynamicSeed = _dynamicColorSeed;
     final hasDynamicColor = _dynamicColor && dynamicSeed != null;
@@ -899,64 +894,64 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-          locale: const Locale("zh", "CN"),
-          supportedLocales: const [Locale("zh", "CN"), Locale("en", "US")],
-          fallbackLocale: const Locale("zh", "CN"),
-          getPages: _playerWindowRoutes,
-          initialRoute: '/',
-          builder: FlutterSmartDialog.init(
-            toastBuilder: CustomToast.new,
-            loadingBuilder: LoadingWidget.new,
-            builder: (context, child) {
-              child = MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: TextScaler.linear(_textScale),
-                ),
-                child: child!,
-              );
+      locale: const Locale("zh", "CN"),
+      supportedLocales: const [Locale("zh", "CN"), Locale("en", "US")],
+      fallbackLocale: const Locale("zh", "CN"),
+      getPages: _playerWindowRoutes,
+      initialRoute: '/',
+      builder: FlutterSmartDialog.init(
+        toastBuilder: CustomToast.new,
+        loadingBuilder: LoadingWidget.new,
+        builder: (context, child) {
+          child = MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(_textScale),
+            ),
+            child: child!,
+          );
 
-              void onBack() {
-                if (SmartDialog.checkExist()) {
-                  SmartDialog.dismiss();
-                  return;
-                }
+          void onBack() {
+            if (SmartDialog.checkExist()) {
+              SmartDialog.dismiss();
+              return;
+            }
 
-                if (Get.key.currentState?.canPop() ?? false) {
-                  Get.back();
-                  return;
-                }
+            if (Get.key.currentState?.canPop() ?? false) {
+              Get.back();
+              return;
+            }
 
-                if (Get.currentRoute != '/videoV') {
-                  // 仅在非首个视频或非视频页时才允许窗口级退回
-                  windowManager.close();
-                }
-              }
+            if (Get.currentRoute != '/videoV') {
+              // 仅在非首个视频或非视频页时才允许窗口级退回
+              windowManager.close();
+            }
+          }
 
-              return BackDetector(
-                onBack: onBack,
-                child: _shouldDisablePlayerWindowSemantics
-                    ? ExcludeSemantics(child: child)
-                    : child,
-              );
-            },
-          ),
-          navigatorObservers: [
-            FlutterSmartDialog.observer,
-            routeObserver,
-            _PlayerWindowRouteObserver(),
-          ],
-          scrollBehavior: const MaterialScrollBehavior().copyWith(
-            scrollbars: false,
-            dragDevices: {
-              PointerDeviceKind.touch,
-              PointerDeviceKind.stylus,
-              PointerDeviceKind.invertedStylus,
-              PointerDeviceKind.trackpad,
-              PointerDeviceKind.unknown,
-              if (PlatformUtils.isDesktop) PointerDeviceKind.mouse,
-            },
-          ),
-        );
+          return BackDetector(
+            onBack: onBack,
+            child: _shouldDisablePlayerWindowSemantics
+                ? ExcludeSemantics(child: child)
+                : child,
+          );
+        },
+      ),
+      navigatorObservers: [
+        FlutterSmartDialog.observer,
+        routeObserver,
+        _PlayerWindowRouteObserver(),
+      ],
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        scrollbars: false,
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.unknown,
+          if (PlatformUtils.isDesktop) PointerDeviceKind.mouse,
+        },
+      ),
+    );
   }
 }
 

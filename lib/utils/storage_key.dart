@@ -153,6 +153,7 @@ abstract final class SettingBoxKey {
       downloadTaskCount = 'downloadTaskCount',
       downloadPath = 'downloadPath',
       disableMobileDownload = 'disableMobileDownload',
+      imageSavePath = 'imageSavePath',
       followOrderType = 'followOrderType',
       enableImgMenu = 'enableImgMenu',
       showDynDispute = 'showDynDispute',

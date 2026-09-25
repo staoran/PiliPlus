@@ -17,8 +17,6 @@ import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
-import 'package:PiliPlus/pages/setting/models/play_settings.dart'
-    show kMaxVolume;
 import 'package:PiliPlus/pages/sponsor_block/block_mixin.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_status.dart';
@@ -75,7 +73,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   static PlPlayerController? _instance;
 
-  final playerStatus = PlPlayerStatus(.playing);
+  final playerStatus = PlPlayerStatus(.paused);
 
   final Rx<DataStatus> dataStatus = Rx(.none);
 
@@ -318,7 +316,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     }
 
+    const shortSide = 280.0;
+    const minShortSide = 160.0;
     final Size size;
+    final Size minimumSize;
     final state = videoPlayerController!.state;
     int width = state.width;
     int height = state.height;
@@ -329,12 +330,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       height = this.height ?? 9;
     }
     if (height > width) {
-      size = Size(280.0, 280.0 * height / width);
+      size = Size(shortSide, shortSide * height / width);
+      minimumSize = Size(minShortSide, minShortSide * height / width);
     } else {
-      size = Size(280.0 * width / height, 280.0);
+      size = Size(shortSide * width / height, shortSide);
+      minimumSize = Size(minShortSide * width / height, minShortSide);
     }
 
-    await windowManager.setMinimumSize(size);
+    await windowManager.setMinimumSize(minimumSize);
     setAlwaysOnTop(true);
     windowManager
       ..setSize(size)
@@ -553,20 +556,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     return _instance?.playerStatus.value;
   }
 
-  static Future<void> pauseIfExists({
+  static Future<void>? pauseIfExists({
     bool notify = true,
     bool isInterrupt = false,
-  }) async {
+  }) {
     if (_instance?.playerStatus.isPlaying ?? false) {
-      await _instance?.pause(notify: notify, isInterrupt: isInterrupt);
+      return _instance?.pause(notify: notify, isInterrupt: isInterrupt);
     }
+    return null;
   }
 
-  static Future<void> seekToIfExists(
+  static Future<void>? seekToIfExists(
     Duration position, {
     bool isSeek = true,
-  }) async {
-    await _instance?.seekTo(position, isSeek: isSeek);
+  }) {
+    return _instance?.seekTo(position, isSeek: isSeek);
   }
 
   static double? getVolumeIfExists() {
@@ -684,6 +688,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   int _beginMediaSwitch() {
     _progressGeneration = null;
     _cancelPendingCompleted(reason: 'media_switch');
+    _stopWakeLockTimer();
     _cancelSubForSeek();
     _isSwitchingMedia = true;
     return ++_mediaSwitchGeneration;
@@ -778,8 +783,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         this.height = height;
         this.dataSource = dataSource;
         _autoPlay = autoplay;
-        // 初始化视频倍速
-        // _playbackSpeed.value = speed;
         // 初始化数据加载状态
         dataStatus.value = DataStatus.loading;
         // 初始化全屏方向
@@ -911,7 +914,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
-      'volume-max': kMaxVolume.toString(),
     };
     if (hwdec != null) {
       opt['hwdec'] = hwdec!;
@@ -1137,24 +1139,16 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   Future<void> _initializePlayer(bool Function() isCurrent) async {
     if (!isCurrent()) return;
     // 设置倍速
-    if (isLive) {
-      await setPlaybackSpeed(1.0);
-    } else {
-      if (_videoPlayerController?.state.rate != _playbackSpeed.value) {
-        await setPlaybackSpeed(_playbackSpeed.value);
+    if (_videoPlayerController != null) {
+      final speed = isLive ? 1.0 : playbackSpeed;
+      if (_videoPlayerController!.state.rate != speed) {
+        await setPlaybackSpeed(speed);
       }
     }
     if (!isCurrent()) return;
     _initVideoFit();
-    // 跳转播放
-    // if (seekTo != Duration.zero) {
-    //   await this.seekTo(seekTo);
-    // }
-
-    // 自动播放
     if (_autoPlay) {
       await play(isCurrent: isCurrent);
-      // await play(duration: duration);
     }
   }
 
@@ -1163,18 +1157,53 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   final Set<ValueChanged<Duration>> _seekListeners = {};
   final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
 
+  Timer? _wakeLockTimer;
+
+  void _startWakeLockTimer() {
+    _wakeLockTimer?.cancel();
+    _wakeLockTimer = Timer(
+      const Duration(milliseconds: 500),
+      _stopWakeLock,
+    );
+  }
+
+  void _stopWakeLockTimer() {
+    _wakeLockTimer?.cancel();
+    _wakeLockTimer = null;
+  }
+
+  void _stopWakeLock() {
+    WakelockPlus.disable();
+    _updatePlaybackState(debugLabel: 'onVideoPaused');
+  }
+
+  void _updatePlaybackState({Duration? position, String? debugLabel}) {
+    videoPlayerServiceHandler?.onUpdateState(
+      playerStatus.value,
+      isBuffering.value,
+      isLive,
+      position:
+          position ?? _videoPlayerController?.state.position ?? this.position,
+      speed: playbackSpeed,
+      debugLabel: debugLabel,
+    );
+  }
+
   /// 播放事件监听
   void _publishPlayerStatus(PlayerStatus status) {
-    WakelockPlus.toggle(enable: status.isPlaying);
+    final changed = playerStatus.value != status;
+    playerStatus.value = status;
+    if (status.isPlaying) {
+      _stopWakeLockTimer();
+      WakelockPlus.enable();
+      _updatePlaybackState();
+    } else {
+      _startWakeLockTimer();
+    }
     if (!status.isPlaying) {
       _disableAutoEnterPip();
     }
-    playerStatus.value = status;
-    videoPlayerServiceHandler?.onStatusChange(
-      status,
-      isBuffering.value,
-      isLive,
-    );
+    if (!changed) return;
     for (final element in List<ValueChanged<PlayerStatus>>.of(
       _statusListeners,
     )) {
@@ -1390,8 +1419,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           sliderPosition = event;
           updateSliderPositionSecond();
         }
+        if (positionSeconds.value != previousSecond ||
+            (event == Duration.zero && playerStatus.isPlaying)) {
+          _updatePlaybackState(position: event);
+        }
         if (positionSeconds.value != previousSecond) {
-          videoPlayerServiceHandler?.onPositionChange(event);
           makeHeartBeat(positionSeconds.value);
         }
 
@@ -1406,11 +1438,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }),
       stream.buffering.listen((bool buffering) {
         isBuffering.value = buffering;
-        videoPlayerServiceHandler?.onStatusChange(
-          playerStatus.value,
-          buffering,
-          isLive,
-        );
+        if (!playerStatus.isCompleted) {
+          _stopWakeLockTimer();
+          _updatePlaybackState();
+        }
       }),
       if (kDebugMode)
         stream.log.listen(((PlayerLog log) {
@@ -1446,7 +1477,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           if (event.startsWith('tcp: ffurl_read returned ') ||
               event.startsWith("Failed to open https://") ||
               event.startsWith("Can not open external file https://")) {
-            Future.delayed(const Duration(milliseconds: 3000), refreshPlayer);
+            Timer(const Duration(milliseconds: 3000), refreshPlayer);
           }
           return;
         }
@@ -1459,7 +1490,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             'controllerStream.error.listen',
             const Duration(milliseconds: 10000),
             () {
-              Future.delayed(const Duration(milliseconds: 3000), () {
+              Timer(const Duration(milliseconds: 3000), () {
                 // if (kDebugMode) {
                 //   debugPrint("isBuffering.value: ${isBuffering.value}");
                 // }
@@ -1558,9 +1589,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
               ? PlayerStatus.playing
               : PlayerStatus.paused
         : null;
-    if (completedSeekStatus != null) {
-      playerStatus.value = completedSeekStatus;
-    }
     final seekGeneration = ++_seekGeneration;
     bool isCurrentSeek() =>
         seekGeneration == _seekGeneration &&
@@ -1578,14 +1606,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         return;
       }
       completedSeekStatusPublished = true;
-      videoPlayerServiceHandler?.onStatusChange(
-        completedSeekStatus,
-        isBuffering.value,
-        isLive,
-      );
-      for (final listener in _statusListeners) {
-        listener(completedSeekStatus);
-      }
+      _publishPlayerStatus(completedSeekStatus);
     }
 
     Future<bool> seek() async {
@@ -1660,6 +1681,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     await _videoPlayerController?.setRate(speed);
     _playbackSpeed.value = speed;
+    _updatePlaybackState();
     if (danmakuController != null) {
       try {
         DanmakuOption currentOption = danmakuController!.option;
@@ -1694,7 +1716,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     controls = !hideControls;
     // repeat为true，将从头播放
     if (repeat) {
-      // await seekTo(Duration.zero);
       await seekTo(Duration.zero, isSeek: false);
     }
 
@@ -1704,8 +1725,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     audioSessionHandler?.setActive(true);
 
-    playerStatus.value = PlayerStatus.playing;
-    // screenManager.setOverlays(false);
+    if (_videoPlayerController?.state.playing == true &&
+        !playerStatus.isPlaying) {
+      _publishPlayerStatus(PlayerStatus.playing);
+    }
   }
 
   /// 暂停播放
@@ -1718,7 +1741,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       return;
     }
     await currentPlayer.pause();
-    playerStatus.value = PlayerStatus.paused;
+    if (!playerStatus.isPaused) {
+      _publishPlayerStatus(PlayerStatus.paused);
+    }
 
     // 主动暂停时让出音频焦点
     if (!isInterrupt) {
@@ -1745,9 +1770,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void onSeekEnd() {
-    if (seekToPos != null) {
-      feedBack();
-    }
     if (showSeekPreview) {
       showPreview.value = false;
     }
@@ -2172,7 +2194,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     // _showControls.close();
     // _controlsLock.close();
 
-    // playerStatus.close();
+    playerStatus.close();
     // dataStatus.close();
 
     if (PlatformUtils.isDesktop && isAlwaysOnTop.value) {
@@ -2184,9 +2206,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _positionListeners.clear();
     _seekListeners.clear();
     _statusListeners.clear();
-    if (playerStatus.isPlaying) {
-      WakelockPlus.disable();
-    }
+    _stopWakeLockTimer();
+    WakelockPlus.disable();
     if (kDebugMode) {
       debugPrint(
         '[PlPlayerController] dispose player playerCount=$_playerCount isCloseAll=$_isCloseAll aid=$_aid bvid=$_bvid cid=$cid',
@@ -2257,11 +2278,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     final image = await videoPlayerController?.screenshot();
     if (image != null) {
       SmartDialog.showToast('点击弹窗保存截图');
-      showDialog(
+      final dispose = await showDialog<bool>(
         context: Get.context!,
         builder: (context) => GestureDetector(
           onTap: () async {
+            Get.back(result: false);
             final bytes = await image.toByteData(format: .png);
+            image.dispose();
             if (bytes != null) {
               final time = DurationUtils.formatDuration(
                 positionInMilliseconds / 1000,
@@ -2273,7 +2296,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             } else {
               SmartDialog.showToast('保存失败');
             }
-            Get.back();
           },
           child: Align(
             alignment: Alignment.centerRight,
@@ -2299,7 +2321,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             ),
           ),
         ),
-      ).whenComplete(image.dispose);
+      );
+      if (dispose ?? true) image.dispose();
     } else {
       SmartDialog.showToast('截图失败');
     }

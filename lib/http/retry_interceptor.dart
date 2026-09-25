@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:http2/http2.dart';
 
@@ -71,7 +73,7 @@ class RetryInterceptor extends Interceptor {
                       is! TransportConnectionException || // 网络中断, 此时请求可能已经被服务器所接收
                   _canRetryTransportError(err))
                   ) {
-            Future.delayed(
+            Timer(
               Duration(
                 milliseconds: ++err.requestOptions.extra['_rt'] * _delay,
               ),

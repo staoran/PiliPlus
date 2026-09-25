@@ -326,9 +326,7 @@ abstract final class Pref {
 
   static String get hardwareDecoding => _setting.get(
     SettingBoxKey.hardwareDecoding,
-    defaultValue: Platform.isAndroid
-        ? HwDecType.androidDefault
-        : HwDecType.auto.hwdec,
+    defaultValue: HwDecType.kHwdec,
   );
 
   static String get videoSync =>
@@ -1072,6 +1070,8 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.setSystemBrightness, defaultValue: false);
 
   static String? get downloadPath => _setting.get(SettingBoxKey.downloadPath);
+
+  static String? get imageSavePath => _setting.get(SettingBoxKey.imageSavePath);
 
   static String? get liveCdnUrl => _setting.get(SettingBoxKey.liveCdnUrl);
 

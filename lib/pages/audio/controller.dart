@@ -28,8 +28,6 @@ import 'package:PiliPlus/pages/common/common_intro_controller.dart'
     show FavMixin, IntroAction;
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/main_reply/view.dart';
-import 'package:PiliPlus/pages/setting/models/play_settings.dart'
-    show kMaxVolume;
 import 'package:PiliPlus/pages/sponsor_block/block_mixin.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart';
@@ -221,6 +219,21 @@ class AudioController extends GetxController
   double? _lastVolume;
   late final RxDouble desktopVolume = RxDouble(Pref.desktopVolume);
 
+  Timer? _statusTimer;
+
+  void _startStatusTimer() {
+    _statusTimer?.cancel();
+    _statusTimer = Timer(
+      const Duration(milliseconds: 500),
+      _updatePlaybackState,
+    );
+  }
+
+  void _stopStatusTimer() {
+    _statusTimer?.cancel();
+    _statusTimer = null;
+  }
+
   void toggleVolume() {
     if (_lastVolume == null) {
       _lastVolume = desktopVolume.value;
@@ -354,7 +367,16 @@ class AudioController extends GetxController
     if (skipSource == BlockSkipSource.automatic) {
       _recordAutoTailSkipCandidate(duration);
     }
-    return player?.seek(duration);
+    final currentPlayer = player;
+    if (currentPlayer == null) return null;
+    final switchGeneration = _switchGeneration;
+    return currentPlayer.seek(duration).then((_) {
+      if (!isClosed &&
+          switchGeneration == _switchGeneration &&
+          identical(player, currentPlayer)) {
+        _updatePlaybackState(position: duration);
+      }
+    });
   }
 
   void _updateCurrItem(DetailItem item) {
@@ -374,7 +396,7 @@ class AudioController extends GetxController
         expectedCid,
         hashCode.toString(),
       );
-    } else if (_shouldSyncVideoDetailMetadata) {
+    } else {
       unawaited(
         videoPlayerServiceHandler?.onAudioDetailChangeInBackground(
               item,
@@ -386,16 +408,6 @@ class AudioController extends GetxController
                   subId.firstOrNull == expectedSubId,
             ) ??
             Future<void>.value(),
-      );
-    } else {
-      DebugLogService.log(
-        'audio.item',
-        'skip onVideoDetailChange in background',
-        extra: {
-          'oid': oid.toString(),
-          'subId': subId.firstOrNull?.toString(),
-          'foreground': _isAppInForeground,
-        },
       );
     }
     DebugLogService.log(
@@ -679,12 +691,20 @@ class AudioController extends GetxController
   }
 
   void _publishPlaybackStatus(PlayerStatus status) {
+    _playerStatus = status;
     if (status.isPlaying) {
       animController.forward();
+      _stopStatusTimer();
+      _updatePlaybackState();
     } else {
       animController.reverse();
+      if (status.isCompleted) {
+        _stopStatusTimer();
+        _updatePlaybackState();
+      } else {
+        _startStatusTimer();
+      }
     }
-    videoPlayerServiceHandler?.onStatusChange(status, false, false);
   }
 
   bool get _enableHeartBeat => Accounts.heartbeat.isLogin && !Pref.historyPause;
@@ -795,7 +815,7 @@ class AudioController extends GetxController
     if (_shouldSyncVideoDetailMetadata) {
       _videoDetailController?.playedTime = completedDuration;
     }
-    videoPlayerServiceHandler?.onPositionChange(completedDuration);
+    _updatePlaybackState(position: completedDuration);
   }
 
   void _scheduleAutoTailSkipCompleted({
@@ -970,6 +990,7 @@ class AudioController extends GetxController
 
   int _beginSwitch() {
     _cancelPendingCompleted(reason: 'switch');
+    _stopStatusTimer();
     final generation = ++_switchGeneration;
     DebugLogService.log(
       'audio.switch',
@@ -1054,11 +1075,13 @@ class AudioController extends GetxController
   void _resetPlaybackProgressForSwitch() {
     position.value = Duration.zero;
     duration.value = Duration.zero;
+    _playerStatus = PlayerStatus.paused;
+    _isBuffering = false;
     _start = null;
     _audioSwitchOpenReady = false;
     _audioSwitchZeroPositionGuardGeneration = null;
     _resetHeartBeatProgress();
-    videoPlayerServiceHandler?.onPositionChange(Duration.zero);
+    _updatePlaybackState(position: Duration.zero);
     DebugLogService.log(
       'audio.switch',
       'reset playback progress for switch',
@@ -1895,6 +1918,20 @@ class AudioController extends GetxController
     }
   }
 
+  PlayerStatus _playerStatus = .paused;
+  bool _isBuffering = false;
+  void _updatePlaybackState({Duration? position, String? debugLabel}) {
+    if (isClosed) return;
+    videoPlayerServiceHandler?.onUpdateState(
+      _playerStatus,
+      _isBuffering,
+      false,
+      position: position ?? player?.state.position ?? this.position.value,
+      speed: speed,
+      debugLabel: debugLabel,
+    );
+  }
+
   Future<void> _initPlayerIfNeeded() async {
     if (_hasInit) return;
     _hasInit = true;
@@ -1906,7 +1943,6 @@ class AudioController extends GetxController
           'volume': PlatformUtils.isDesktop
               ? (desktopVolume.value * 100).toString()
               : Pref.playerVolume.toString(),
-          'volume-max': kMaxVolume.toString(),
           ...Pref.initBuffer(),
         },
       ),
@@ -1933,8 +1969,10 @@ class AudioController extends GetxController
           if (_shouldSyncVideoDetailMetadata) {
             _videoDetailController?.playedTime = position;
           }
-          videoPlayerServiceHandler?.onPositionChange(position);
+          _updatePlaybackState(position: position);
           _unawaitedHeartBeat(_reportPlayingHeartBeat(position));
+        } else if (position == Duration.zero && _playerStatus.isPlaying) {
+          _updatePlaybackState(position: position);
         }
         _settleAudioSwitchingOnValidState(position: position);
         _maybeStartSwitchProtectionWarmup(position);
@@ -1945,6 +1983,12 @@ class AudioController extends GetxController
         _settleAudioSwitchingOnValidState(duration: duration);
       }),
       stream.playing.listen(_handlePlayingChanged),
+      stream.buffering.listen((buffering) {
+        _isBuffering = buffering;
+        if (!_playerStatus.isCompleted) {
+          _updatePlaybackState();
+        }
+      }),
       stream.completed.listen((completed) {
         if (!completed) {
           return;
@@ -2892,6 +2936,7 @@ class AudioController extends GetxController
     if (player case final player?) {
       this.speed = speed;
       player.setRate(speed);
+      _updatePlaybackState();
       if (_shouldSyncVideoDetailSideEffects) {
         unawaited(
           _videoDetailController?.plPlayerController.setPlaybackSpeed(speed),
@@ -2971,6 +3016,7 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
+    _stopStatusTimer();
     // 退出听视频时保存最后的进度
     final persistedCompleted = _persistCompletedProgressIfNeeded(
       reason: 'controller_closed',
@@ -3005,18 +3051,21 @@ class AudioController extends GetxController
       );
     }
 
-    // _cancelTimer();
-    shutdownTimerService
-      ..onPause = null
-      ..isPlaying = null
-      ..reset();
-    videoPlayerServiceHandler
-      ?..onPlay = null
-      ..onPause = null
-      ..onSeek = null;
+    if (shutdownTimerService.onPause == onPause) {
+      shutdownTimerService
+        ..onPause = null
+        ..isPlaying = null
+        ..reset();
+    }
+    final serviceHandler = videoPlayerServiceHandler;
+    if (serviceHandler != null) {
+      if (serviceHandler.onPlay == onPlay) serviceHandler.onPlay = null;
+      if (serviceHandler.onPause == onPause) serviceHandler.onPause = null;
+      if (serviceHandler.onSeek == onSeek) serviceHandler.onSeek = null;
+    }
     // 不要在这里重置 setListControlMode，因为播放器页有自己的状态管理
     // 从听视频页返回时，播放器页的 didPopNext 会恢复正确的列表控制模式
-    if (_shouldSyncVideoDetailSideEffects) {
+    if (_shouldSyncVideoDetailSideEffects || !_hasVideoDetailController) {
       videoPlayerServiceHandler?.onVideoDetailDispose(hashCode.toString());
     } else {
       DebugLogService.log(
