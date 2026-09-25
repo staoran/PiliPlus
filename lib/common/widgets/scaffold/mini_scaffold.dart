@@ -2,8 +2,6 @@ import 'dart:async' show Completer;
 
 import 'package:PiliPlus/common/widgets/scaffold/bottom_sheet.dart';
 import 'package:PiliPlus/common/widgets/scaffold/bottom_sheet_layout.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/src/extension_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class MiniScaffold extends StatefulWidget {
@@ -46,6 +44,7 @@ class MiniScaffoldState extends State<MiniScaffold>
 
   PersistentBottomSheetController _buildBottomSheet(
     WidgetBuilder builder, {
+    required ModalRoute<dynamic> route,
     required AnimationController animationController,
     BoxConstraints? constraints,
     bool? enableDrag,
@@ -119,7 +118,7 @@ class MiniScaffoldState extends State<MiniScaffold>
       constraints: constraints,
     );
 
-    (Get.routing.route! as ModalRoute).addLocalHistoryEntry(entry);
+    route.addLocalHistoryEntry(entry);
 
     return PersistentBottomSheetController(
       bottomSheet,
@@ -139,6 +138,12 @@ class MiniScaffoldState extends State<MiniScaffold>
     AnimationController? transitionAnimationController,
     AnimationStyle? sheetAnimationStyle,
   }) {
+    final route = ModalRoute.of(context);
+    if (route == null) {
+      throw FlutterError(
+        'MiniScaffold.showBottomSheet requires an enclosing ModalRoute.',
+      );
+    }
     _closeCurrentBottomSheet();
     final AnimationController controller =
         (transitionAnimationController ??
@@ -150,6 +155,7 @@ class MiniScaffoldState extends State<MiniScaffold>
     setState(() {
       _currentBottomSheet = _buildBottomSheet(
         builder,
+        route: route,
         animationController: controller,
         constraints: constraints,
         enableDrag: enableDrag,
