@@ -6,10 +6,11 @@
     <h1>PiliPlus</h1>
 <div align="center">
 
+中文 | [English](README.en.md)
+
 ![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus)
 ![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus)
 ![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total)
-
 </div>
     <p>使用Flutter开发的BiliBili第三方客户端</p>
 
@@ -245,7 +246,9 @@
 
 ## 下载
 
-可以通过右侧release进行下载或拉取代码到本地进行编译
+本 fork 的构建和应用内更新来自 [staoran/PiliPlus Releases](https://github.com/staoran/PiliPlus/releases)，各平台产物以实际发布内容为准；也可以克隆本仓库在本地编译。
+
+[上游 Releases](https://github.com/bggRGjQaUbCoE/PiliPlus/releases) 提供上游版本，不包含本 fork 的全部修改。
 
 <br/>
 

@@ -161,6 +161,7 @@ class AudioController extends GetxController
   ListOrder order = ListOrder.ORDER_NORMAL;
   Future<void> _switchQueue = Future<void>.value();
   bool _isLocalPlayback = false;
+  int? _blockMediaReadyGeneration;
   // 保存当前使用的本地缓存条目（用于从其他页面返回时恢复本地播放）
   BiliDownloadEntryInfo? currentLocalEntry;
   static const _switchProtectionWarmupThreshold = Duration(seconds: 6);
@@ -1637,14 +1638,20 @@ class AudioController extends GetxController
     }
   }
 
+  void _playNextPart() => playNext(nextPart: true);
+
+  late final void Function() _skipToNext = _playNextPart;
+  late final void Function() _skipToPrevious = playPrev;
+
   /// 更新媒体通知列表控制模式
   void _updateListControlMode() {
+    if (isClosed) return;
     final hasMultiItems = (playlist?.length ?? 0) > 1;
 
     videoPlayerServiceHandler?.setListControlMode(
       enabled: hasMultiItems,
-      onNext: hasMultiItems ? () => playNext(nextPart: true) : null,
-      onPrevious: hasMultiItems ? playPrev : null,
+      onNext: hasMultiItems ? _skipToNext : null,
+      onPrevious: hasMultiItems ? _skipToPrevious : null,
     );
   }
 
@@ -1826,6 +1833,7 @@ class AudioController extends GetxController
     http_model.Volume? volume,
   }) async {
     final openGeneration = _switchGeneration;
+    _blockMediaReadyGeneration = null;
     DebugLogService.log(
       'audio.media',
       'open media',
@@ -1862,6 +1870,7 @@ class AudioController extends GetxController
       await player!.play();
       player!.setRate(speed);
       if (openGeneration == _switchGeneration) {
+        _blockMediaReadyGeneration = openGeneration;
         _audioSwitchOpenReady = true;
         final currentPlayer = player!;
         final statePosition = _rawAudioPosition(currentPlayer);
@@ -2239,6 +2248,12 @@ class AudioController extends GetxController
 
   @pragma('vm:notify-debugger-on-exception')
   void _querySponsorBlock() {
+    final segments = currentLocalEntry?.segments;
+    if (_isLocalPlayback && segments != null) {
+      resetBlock();
+      if (enableBlock) handleSBData(segments);
+      return;
+    }
     if (isUgc && blockConfig.enableSponsorBlock) {
       try {
         querySponsorBlock(
@@ -2990,7 +3005,14 @@ class AudioController extends GetxController
   int get currPosInMilliseconds => player?.state.position.inMilliseconds ?? 0;
 
   @override
-  int? get timeLength => player?.state.duration.inMilliseconds ?? 0;
+  int? get timeLength => duration.value.inMilliseconds;
+
+  @override
+  bool get blockPlaybackReady =>
+      player != null && _blockMediaReadyGeneration == _switchGeneration;
+
+  @override
+  bool get isFileSource => _isLocalPlayback;
 
   @override
   Future<void>? seekTo(
@@ -3062,6 +3084,12 @@ class AudioController extends GetxController
       if (serviceHandler.onPlay == onPlay) serviceHandler.onPlay = null;
       if (serviceHandler.onPause == onPause) serviceHandler.onPause = null;
       if (serviceHandler.onSeek == onSeek) serviceHandler.onSeek = null;
+      if (serviceHandler.onSkipToNext == _skipToNext) {
+        serviceHandler.onSkipToNext = null;
+      }
+      if (serviceHandler.onSkipToPrevious == _skipToPrevious) {
+        serviceHandler.onSkipToPrevious = null;
+      }
     }
     // 不要在这里重置 setListControlMode，因为播放器页有自己的状态管理
     // 从听视频页返回时，播放器页的 didPopNext 会恢复正确的列表控制模式

@@ -1,7 +1,8 @@
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
+import 'package:PiliPlus/models_new/download/download_info.dart';
 import 'package:PiliPlus/models_new/video/video_detail/stat_detail.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
-import 'package:PiliPlus/pages/download/controller.dart';
+import 'package:PiliPlus/pages/download/download/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
@@ -69,30 +70,31 @@ class LocalIntroController extends CommonIntroController {
       videoDetail.value.title = argTitle;
     }
 
-    // 优先从 DownloadPageController 获取数据（如果已注册）
-    // 否则从 DownloadService 获取数据
     _loadDownloadList();
   }
 
   Future<void> _loadDownloadList() async {
     final list = <BiliDownloadEntryInfo>[];
 
-    if (Get.isRegistered<DownloadPageController>()) {
-      // 主窗口：从 DownloadPageController 获取
-      final controller = Get.find<DownloadPageController>();
-      for (final e in controller.pages) {
-        final items = e.entries..sort((a, b) => a.sortKey.compareTo(b.sortKey));
-        final completed = items.where((e) => e.isCompleted);
-        list.addAllIf(completed.isNotEmpty, completed);
-        if (completed.length == 1) {
-          aidSet.add(e.pageId);
-        }
+    if (!Get.isRegistered<DownloadService>()) return;
+    final downloadService = Get.find<DownloadService>();
+    await downloadService.waitForInitialization;
+    if (isClosed) return;
+    final registeredSeasons = Get.isRegistered<DownloadController>()
+        ? Get.find<DownloadController>().seasons
+        : null;
+    final seasons = registeredSeasons?.isNotEmpty == true
+        ? registeredSeasons!
+        : groupDownloadEntries(downloadService.downloadList);
+    for (final season in seasons) {
+      final pages = season.pages.toList()
+        ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+      for (final page in pages) {
+        final completed = page.entries.where((e) => e.isCompleted).toList()
+          ..sort(downloadEntrySort);
+        list.addAll(completed);
+        if (completed.length == 1) aidSet.add(page.pageId);
       }
-    } else if (Get.isRegistered<DownloadService>()) {
-      // 新窗口：从 DownloadService 获取，需要等待初始化完成
-      final downloadService = Get.find<DownloadService>();
-      await downloadService.waitForInitialization;
-      list.addAll(downloadService.downloadList);
     }
 
     this.list.value = list;
@@ -109,6 +111,7 @@ class LocalIntroController extends CommonIntroController {
     }
     if (index != 0) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (isClosed) return;
         try {
           final state = videoDetailCtr.scrollKey.currentState;
           if (state != null && state.mounted) {
@@ -190,8 +193,7 @@ class LocalIntroController extends CommonIntroController {
       ..bvid = entry.bvid
       ..cid.value = entry.cid
       ..args['dirPath'] = entry.entryDirPath
-      ..initFileSource(entry, isInit: false)
-      // 调用 queryVideoUrl() 来获取新视频的空降助手数据（如果有网络）
+      ..initFileSource(entry)
       ..queryVideoUrl();
 
     // 仅更新本地标题，避免引入在线详情/评论等不稳定逻辑

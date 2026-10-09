@@ -110,6 +110,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _initWindow();
     // Only setup window channels on desktop platforms
     if (PlatformUtils.isDesktop) {
+      FocusManager.instance.addEarlyKeyEventHandler(_onKeyEvent);
       // Register window method handler early so main window can reuse this one
       // without spawning extra player windows.
       _setupWindowMethodHandler();
@@ -788,6 +789,37 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   @override
+  void onWindowMoved() {
+    PlPlayerController.instance?.updatePipBounds();
+  }
+
+  @override
+  void onWindowResized() {
+    PlPlayerController.instance?.updatePipBounds();
+  }
+
+  KeyEventResult _onKeyEvent(KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.escape ||
+        event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (SmartDialog.checkExist()) {
+      SmartDialog.dismiss();
+      return KeyEventResult.handled;
+    }
+    final route = Get.routing.route;
+    if (route is GetPageRoute &&
+        route.popDisposition == RoutePopDisposition.doNotPop) {
+      route.onPopInvokedWithResult(false, null);
+    } else if (Get.key.currentState?.canPop() == true) {
+      Get.key.currentState!.pop();
+    } else {
+      PlPlayerController.instance?.onPopInvokedWithResult(false, null);
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
   Future<void> onWindowClose() async {
     // 同步设置到主窗口
     try {
@@ -848,6 +880,9 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
   @override
   void dispose() {
+    if (PlatformUtils.isDesktop) {
+      FocusManager.instance.removeEarlyKeyEventHandler(_onKeyEvent);
+    }
     windowManager.removeListener(this);
     super.dispose();
   }

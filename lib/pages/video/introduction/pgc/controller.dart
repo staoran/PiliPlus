@@ -38,6 +38,7 @@ class PgcIntroController extends CommonIntroController {
   int? seasonId;
   int? epId;
   int _changeEpisodeGeneration = 0;
+  int _pgcInfoGeneration = 0;
 
   String get pgcType => pgcItem.type == 1 || pgcItem.type == 4 ? '追番' : '追剧';
 
@@ -46,6 +47,13 @@ class PgcIntroController extends CommonIntroController {
 
   // 标记 pgcItem 是否已加载
   final RxBool pgcItemLoaded = false.obs;
+  ScrollController? _seasonController;
+  ScrollController seasonController(int index) {
+    if (_seasonController != null) return _seasonController!;
+    return _seasonController = ScrollController(
+      initialScrollOffset: index * 150,
+    );
+  }
 
   @override
   (Object, int) get getFavRidType => (epId!, 24);
@@ -82,8 +90,22 @@ class PgcIntroController extends CommonIntroController {
 
   /// 异步加载 pgcItem
   Future<void> _loadPgcItem() async {
+    final generation = ++_pgcInfoGeneration;
+    final requestSeasonId = seasonId;
+    final requestEpId = epId;
+    final changeGeneration = _changeEpisodeGeneration;
+    bool isCurrent() =>
+        !isClosed &&
+        generation == _pgcInfoGeneration &&
+        seasonId == requestSeasonId &&
+        epId == requestEpId &&
+        changeGeneration == _changeEpisodeGeneration;
     try {
-      final result = await SearchHttp.pgcInfo(seasonId: seasonId, epId: epId);
+      final result = await SearchHttp.pgcInfo(
+        seasonId: requestSeasonId,
+        epId: requestEpId,
+      );
+      if (!isCurrent()) return;
       if (result.isSuccess) {
         pgcItem = result.data;
         pgcItemLoaded.value = true;
@@ -93,6 +115,7 @@ class PgcIntroController extends CommonIntroController {
         result.toast();
       }
     } catch (e) {
+      if (!isCurrent()) return;
       if (kDebugMode) {
         debugPrint('_loadPgcItem error: $e');
       }
@@ -102,6 +125,7 @@ class PgcIntroController extends CommonIntroController {
 
   /// pgcItem 准备好后的初始化逻辑
   void _onPgcItemReady() {
+    if (isClosed || !pgcItemLoaded.value) return;
     // 调用 queryVideoIntro 更新视频详情
     queryVideoIntro();
 
@@ -117,10 +141,15 @@ class PgcIntroController extends CommonIntroController {
 
     // 设置媒体通知列表控制模式
     _updateListControlMode();
+    // loaded remains true on season changes; notify both body and sidebar.
+    pgcItemLoaded.refresh();
   }
 
   /// 更新媒体通知列表控制模式
   void _updateListControlMode() {
+    if (isClosed || !pgcItemLoaded.value || !videoDetailCtr.canStartPlayback) {
+      return;
+    }
     // PGC 内容通常有多集
     final hasMultiEpisodes = (pgcItem.episodes?.length ?? 0) > 1;
 
@@ -136,7 +165,13 @@ class PgcIntroController extends CommonIntroController {
 
   // 获取点赞/投币/收藏状态
   Future<void> queryPgcLikeCoinFav() async {
-    final result = await VideoHttp.pgcLikeCoinFav(epId: epId!);
+    final requestEpId = epId;
+    final requestItem = pgcItem;
+    if (requestEpId == null) return;
+    final result = await VideoHttp.pgcLikeCoinFav(epId: requestEpId);
+    if (isClosed || epId != requestEpId || !identical(pgcItem, requestItem)) {
+      return;
+    }
     if (result case Success(:final response)) {
       final hasLike = response.like == 1;
       final hasFav = response.favorite == 1;
@@ -252,6 +287,10 @@ class PgcIntroController extends CommonIntroController {
                     title:
                         '${pgcItem.title}${item != null ? '\n${item.showTitle}' : ''}',
                     uname: '',
+                    replyInfo: (
+                      oid: videoDetailCtr.aid,
+                      replyType: videoDetailCtr.videoType.replyType,
+                    ),
                   ),
                 );
               },
@@ -389,6 +428,7 @@ class PgcIntroController extends CommonIntroController {
       }
       videoDetailCtr
         ..onReset()
+        ..seasonId = seasonId
         ..epId = epId
         ..bvid = bvid
         ..aid = aid
@@ -425,6 +465,7 @@ class PgcIntroController extends CommonIntroController {
         await cancelOwnedSwitch(reason: 'pgc_switch_identity_mismatch');
         return false;
       }
+      if (!videoDetailCtr.videoState.value) return false;
 
       if (!isCurrentSwitch()) {
         return false;
@@ -704,5 +745,63 @@ class PgcIntroController extends CommonIntroController {
         res.toast();
       }
     });
+  }
+
+  bool _changingSeason = false;
+  bool get changingSeason => _changingSeason;
+
+  Future<bool> changeSeason(int seasonId) async {
+    if (_changingSeason || isClosed || !pgcItemLoaded.value) return false;
+    _changingSeason = true;
+    final generation = ++_pgcInfoGeneration;
+    final previousChange = _changeEpisodeGeneration;
+    final previousEpId = epId;
+    bool isCurrentRequest() => !isClosed && generation == _pgcInfoGeneration;
+    SmartDialog.showLoading();
+    try {
+      final res = await SearchHttp.pgcInfo(seasonId: seasonId);
+      if (!isCurrentRequest() ||
+          previousChange != _changeEpisodeGeneration ||
+          previousEpId != epId) {
+        return false;
+      }
+      if (res case Success(:final response)) {
+        final episodes = response.episodes;
+        if (episodes != null && episodes.isNotEmpty) {
+          pgcItem = response;
+          isFav.value = pgcItem.userStatus?.favored == 1;
+          this.seasonId = seasonId;
+          final expectedChange = _changeEpisodeGeneration + 1;
+          final changed = await onChangeEpisode(episodes.first);
+          if (!isCurrentRequest() ||
+              expectedChange != _changeEpisodeGeneration) {
+            return false;
+          }
+          pgcItemLoaded.refresh();
+          if (!changed) return false;
+          _onPgcItemReady();
+          return true;
+        } else {
+          SmartDialog.showToast('剧集为空');
+        }
+      } else {
+        res.toast();
+      }
+    } catch (e) {
+      if (isCurrentRequest() && kDebugMode) debugPrint('changeSeason: $e');
+    } finally {
+      SmartDialog.dismiss();
+      _changingSeason = false;
+    }
+    return false;
+  }
+
+  @override
+  void onClose() {
+    _pgcInfoGeneration++;
+    _changeEpisodeGeneration++;
+    _seasonController?.dispose();
+    _seasonController = null;
+    super.onClose();
   }
 }

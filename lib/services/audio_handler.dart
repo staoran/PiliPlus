@@ -9,6 +9,10 @@ import 'package:PiliPlus/models_new/live/live_room_info_h5/data.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
+import 'package:PiliPlus/pages/common/common_intro_controller.dart';
+import 'package:PiliPlus/pages/video/introduction/local/controller.dart';
+import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
+import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/debug_log_service.dart';
@@ -19,6 +23,9 @@ import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_instance/src/extension_instance.dart';
 import 'package:path/path.dart' as path;
 
 Future<VideoPlayerServiceHandler> initAudioService() {
@@ -51,10 +58,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
   Future<void>? Function(Duration position)? onSeek;
-
-  // 列表播放相关回调
-  Function? onSkipToNext;
-  Function? onSkipToPrevious;
+  void Function()? onSkipToNext;
+  void Function()? onSkipToPrevious;
 
   // 是否启用列表控制（上一个/下一个）
   bool _enableListControl = false;
@@ -63,8 +68,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   /// 注意：控件会在下次播放状态更新时自动刷新，不需要立即刷新
   void setListControlMode({
     bool enabled = false,
-    Function? onNext,
-    Function? onPrevious,
+    void Function()? onNext,
+    void Function()? onPrevious,
   }) {
     if (_enableListControl != enabled ||
         (onSkipToNext != null) != (onNext != null) ||
@@ -88,8 +93,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
         },
       ),
     );
-    if (_enableListControl && onSkipToNext != null) {
-      onSkipToNext!.call();
+    if (_enableListControl) {
+      (onSkipToNext ?? _findIntroController()?.nextPlay)?.call();
     } else {
       // 默认快进10秒
       await fastForward();
@@ -108,8 +113,8 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
         },
       ),
     );
-    if (_enableListControl && onSkipToPrevious != null) {
-      onSkipToPrevious!.call();
+    if (_enableListControl) {
+      (onSkipToPrevious ?? _findIntroController()?.prevPlay)?.call();
     } else {
       // 默认快退10秒
       await rewind();
@@ -128,6 +133,24 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     return onPause?.call() ??
         PlPlayerController.pauseIfExists() ??
         Future.syncValue(null);
+  }
+
+  CommonIntroController? _findIntroController() {
+    final playOwner = PlPlayerController.playOwner;
+    if (playOwner != null) {
+      final tag = playOwner.tag;
+      try {
+        return switch (playOwner.type) {
+          UgcIntroController => Get.find<UgcIntroController>(tag: tag),
+          PgcIntroController => Get.find<PgcIntroController>(tag: tag),
+          LocalIntroController => Get.find<LocalIntroController>(tag: tag),
+          _ => throw UnimplementedError(playOwner.type.toString()),
+        };
+      } catch (_) {
+        if (kDebugMode) rethrow;
+      }
+    }
+    return null;
   }
 
   @override

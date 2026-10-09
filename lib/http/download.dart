@@ -22,6 +22,7 @@ abstract final class DownloadHttp {
     SourceInfo? source,
     PageInfo? pageData,
     EpInfo? ep,
+    bool Function()? isCurrent,
   }) async {
     final isLogin = Accounts.get(AccountType.video).isLogin;
     final res = await VideoHttp.videoUrl(
@@ -39,7 +40,16 @@ abstract final class DownloadHttp {
       },
     );
     if (res case Success(:final response)) {
+      if (isCurrent?.call() == false) {
+        throw StateError('Download task is no longer current');
+      }
       final dash = response.dash;
+
+      // segments
+      if (ep != null && response.clipInfoList != null) {
+        entry.segments = response.clipInfoList;
+      }
+
       if (dash != null) {
         final targetVideoQa = response.findAvailableVideoQuality(
           entry.preferedVideoQuality,

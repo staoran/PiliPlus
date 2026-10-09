@@ -5,11 +5,15 @@ import 'dart:io' show Directory, File;
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/download.dart';
 import 'package:PiliPlus/http/init.dart';
+import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/http/sponsor_block.dart';
+import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/download/bili_download_media_file_info.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
+import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
@@ -37,6 +41,8 @@ class DownloadService extends GetxService {
   static const _maxDanmakuConcurrency = 4;
 
   final _lock = Lock();
+  final _entryWriteLock = Lock();
+  final _deletedEntries = Expando<bool>();
 
   final flagNotifier = SetNotifier();
   final waitDownloadQueue = RxList<BiliDownloadEntryInfo>();
@@ -47,7 +53,7 @@ class DownloadService extends GetxService {
   int? _curCid;
   int? get curCid => _curCid;
   final curDownload = Rxn<BiliDownloadEntryInfo>();
-  late final int _downloadTaskLimit;
+  late final int _downloadTaskLimit = Pref.downloadTaskCount;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   List<ConnectivityResult>? _connectivityResults;
   bool _schedulerPaused = false;
@@ -58,7 +64,7 @@ class DownloadService extends GetxService {
   int get activeCount => _activeTasks.length;
 
   bool isActive(BiliDownloadEntryInfo entry) =>
-      _activeTasks.containsKey(entry.cid);
+      identical(_activeTasks[entry.cid]?.entry, entry);
 
   bool isActiveCid(int cid) => _activeTasks.containsKey(cid);
 
@@ -72,7 +78,6 @@ class DownloadService extends GetxService {
   @override
   void onInit() {
     super.onInit();
-    _downloadTaskLimit = Pref.downloadTaskCount;
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _onConnectivityChanged,
     );
@@ -410,12 +415,14 @@ class DownloadService extends GetxService {
     return result;
   }
 
-  void downloadVideo(
-    Part page,
+  void downloadVideo({
+    required int index,
+    required Part page,
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
-    VideoQuality videoQuality,
-  ) {
+    required VideoQuality videoQuality,
+    SeasonInfo? seasonInfo,
+  }) {
     final cid = page.cid!;
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
       return;
@@ -466,16 +473,17 @@ class DownloadService extends GetxService {
       ownerId: videoDetail?.owner?.mid ?? videoArc?.arc?.author?.mid,
       ownerName: videoDetail?.owner?.name ?? videoArc?.arc?.author?.name,
       pageData: pageData,
+      seasonInfo: seasonInfo,
     );
     _createDownload(entry);
   }
 
-  void downloadBangumi(
-    int index,
-    PgcInfoModel pgcItem,
-    pgc.EpisodeItem episode,
-    VideoQuality quality,
-  ) {
+  void downloadBangumi({
+    required int index,
+    required PgcInfoModel pgcItem,
+    required pgc.EpisodeItem episode,
+    required VideoQuality quality,
+  }) {
     final cid = episode.cid!;
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
       return;
@@ -779,6 +787,97 @@ class DownloadService extends GetxService {
     }
   }
 
+  Future<bool> updateSegments(BiliDownloadEntryInfo entry) {
+    if (entry.pageData != null) {
+      return _updateBlockSegments(entry);
+    } else {
+      return _updatePgcSegments(entry);
+    }
+  }
+
+  Future<bool> _persistSegments(
+    BiliDownloadEntryInfo entry,
+    List<SegmentItemModel>? segments, {
+    required String entryPath,
+    _ActiveDownloadTask? task,
+  }) {
+    return _lock.synchronized(() async {
+      final current = task != null
+          ? identical(_activeTasks[entry.cid], task)
+          : downloadList.any((e) => identical(e, entry)) ||
+                waitDownloadQueue.any((e) => identical(e, entry));
+      if (!current ||
+          _deletedEntries[entry] == true ||
+          entry.entryDirPath != entryPath ||
+          !File(path.join(entryPath, _entryFile)).existsSync()) {
+        return false;
+      }
+      if (segments != null) {
+        entry.segments = segments;
+        await _updateBiliDownloadEntryJson(entry);
+      }
+      return true;
+    });
+  }
+
+  Future<bool> _updateBlockSegments(
+    BiliDownloadEntryInfo entry, {
+    _ActiveDownloadTask? task,
+  }) async {
+    final entryPath = entry.entryDirPath;
+    final LoadingState<List<SegmentItemModel>> res;
+    try {
+      res = await requestBlockSegments(entry);
+    } catch (e) {
+      if (kDebugMode) debugPrint('download segments: $e');
+      return false;
+    }
+    if (res case Success(:final response)) {
+      return _persistSegments(
+        entry,
+        response,
+        entryPath: entryPath,
+        task: task,
+      );
+    }
+    if (res case Error(code: 404)) {
+      return _persistSegments(entry, [], entryPath: entryPath, task: task);
+    }
+    return false;
+  }
+
+  Future<bool> _updatePgcSegments(BiliDownloadEntryInfo entry) async {
+    final entryPath = entry.entryDirPath;
+    final ep = entry.ep;
+    if (ep == null) return false;
+    final res = await VideoHttp.videoUrl(
+      avid: entry.avid,
+      bvid: entry.bvid,
+      cid: entry.cid,
+      seasonId: entry.seasonId,
+      epid: ep.episodeId,
+      qn: entry.preferedVideoQuality,
+      tryLook: false,
+      videoType: switch (ep.from) {
+        'pugv' => .pugv,
+        _ => .pgc,
+      },
+    );
+    if (res case Success(:final response)) {
+      return _persistSegments(
+        entry,
+        response.clipInfoList,
+        entryPath: entryPath,
+      );
+    }
+    return false;
+  }
+
+  @visibleForTesting
+  Future<LoadingState<List<SegmentItemModel>>> requestBlockSegments(
+    BiliDownloadEntryInfo entry,
+  ) => SponsorBlock.getSkipSegments(bvid: entry.bvid, cid: entry.cid);
+
   Future<void> _startDownload(_ActiveDownloadTask task) async {
     final entry = task.entry;
     try {
@@ -793,6 +892,12 @@ class DownloadService extends GetxService {
         return;
       }
 
+      // ugc segments
+      if (entry.pageData != null && Pref.enableSponsorBlock) {
+        await _updateBlockSegments(entry, task: task);
+      }
+      if (await _restoreInterruptedTaskStatus(task)) return;
+
       _updateEntryStatus(entry, DownloadStatus.getPlayUrl);
 
       final mediaFileInfo = await DownloadHttp.getVideoUrl(
@@ -800,21 +905,23 @@ class DownloadService extends GetxService {
         ep: entry.ep,
         source: entry.source,
         pageData: entry.pageData,
+        isCurrent: () => identical(_activeTasks[entry.cid], task),
       );
       if (await _restoreInterruptedTaskStatus(task)) {
         return;
       }
 
       final videoDir = Directory(path.join(entry.entryDirPath, entry.typeTag));
-      if (!videoDir.existsSync()) {
-        await videoDir.create(recursive: true);
-      }
-
-      final mediaJsonFile = File(path.join(videoDir.path, _indexFile));
-      await Future.wait([
-        mediaJsonFile.writeAsString(jsonEncode(mediaFileInfo.toJson())),
-        _downloadCover(entry: entry),
-      ]);
+      final prepared = await _lock.synchronized(() async {
+        if (!identical(_activeTasks[entry.cid], task)) return false;
+        await _updateBiliDownloadEntryJson(entry);
+        if (!videoDir.existsSync()) await videoDir.create(recursive: true);
+        await File(path.join(videoDir.path, _indexFile))
+            .writeAsString(jsonEncode(mediaFileInfo.toJson()));
+        return true;
+      });
+      if (!prepared) return;
+      await _downloadCover(entry: entry);
 
       if (await _restoreInterruptedTaskStatus(task)) {
         return;
@@ -872,8 +979,12 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _updateBiliDownloadEntryJson(BiliDownloadEntryInfo entry) {
-    final entryJsonFile = File(path.join(entry.entryDirPath, _entryFile));
-    return entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
+    return _entryWriteLock.synchronized(() async {
+      if (_deletedEntries[entry] == true) return;
+      final entryJsonFile = File(path.join(entry.entryDirPath, _entryFile));
+      if (!entryJsonFile.parent.existsSync()) return;
+      await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
+    });
   }
 
   void _onReceive(_ActiveDownloadTask task, int progress, int total) {
@@ -988,44 +1099,62 @@ class DownloadService extends GetxService {
     bool refresh = true,
     bool downloadNext = true,
   }) async {
-    if (removeList) {
-      downloadList.remove(entry);
-    }
-    if (removeQueue) {
-      waitDownloadQueue.remove(entry);
-    }
-    if (_activeTasks.containsKey(entry.cid)) {
-      await cancelDownload(
-        entry: entry,
-        isDelete: true,
-        downloadNext: downloadNext,
-      );
-    }
-    final downloadDir = Directory(entry.pageDirPath);
-    if (downloadDir.existsSync()) {
-      if (!await downloadDir.lengthGte(2)) {
-        await downloadDir.tryDel(recursive: true);
-      } else {
-        final entryDir = Directory(entry.entryDirPath);
-        if (entryDir.existsSync()) {
-          await entryDir.tryDel(recursive: true);
-        }
+    await _lock.synchronized(() async {
+      _deletedEntries[entry] = true;
+      if (removeList) {
+        downloadList.remove(entry);
       }
-    }
-    if (refresh) {
-      flagNotifier.refresh();
-    }
+      if (removeQueue) {
+        waitDownloadQueue.remove(entry);
+      }
+      final task = _activeTasks[entry.cid];
+      if (task != null && identical(task.entry, entry)) {
+        await _pauseTaskLocked(task, isDelete: true);
+        waitDownloadQueue.remove(entry);
+      }
+      await _entryWriteLock.synchronized(() async {
+        final downloadDir = Directory(entry.pageDirPath);
+        if (downloadDir.existsSync()) {
+          if (!await downloadDir.lengthGte(2)) {
+            await downloadDir.tryDel(recursive: true);
+          } else {
+            final entryDir = Directory(entry.entryDirPath);
+            if (entryDir.existsSync()) {
+              await entryDir.tryDel(recursive: true);
+            }
+          }
+        }
+      });
+      if (downloadNext) await _scheduleDownloadsLocked();
+      if (refresh) {
+        flagNotifier.refresh();
+      }
+    });
   }
 
   Future<void> deletePage({
     required String pageDirPath,
     bool refresh = true,
   }) async {
-    await Directory(pageDirPath).tryDel(recursive: true);
-    downloadList.removeWhere((e) => e.pageDirPath == pageDirPath);
-    if (refresh) {
-      flagNotifier.refresh();
-    }
+    await _lock.synchronized(() async {
+      for (final entry in [...downloadList, ...waitDownloadQueue]) {
+        if (entry.pageDirPath == pageDirPath) _deletedEntries[entry] = true;
+      }
+      for (final task in _activeTasks.values.toList()) {
+        if (task.entry.pageDirPath == pageDirPath) {
+          await _pauseTaskLocked(task, isDelete: true);
+        }
+      }
+      waitDownloadQueue.removeWhere((e) => e.pageDirPath == pageDirPath);
+      await _entryWriteLock.synchronized(
+        () => Directory(pageDirPath).tryDel(recursive: true),
+      );
+      downloadList.removeWhere((e) => e.pageDirPath == pageDirPath);
+      if (refresh) {
+        flagNotifier.refresh();
+      }
+      await _scheduleDownloadsLocked();
+    });
   }
 
   Future<void> cancelDownload({

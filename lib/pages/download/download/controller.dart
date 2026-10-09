@@ -6,21 +6,20 @@ import 'package:PiliPlus/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/storage.dart';
-import 'package:collection/collection.dart';
-import 'package:flutter/widgets.dart' show Text;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart' show Text;
 
-class DownloadPageController extends GetxController
-    with BaseMultiSelectMixin<DownloadPageInfo> {
+class DownloadController extends GetxController
+    with BaseMultiSelectMixin<DownloadSeasonInfo> {
   final _downloadService = Get.find<DownloadService>();
-  final pages = RxList<DownloadPageInfo>();
+  final seasons = RxList<DownloadSeasonInfo>();
   final flag = RxInt(0);
 
   @override
-  List<DownloadPageInfo> get list => pages;
+  List<DownloadSeasonInfo> get list => seasons;
   @override
-  RxList<DownloadPageInfo> get state => pages;
+  RxList<DownloadSeasonInfo> get state => seasons;
 
   @override
   void onInit() {
@@ -39,37 +38,11 @@ class DownloadPageController extends GetxController
     await _downloadService.waitForInitialization;
     if (isClosed) return;
     if (_downloadService.downloadList.isEmpty) {
-      pages.clear();
+      seasons.clear();
+      flag.value++;
       return;
     }
-    final list = <DownloadPageInfo>[];
-    for (final entry in _downloadService.downloadList) {
-      final pageId = entry.pageId;
-      final page = list.firstWhereOrNull((e) => e.pageId == pageId);
-      if (page != null) {
-        final aSortKey = entry.sortKey;
-        final bSortKey = page.sortKey;
-        if (aSortKey < bSortKey) {
-          page
-            ..cover = entry.cover
-            ..sortKey = aSortKey;
-        }
-        page.entries.add(entry);
-      } else {
-        list.add(
-          DownloadPageInfo(
-            pageId: pageId,
-            dirPath: entry.pageDirPath,
-            title: entry.title,
-            cover: entry.cover,
-            sortKey: entry.sortKey,
-            seasonType: entry.ep?.seasonType,
-            entries: [entry],
-          ),
-        );
-      }
-    }
-    pages.value = list;
+    seasons.value = groupDownloadEntries(_downloadService.downloadList);
     flag.value++;
   }
 
@@ -81,14 +54,16 @@ class DownloadPageController extends GetxController
       onConfirm: () async {
         SmartDialog.showLoading();
         final watchProgress = GStorage.watchProgress;
-        for (final page in allChecked) {
-          await watchProgress.deleteAll(
-            page.entries.map((e) => e.cid.toString()),
-          );
-          await _downloadService.deletePage(
-            pageDirPath: page.dirPath,
-            refresh: false,
-          );
+        for (final season in allChecked) {
+          for (final page in season.pages) {
+            await watchProgress.deleteAll(
+              page.entries.map((e) => e.cid.toString()),
+            );
+            await _downloadService.deletePage(
+              pageDirPath: page.dirPath,
+              refresh: false,
+            );
+          }
         }
         _downloadService.flagNotifier.refresh();
         if (enableMultiSelect.value) {

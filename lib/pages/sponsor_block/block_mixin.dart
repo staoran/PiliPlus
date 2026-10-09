@@ -41,6 +41,9 @@ mixin BlockMixin on GetxController {
   int? _lastBlockPos;
   BlockConfigMixin get blockConfig;
   StreamSubscription<Duration>? _blockListener;
+  StreamSubscription<bool>? _playingListener;
+  Timer? _playingTimeout;
+  int _blockGeneration = 0;
   StreamSubscription<Duration>? get blockListener => _blockListener;
   late final List<SegmentModel> _segmentList = <SegmentModel>[];
   late final RxList<Segment> segmentProgressList = <Segment>[].obs;
@@ -56,8 +59,10 @@ mixin BlockMixin on GetxController {
   bool get preInitPlayer;
   int get currPosInMilliseconds;
   bool get isFullScreen => false;
+  bool get blockPlaybackReady => player != null;
 
   bool get isUgc;
+  bool get isFileSource => false;
   late final isBlock = isUgc || !blockConfig.enablePgcSkip;
 
   Future<void> querySponsorBlock({
@@ -65,8 +70,9 @@ mixin BlockMixin on GetxController {
     required int cid,
   }) async {
     resetBlock();
-
-    final result = await SponsorBlock.getSkipSegments(bvid: bvid, cid: cid);
+    final generation = _blockGeneration;
+    final result = await requestSponsorBlock(bvid: bvid, cid: cid);
+    if (isClosed || generation != _blockGeneration) return;
     switch (result) {
       case Success<List<SegmentItemModel>>(:final response):
         handleSBData(response);
@@ -78,11 +84,64 @@ mixin BlockMixin on GetxController {
     }
   }
 
+  Future<LoadingState<List<SegmentItemModel>>> requestSponsorBlock({
+    required String bvid,
+    required int cid,
+  }) => SponsorBlock.getSkipSegments(bvid: bvid, cid: cid);
+
   void initSkip() {
-    if (isClosed) return;
+    if (isClosed || !blockPlaybackReady) return;
+    _playingListener?.cancel();
+    _playingListener = null;
+    _playingTimeout?.cancel();
+    _playingTimeout = null;
     if (_segmentList.isNotEmpty) {
+      final generation = _blockGeneration;
+      final targetPlayer = player;
+      bool isCurrent() =>
+          !isClosed &&
+          generation == _blockGeneration &&
+          identical(player, targetPlayer) &&
+          blockPlaybackReady;
+      if (_blockListener == null && autoPlay && targetPlayer != null) {
+        void skipCurrentSegment() {
+          if (!isCurrent()) return;
+          for (final item in _segmentList) {
+            if (!item.segment.contains(currPosInMilliseconds)) continue;
+            switch (item.skipType) {
+              case SkipType.alwaysSkip:
+              case SkipType.skipOnce when !item.hasSkipped:
+                item.hasSkipped = true;
+                onSkip(item, skipSource: BlockSkipSource.automatic);
+              case SkipType.skipManually:
+                onAddItem(item);
+              default:
+            }
+            break;
+          }
+        }
+
+        if (targetPlayer.state.playing) {
+          skipCurrentSegment();
+        } else {
+          _playingListener = targetPlayer.stream.playing.listen((playing) {
+            if (!playing || !isCurrent()) return;
+            _playingListener?.cancel();
+            _playingListener = null;
+            _playingTimeout?.cancel();
+            _playingTimeout = null;
+            skipCurrentSegment();
+          });
+          _playingTimeout = Timer(const Duration(seconds: 15), () {
+            _playingListener?.cancel();
+            _playingListener = null;
+            _playingTimeout = null;
+          });
+        }
+      }
       _blockListener?.cancel();
       _blockListener = player?.stream.position.listen((position) {
+        if (!isCurrent()) return;
         int currentPos = position.inSeconds;
         if (currentPos != _lastBlockPos) {
           _lastBlockPos = currentPos;
@@ -125,11 +184,15 @@ mixin BlockMixin on GetxController {
     }
   }
 
-  Future<void> handleSBData(List<SegmentItemModel> list) async {
+  Future<void> handleSBData(
+    List<SegmentItemModel> list, {
+    bool activate = true,
+  }) async {
+    if (isClosed) return;
+
     if (list.isNotEmpty) {
       try {
-        Future<void>? future;
-        final duration = list.first.videoDuration ?? timeLength!;
+        final duration = list.first.videoDuration ?? timeLength ?? 0;
         // segmentList
         _segmentList.addAll(
           list
@@ -149,63 +212,27 @@ mixin BlockMixin on GetxController {
                         '${videoLabel!.value.isNotEmpty ? '/' : ''}${segmentModel.segmentType.title}';
                   }
 
-                  if (_blockListener == null && autoPlay && player != null) {
-                    final currPos = currPosInMilliseconds;
-
-                    if (segmentModel.segment.contains(currPos)) {
-                      _lastBlockPos = currPos;
-
-                      switch (segmentModel.skipType) {
-                        case SkipType.alwaysSkip:
-                        case SkipType.skipOnce:
-                          segmentModel.hasSkipped = true;
-                          if (player!.state.playing) {
-                            future = onSkip(
-                              segmentModel,
-                              skipSource: BlockSkipSource.automatic,
-                            );
-                          } else {
-                            player!.stream.playing.firstWhere((e) {
-                              if (e) {
-                                future = onSkip(
-                                  segmentModel,
-                                  skipSource: BlockSkipSource.automatic,
-                                );
-                                return true;
-                              }
-                              return false;
-                            }, orElse: () => false);
-                          }
-                          break;
-                        case SkipType.skipManually:
-                          onAddItem(segmentModel);
-                          break;
-                        default:
-                          break;
-                      }
-                    }
-                  }
-
                   return segmentModel;
                 },
               ),
         );
 
         // _segmentProgressList
-        segmentProgressList.addAll(
-          _segmentList.map((e) {
-            double start = (e.segment.$1 / duration).clamp(0.0, 1.0);
-            double end = (e.segment.$2 / duration).clamp(0.0, 1.0);
-            return Segment(
-              start: start,
-              end: end,
-              color: blockConfig._getColor(e.segmentType),
-            );
-          }),
-        );
+        if (duration > 0) {
+          segmentProgressList.addAll(
+            _segmentList.map((e) {
+              double start = (e.segment.$1 / duration).clamp(0.0, 1.0);
+              double end = (e.segment.$2 / duration).clamp(0.0, 1.0);
+              return Segment(
+                start: start,
+                end: end,
+                color: blockConfig._getColor(e.segmentType),
+              );
+            }),
+          );
+        }
 
-        if (_blockListener == null && (autoPlay || preInitPlayer)) {
-          await future;
+        if (activate && _blockListener == null && (autoPlay || preInitPlayer)) {
           initSkip();
         }
       } catch (e) {
@@ -275,12 +302,14 @@ mixin BlockMixin on GetxController {
     bool isSeek = true,
     BlockSkipSource skipSource = BlockSkipSource.manual,
   }) async {
+    final generation = _blockGeneration;
     try {
       await seekTo(
         Duration(milliseconds: item.segment.$2),
         isSeek: isSeek,
         skipSource: skipSource,
       );
+      if (isClosed || generation != _blockGeneration) return;
       if (isSkip) {
         _skipToast(item);
       } else {
@@ -491,6 +520,13 @@ mixin BlockMixin on GetxController {
   }
 
   void resetBlock() {
+    _blockGeneration++;
+    _playingListener?.cancel();
+    _playingListener = null;
+    _playingTimeout?.cancel();
+    _playingTimeout = null;
+    _stopSkipTimer();
+    listData.clear();
     cancelBlockListener();
     _lastBlockPos = null;
     videoLabel?.value = '';
@@ -510,6 +546,7 @@ mixin BlockMixin on GetxController {
           _ => false,
         }) {
           _skipToast(i);
+          i.hasSkipped = true;
           pos = math.max(pos, i.segment.$2);
         }
       } else {

@@ -16,6 +16,7 @@ import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/widgets/pgc_panel.dart';
+import 'package:PiliPlus/pages/video/introduction/pgc/widgets/season.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/action_item.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
@@ -25,21 +26,19 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PgcIntroPage extends StatefulWidget {
-  final int? cid;
   final String heroTag;
   final Function showEpisodes;
   final Function showIntroDetail;
   final double maxWidth;
-  final bool isLandscape;
+  final bool isPortrait;
 
   const PgcIntroPage({
     super.key,
-    this.cid,
     required this.heroTag,
     required this.showEpisodes,
     required this.showIntroDetail,
     required this.maxWidth,
-    required this.isLandscape,
+    required this.isPortrait,
   });
 
   @override
@@ -49,6 +48,7 @@ class PgcIntroPage extends StatefulWidget {
 class _PgcIntroPageState extends State<PgcIntroPage> {
   late final PgcIntroController introController;
   late final VideoDetailController videoDetailCtr;
+  late ColorScheme colorScheme;
 
   @override
   void initState() {
@@ -61,9 +61,13 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.of(context);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    colorScheme = ColorScheme.of(context);
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Obx(() {
       if (!introController.pgcItemLoaded.value) {
         return const SliverToBoxAdapter(
@@ -77,7 +81,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
       }
 
       final item = introController.pgcItem;
-      final isLandscape = widget.isLandscape;
+      final isPortrait = widget.isPortrait;
       Widget sliver = SliverToBoxAdapter(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,25 +90,39 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: 10,
               children: [
-                _buildCover(colorScheme, isLandscape, item),
+                _buildCover(item),
                 Expanded(
-                  child: _buildInfoPanel(isLandscape, colorScheme, item),
+                  child: _buildInfoPanel(isPortrait, item),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             // 点赞收藏转发 布局样式2
             if (introController.isPgc) actionGrid(item.stat!, introController),
-            // 番剧分集
-            if (item.episodes?.isNotEmpty == true)
-              PgcPanel(
-                heroTag: widget.heroTag,
-                pages: item.episodes!,
-                cid: videoDetailCtr.cid.value,
-                onChangeEpisode: introController.onChangeEpisode,
-                showEpisodes: widget.showEpisodes,
-                newEp: item.newEp,
-              ),
+            if (isPortrait ||
+                !videoDetailCtr.plPlayerController.horizontalSeasonPanel) ...[
+              if (item.hasSeasons)
+                Padding(
+                  padding: const .only(top: 5),
+                  child: SeasonPanel(
+                    seasons: item.seasons!,
+                    pgcController: introController,
+                    onSeasonChanged: () {
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ),
+              // 番剧分集
+              if (item.hasEpisodes)
+                PgcPanel(
+                  heroTag: widget.heroTag,
+                  pages: item.episodes!,
+                  cid: videoDetailCtr.cid.value,
+                  onChangeEpisode: introController.onChangeEpisode,
+                  showEpisodes: widget.showEpisodes,
+                  newEp: item.newEp,
+                ),
+            ],
           ],
         ),
       );
@@ -152,11 +170,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
     return null;
   }
 
-  Widget _buildCover(
-    ColorScheme colorScheme,
-    bool isLandscape,
-    PgcInfoModel item,
-  ) {
+  Widget _buildCover(PgcInfoModel item) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -212,11 +226,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
     );
   }
 
-  Widget _buildInfoPanel(
-    bool isLandscape,
-    ColorScheme colorScheme,
-    PgcInfoModel item,
-  ) {
+  Widget _buildInfoPanel(bool isPortrait, PgcInfoModel item) {
     if (introController.isPgc) {
       Widget subBtn() => Obx(
         () {
@@ -308,7 +318,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
         children: [
           StatWidget(type: .play, value: item.stat!.view),
           StatWidget(type: .danmaku, value: item.stat!.danmaku),
-          if (isLandscape) ...desc(),
+          if (!isPortrait) ...desc(),
         ],
       );
       return GestureDetector(
@@ -325,7 +335,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               title(),
               stat(),
               const SizedBox(height: 5),
-              if (!isLandscape) ...desc(),
+              if (isPortrait) ...desc(),
               const SizedBox(height: 5),
               Expanded(
                 child: Text(
