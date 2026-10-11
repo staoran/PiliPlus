@@ -1,3 +1,2 @@
--dontwarn javax.annotation.Nullable
--dontwarn org.conscrypt.Conscrypt
--dontwarn org.conscrypt.OpenSSLProvider
+-keep class com.taoran.piliplus.AndroidHelper { public *; }
+-keep class com.taoran.piliplus.AndroidHelper$ToDart { public *; }

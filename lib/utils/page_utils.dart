@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math';
 
 import 'package:PiliPlus/common/widgets/fractionally_sized_box.dart';
@@ -237,6 +238,7 @@ abstract final class PageUtils {
     required bool isLive,
     required bool isPlaying,
   }) {
+    if (!Platform.isAndroid || !PiliAndroidHelper.isPipAvailable) return;
     if (width != null &&
         height != null &&
         !_fitsInAndroidRequirements(width, height)) {
@@ -271,6 +273,7 @@ abstract final class PageUtils {
           parameters: {
             'id': item.idStr,
             'type': 'opus',
+            if (viewComment) 'viewComment': '',
           },
         );
       } else {
@@ -349,6 +352,7 @@ abstract final class PageUtils {
           parameters: {
             'id': item.idStr,
             'type': 'opus',
+            if (viewComment) 'viewComment': '',
           },
         );
         break;

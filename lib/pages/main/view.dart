@@ -15,7 +15,7 @@ import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
-import 'package:PiliPlus/utils/android/android_helper.dart';
+import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -29,6 +29,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:tray_manager/tray_manager.dart' as tray_manager show Image;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -40,12 +41,7 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends PopScopeState<MainApp>
-    with
-        RouteAware,
-        RouteAwareMixin,
-        WidgetsBindingObserver,
-        WindowListener,
-        TrayListener {
+    with RouteAware, RouteAwareMixin, WidgetsBindingObserver, WindowListener {
   final _mainController = Get.put(MainController());
   late final _setting = GStorage.setting;
   late EdgeInsets _padding;
@@ -67,8 +63,7 @@ class _MainAppState extends PopScopeState<MainApp>
         ..addListener(this)
         ..setPreventClose(true);
       if (_mainController.showTrayIcon) {
-        trayManager.addListener(this);
-        _handleTray();
+        _initTrayIcon();
       }
     }
     if (!Platform.isMacOS) {
@@ -127,7 +122,7 @@ class _MainAppState extends PopScopeState<MainApp>
       HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     }
     if (PlatformUtils.isDesktop) {
-      trayManager.removeListener(this);
+      _destroyTrayIcon();
       windowManager.removeListener(this);
     }
     removeObserverMobile(this);
@@ -182,7 +177,7 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void onWindowClose() {
-    if (_mainController.showTrayIcon && _mainController.minimizeOnExit) {
+    if (_trayIcon != null && _mainController.minimizeOnExit) {
       _hide();
       _onHideWindow();
     } else {
@@ -191,11 +186,13 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Future<void> _onClose() async {
+    if (_closing) return;
+    _closing = true;
     // 关闭预创建的播放器窗口（如果有）
     await PlayerWindowService.instance.closePreCreatedWindow();
     await GStorage.compact();
     await GStorage.close();
-    await trayManager.destroy();
+    _destroyTrayIcon();
     DeviceUtils.exitApp();
   }
 
@@ -252,61 +249,165 @@ class _MainAppState extends PopScopeState<MainApp>
     return windowManager.show();
   }
 
-  @override
-  Future<void> onTrayIconMouseDown() async {
-    if (await windowManager.isVisible()) {
-      _onHideWindow();
-      _hide();
-    } else {
-      _onShowWindow();
+  TrayIcon? _trayIcon;
+  tray_manager.Image? _icon;
+  int? _trayListenerId;
+  Menu? _trayMenu;
+  int? _showMenuId;
+  MenuItem? _showMenuItem;
+  int? _playPageOnTopMenuId;
+  MenuItem? _playPageOnTopMenuItem;
+  int? _exitMenuId;
+  MenuItem? _exitMenuItem;
+  bool _trayClosed = false;
+  bool _closing = false;
+
+  bool get _canHandleTray => mounted && !_closing && !_trayClosed;
+
+  void _destroyTrayIcon() {
+    _trayClosed = true;
+    final trayIcon = _trayIcon;
+    final trayListenerId = _trayListenerId;
+    final menu = _trayMenu;
+    final icon = _icon;
+    final showItem = _showMenuItem;
+    final showId = _showMenuId;
+    final onTopItem = _playPageOnTopMenuItem;
+    final onTopId = _playPageOnTopMenuId;
+    final exitItem = _exitMenuItem;
+    final exitId = _exitMenuId;
+    _trayIcon = null;
+    _trayListenerId = null;
+    _trayMenu = null;
+    _icon = null;
+    _showMenuItem = null;
+    _showMenuId = null;
+    _playPageOnTopMenuItem = null;
+    _playPageOnTopMenuId = null;
+    _exitMenuItem = null;
+    _exitMenuId = null;
+
+    void release(void Function() action) {
+      try {
+        action();
+      } catch (e, stack) {
+        debugPrint('Tray cleanup failed: $e\n$stack');
+      }
+    }
+
+    void releaseItem(MenuItem? item, int? listenerId) {
+      if (item == null) return;
+      if (listenerId != null) {
+        release(() => item.removeListener(listenerId));
+      }
+      release(item.dispose);
+    }
+
+    if (trayIcon != null) {
+      if (trayListenerId != null) {
+        release(() => trayIcon.removeListener(trayListenerId));
+      }
+      release(trayIcon.dispose);
+    }
+    if (menu != null) release(menu.dispose);
+    releaseItem(showItem, showId);
+    releaseItem(onTopItem, onTopId);
+    releaseItem(exitItem, exitId);
+    if (icon != null) release(icon.dispose);
+  }
+
+  void _showMenuListener(MenuEvent event) {
+    if (_canHandleTray && event is MenuItemClickedEvent) {
       _show();
     }
   }
 
-  @override
-  Future<void> onTrayIconRightMouseDown() async {
-    // ignore: deprecated_member_use
-    trayManager.popUpContextMenu(bringAppToFront: true);
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    switch (menuItem.key) {
-      case 'show':
-        _show();
-        return;
-      case 'toggle_play_page_on_top':
-        _togglePlayPageAlwaysOnTop();
-        return;
-      case 'exit':
-        _onClose();
-        return;
+  void _playPageOnTopMenuListener(MenuEvent event) {
+    if (_canHandleTray && event is MenuItemClickedEvent) {
+      _togglePlayPageAlwaysOnTop();
     }
   }
 
-  Future<void> _handleTray() async {
-    if (Platform.isWindows) {
-      await trayManager.setIcon(Assets.logoIco);
-    } else {
-      await trayManager.setIcon(Assets.logoLarge);
+  void _exitMenuListener(MenuEvent event) {
+    if (_canHandleTray && event is MenuItemClickedEvent) {
+      _onClose();
     }
-    if (!Platform.isLinux) {
-      await trayManager.setToolTip(Constants.appName);
-    }
+  }
 
-    Menu trayMenu = Menu(
-      items: [
-        MenuItem(key: 'show', label: '显示窗口'),
-        MenuItem(
-          key: 'toggle_play_page_on_top',
-          label: _playPageOnTopLabel,
-          checked: _isPlayPageOnTop,
-        ),
-        MenuItem.separator(),
-        MenuItem(key: 'exit', label: '退出 ${Constants.appName}'),
-      ],
-    );
-    await trayManager.setContextMenu(trayMenu);
+  Future<void> _trayListener(TrayIconEvent event) async {
+    if (!_canHandleTray) return;
+    switch (event) {
+      case TrayIconClickedEvent():
+        final visible = await windowManager.isVisible();
+        if (!_canHandleTray) return;
+        if (visible) {
+          _onHideWindow();
+          await _hide();
+        } else {
+          await _show();
+          if (_canHandleTray) _onShowWindow();
+        }
+      case TrayIconRightClickedEvent():
+        await _refreshTrayMenu();
+        if (_canHandleTray) _trayIcon?.openContextMenu();
+      case TrayIconDoubleClickedEvent():
+    }
+  }
+
+  void _initTrayIcon() {
+    if (_trayIcon != null || _closing || !mounted) return;
+    _trayClosed = false;
+    try {
+      final trayIcon = TrayIcon.create();
+      if (trayIcon == null) throw StateError('Unable to create tray icon');
+      _trayIcon = trayIcon;
+      _trayListenerId = trayIcon.addListener(_trayListener);
+      final icon = ImageAsset.fromAsset(
+        Platform.isWindows ? Assets.logoIco : Assets.logoLarge,
+      );
+      if (icon == null) throw StateError('Unable to load tray image');
+      _icon = icon;
+      trayIcon
+        ..icon = icon
+        ..setTooltip(Constants.appName);
+
+      final showItem = MenuItem.createWithLabelAndType('显示窗口', .normal);
+      if (showItem == null) throw StateError('Unable to create show menu item');
+      _showMenuItem = showItem;
+      _showMenuId = showItem.addListener(_showMenuListener);
+      final onTopItem = MenuItem.createWithLabelAndType(
+        _playPageOnTopLabel,
+        .checkbox,
+      );
+      if (onTopItem == null) {
+        throw StateError('Unable to create on-top menu item');
+      }
+      _playPageOnTopMenuItem = onTopItem;
+      _playPageOnTopMenuId = onTopItem.addListener(_playPageOnTopMenuListener);
+      onTopItem.state = _isPlayPageOnTop ? .checked : .unchecked;
+      final exitItem = MenuItem.createWithLabelAndType(
+        '退出 ${Constants.appName}',
+        .normal,
+      );
+      if (exitItem == null) throw StateError('Unable to create exit menu item');
+      _exitMenuItem = exitItem;
+      _exitMenuId = exitItem.addListener(_exitMenuListener);
+      final menu = Menu.create();
+      if (menu == null) throw StateError('Unable to create tray menu');
+      _trayMenu = menu;
+      menu
+        ..addItem(showItem)
+        ..addItem(onTopItem)
+        ..addSeparator()
+        ..addItem(exitItem);
+      trayIcon.setContextMenu(menu);
+      if (!trayIcon.setVisible(true)) {
+        throw StateError('Unable to show tray icon');
+      }
+    } catch (e, stack) {
+      _destroyTrayIcon();
+      debugPrint('Tray initialization failed: $e\n$stack');
+    }
   }
 
   String get _playPageOnTopLabel {
@@ -319,6 +420,7 @@ class _MainAppState extends PopScopeState<MainApp>
       : Pref.mainWindowAlwaysOnTop;
 
   Future<void> _togglePlayPageAlwaysOnTop() async {
+    if (!_canHandleTray) return;
     final usePlayer = Pref.usePlayerWindow;
     final next = !_isPlayPageOnTop;
     final key = usePlayer
@@ -326,12 +428,13 @@ class _MainAppState extends PopScopeState<MainApp>
         : SettingBoxKey.mainWindowAlwaysOnTop;
 
     await _setting.put(key, next);
+    if (!_canHandleTray) return;
 
     if (usePlayer) {
       try {
         final controller = await PlayerWindowService.instance
             .findPlayerWindow();
-        if (controller != null) {
+        if (_canHandleTray && controller != null) {
           await controller.setAlwaysOnTop(next);
         }
       } catch (_) {}
@@ -343,15 +446,16 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Future<void> _refreshTrayMenu() async {
-    if (_mainController.showTrayIcon) {
-      await _handleTray();
-    }
+    if (!_canHandleTray) return;
+    _playPageOnTopMenuItem
+      ?..label = _playPageOnTopLabel
+      ..state = _isPlayPageOnTop ? .checked : .unchecked;
   }
 
   @pragma('vm:prefer-inline')
   static void _onBack() {
     if (Platform.isAndroid) {
-      PiliAndroidHelper.back();
+      AndroidHelper.back();
     }
   }
 
@@ -486,7 +590,8 @@ class _MainAppState extends PopScopeState<MainApp>
             child: Obx(
               () => DrawerTheme(
                 data: DrawerThemeData(
-                  width: (_mainController.showBottomLabel.value ? 130 : 80) +
+                  width:
+                      (_mainController.showBottomLabel.value ? 130 : 80) +
                       _padding.left,
                 ),
                 child: NavigationDrawer(
