@@ -90,8 +90,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   final RxInt positionSeconds = 0.obs;
   final Rx<Duration> seekPosition = Rx(Duration.zero);
 
-  int get progress =>
-      (isSeeking.value ? seekPosition.value : sliderPosition).inSeconds;
+  int get progress => isSeeking.value
+      ? seekPosition.value.inSeconds
+      : sliderPositionSeconds.value;
 
   int get positionInMilliseconds => position.inMilliseconds;
 
