@@ -392,6 +392,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _danmakuListener?.cancel();
     _tapGestureRecognizer.dispose();
     _longPressRecognizer?.dispose();
+    _mousePointerDown = null;
     _doubleTapGestureRecognizer.dispose();
     _scaleGestureRecognizer.dispose();
     _brightnessListener?.cancel();
@@ -1240,6 +1241,23 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   /// 在鼠标按下时启动原生全屏过渡会与本次点击重叠，窗口可能卡在半过渡状态
   /// 导致鼠标事件失效，因此延后到抬起后执行。
   (bool, bool)? _pendingFullScreenToggle;
+  PointerDownEvent? _mousePointerDown;
+
+  void _onPointerHover(PointerHoverEvent event) {
+    final down = _mousePointerDown;
+    if (down != null &&
+        event.kind == ui.PointerDeviceKind.mouse &&
+        event.device == down.device &&
+        !event.synthesized &&
+        event.buttons == 0) {
+      _mousePointerDown = null;
+      // Flutter 3.47.7 on Windows can derive Down from a mouse move, then
+      // send Hover instead of Up. Cancel through the gesture pipeline;
+      // reevaluate this workaround once the engine pairs that Down with Up/Cancel.
+      GestureBinding.instance.cancelPointer(down.pointer);
+    }
+    plPlayerController.controls = true;
+  }
 
   void _onPointerDown(PointerDownEvent event) {
     if (PlatformUtils.isDesktop) {
@@ -1269,6 +1287,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       } else {
         _tapGestureRecognizer.addPointer(event);
         _doubleTapGestureRecognizer.addPointer(event);
+        if (Platform.isWindows &&
+            event.kind == ui.PointerDeviceKind.mouse &&
+            event.buttons == kPrimaryMouseButton) {
+          _mousePointerDown = event;
+        }
         longPressRecognizer.addPointer(event);
       }
       _scaleGestureRecognizer.addPointer(event);
@@ -1276,6 +1299,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    if (_mousePointerDown?.pointer == event.pointer) {
+      _mousePointerDown = null;
+    }
     final pending = _pendingFullScreenToggle;
     if (pending == null || event.buttons != 0) {
       return;
@@ -1293,6 +1319,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
+    if (_mousePointerDown?.pointer == event.pointer) {
+      _mousePointerDown = null;
+    }
     _pendingFullScreenToggle = null;
   }
 
@@ -2012,7 +2041,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               ? SystemMouseCursors.none
               : MouseCursor.defer,
           onEnter: (_) => plPlayerController.controls = true,
-          onHover: (_) => plPlayerController.controls = true,
+          onHover: _onPointerHover,
           onExit: (_) => plPlayerController.controls =
               widget.videoDetailController?.showSteinEdgeInfo.value ?? false,
           child: child,
