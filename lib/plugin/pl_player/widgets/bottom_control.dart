@@ -14,6 +14,7 @@ class BottomControl extends StatelessWidget {
     super.key,
     required this.maxWidth,
     required this.isFullScreen,
+    required this.animCtr,
     required this.controller,
     required this.buildBottomControl,
     required this.videoDetailController,
@@ -21,6 +22,7 @@ class BottomControl extends StatelessWidget {
 
   final double maxWidth;
   final bool isFullScreen;
+  final AnimationController animCtr;
   final PlPlayerController controller;
   final ValueGetter<Widget> buildBottomControl;
   final VideoDetailController videoDetailController;
@@ -34,6 +36,9 @@ class BottomControl extends StatelessWidget {
     final position = Duration(seconds: duration.seconds);
     if (!controller.isFileSource && controller.showSeekPreview) {
       controller.updatePreviewIndex(duration.seconds);
+      if (controller.hoverDx != null) {
+        controller.hoverDx = duration.localPosition.dx;
+      }
     }
     controller.seekPosition.value = position;
   }
@@ -41,12 +46,31 @@ class BottomControl extends StatelessWidget {
   void onSeek(int milliseconds) {
     final position = Duration(milliseconds: milliseconds);
     controller
+      ..hoverDx = null
       ..seekToPos = position
       ..sliderPosition = position
       ..updateSliderPositionSecond()
       ..seekTo(position, isSeek: false)
       ..onSeekEnd()
       ..seekToPos = null;
+  }
+
+  void _onHover(double dx, int seconds) {
+    if (animCtr.isAnimating) return;
+    controller
+      ..hoverDx = dx
+      ..seekPosition.value = Duration(seconds: seconds)
+      ..updatePreviewIndex(seconds);
+  }
+
+  void _onExit() {
+    if (controller.isSeeking.value || controller.hoverDx == null) {
+      return;
+    }
+    controller
+      ..hoverDx = null
+      ..showPreview.value = false
+      ..hideTaskControls();
   }
 
   @override
@@ -57,6 +81,11 @@ class BottomControl extends StatelessWidget {
         : colorScheme.primary;
     final thumbGlowColor = primary.withAlpha(80);
     final bufferedBarColor = primary.withValues(alpha: 0.4);
+
+    final enableHover =
+        PlatformUtils.isDesktop &&
+        controller.showSeekPreview &&
+        !controller.isFileSource;
 
     return Padding(
       padding: const .symmetric(horizontal: 10, vertical: 12),
@@ -88,6 +117,8 @@ class BottomControl extends StatelessWidget {
                         onDragStart: onDragStart,
                         onDragUpdate: onDragUpdate,
                         onSeek: onSeek,
+                        onHover: enableHover ? _onHover : null,
+                        onExit: enableHover ? _onExit : null,
                       ),
                     ),
                     if (controller.enableBlock &&

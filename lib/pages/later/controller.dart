@@ -4,7 +4,7 @@ import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
-import 'package:PiliPlus/models/common/video/video_quality.dart';
+import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models_new/later/data.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart'
@@ -225,7 +225,7 @@ mixin BaseLaterController
   void toViewDel(
     BuildContext context,
     int index,
-    int? aid,
+    int aid,
   ) {
     final item = loadingState.value.data![index];
     final hasCache = item.hasOfflineCache;
@@ -276,7 +276,7 @@ mixin BaseLaterController
                     bool deletedCache = false;
                     try {
                       final res = await UserHttp.toViewDel(
-                        aids: aid.toString(),
+                        aids: aid,
                       );
                       if (res.isSuccess) {
                         // 如果勾选了删除缓存，同时删除离线缓存
@@ -304,7 +304,7 @@ mixin BaseLaterController
                       if (deletedCache) {
                         SmartDialog.showToast('已删除稍后再看和离线缓存');
                       }
-                      if (!deleteCache || !hasCache) {
+                      if (!deletedCache) {
                         res.toast();
                       }
                     } catch (_) {

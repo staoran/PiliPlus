@@ -1,10 +1,25 @@
 import 'dart:io' show Directory, File;
 
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+Future<Directory> _cacheDirectoryProvider() async {
+  final tmpDirPath = await PathProviderPlatform.instance.getTemporaryPath();
+  if (tmpDirPath == null) {
+    throw MissingPlatformDirectoryException(
+      'Unable to get temporary directory',
+    );
+  }
+  if (PlatformUtils.isDesktop) {
+    return Directory(path.join(tmpDirPath, Constants.appName));
+  }
+  return Directory(tmpDirPath);
+}
 
 abstract final class CacheManager {
   static late final DefaultCacheManager manager;
@@ -13,10 +28,10 @@ abstract final class CacheManager {
     final i = await DefaultCacheManager.init(
       maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
       cacheDirectoryProvider: cacheSubDir == null
-          ? getTemporaryDirectory
+          ? _cacheDirectoryProvider
           : () async {
-              final tempDirectory = await getTemporaryDirectory();
-              return Directory(path.join(tempDirectory.path, cacheSubDir));
+              final root = await _cacheDirectoryProvider();
+              return Directory(path.join(root.path, cacheSubDir));
             },
     );
     manager = i;

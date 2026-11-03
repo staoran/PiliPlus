@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math' show max;
+import 'dart:math' as math;
 
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/http/constants.dart';
@@ -8,6 +8,7 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/pgc.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/models/common/pgc_episode_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
@@ -35,6 +36,11 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+typedef OnChangePgcEpisode = Function(
+  BaseEpisodeItem episode, {
+  PgcEpisodeType? episodeType,
+});
+
 class PgcIntroController extends CommonIntroController {
   int? seasonId;
   int? epId;
@@ -45,16 +51,10 @@ class PgcIntroController extends CommonIntroController {
 
   late final bool isPgc;
   late PgcInfoModel pgcItem;
+  late PgcEpisodeType episodeType;
 
-  // 标记 pgcItem 是否已加载
   final RxBool pgcItemLoaded = false.obs;
-  ScrollController? _seasonController;
-  ScrollController seasonController(int index) {
-    if (_seasonController != null) return _seasonController!;
-    return _seasonController = ScrollController(
-      initialScrollOffset: index * 150,
-    );
-  }
+  ScrollController? seasonController;
 
   @override
   (Object, int) get getFavRidType => (epId!, 24);
@@ -66,12 +66,25 @@ class PgcIntroController extends CommonIntroController {
   late final RxInt followStatus = (-1).obs;
   final RxBool isFav = false.obs;
 
+  late int seasonIndex = 0;
+  late int episodeIndex = 0;
+  late int sectionIndex = 0;
+  late int pvIndex = 0;
+
+  late final _replyCtr = Get.find<VideoReplyController>(tag: heroTag);
+
   @override
   void onInit() {
     final args = Get.arguments;
     seasonId = args['seasonId'];
     epId = args['epId'];
     isPgc = args['videoType'] == VideoType.pgc;
+    if (args['sectionIndex'] case final int value) {
+      episodeType = .section;
+      sectionIndex = value;
+    } else {
+      episodeType = .episode;
+    }
 
     // Important: initialize CommonIntroController fields (heroTag/bvid/cid)
     // before calling any logic that may read cid.
@@ -128,15 +141,22 @@ class PgcIntroController extends CommonIntroController {
   /// pgcItem 准备好后的初始化逻辑
   void _onPgcItemReady() {
     if (isClosed || !pgcItemLoaded.value) return;
+    seasonIndex =
+        pgcItem.seasons?.indexWhere((e) => e.seasonId == seasonId) ?? 0;
+    final sections = pgcItem.sections;
+    if (sections != null &&
+        sections.isNotEmpty &&
+        (sectionIndex < 0 || sectionIndex >= sections.length)) {
+      sectionIndex = 0;
+    }
+    _updateEpisodeIndex(cid.value);
     // 调用 queryVideoIntro 更新视频详情
     queryVideoIntro();
 
     if (isPgc) {
       if (isLogin) {
         queryIsFollowed();
-        if (epId != null) {
-          queryPgcLikeCoinFav();
-        }
+        queryPgcLikeCoinFav();
       }
       queryVideoTags();
     }
@@ -153,7 +173,7 @@ class PgcIntroController extends CommonIntroController {
       return;
     }
     // PGC 内容通常有多集
-    final hasMultiEpisodes = (pgcItem.episodes?.length ?? 0) > 1;
+    final hasMultiEpisodes = episodes.length > 1;
 
     videoPlayerServiceHandler?.setListControlMode(
       enabled: hasMultiEpisodes,
@@ -179,10 +199,10 @@ class PgcIntroController extends CommonIntroController {
       final hasFav = response.favorite == 1;
       late final stat = pgcItem.stat;
       if (hasLike) {
-        stat?.like = max(1, stat.like);
+        stat?.like = math.max(1, stat.like);
       }
       if (hasFav) {
-        stat?.favorite = max(1, stat.favorite);
+        stat?.favorite = math.max(1, stat.favorite);
       }
       this.hasLike.value = hasLike;
       coinNum.value = response.coinNumber!;
@@ -244,12 +264,10 @@ class PgcIntroController extends CommonIntroController {
             DialogOption(
               child: const Text('分享视频', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                final item = pgcItem.episodes?.firstWhereOrNull(
-                  (item) => item.epId == epId,
-                );
+                final item = findEpisode(cid.value);
                 Get.back();
                 ShareUtils.shareText(
-                  '${pgcItem.title}${item != null ? ' ${item.showTitle}' : ''}'
+                  '${pgcItem.title} ${item.showTitle}'
                   ' - $videoUrl',
                 );
               },
@@ -259,9 +277,7 @@ class PgcIntroController extends CommonIntroController {
               child: const Text('分享至动态', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 Get.back();
-                final item = pgcItem.episodes?.firstWhereOrNull(
-                  (item) => item.epId == epId,
-                );
+                final item = findEpisode(cid.value);
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -286,8 +302,7 @@ class PgcIntroController extends CommonIntroController {
                       _ => -1,
                     },
                     pic: pgcItem.cover,
-                    title:
-                        '${pgcItem.title}${item != null ? '\n${item.showTitle}' : ''}',
+                    title: '${pgcItem.title}\n${item.showTitle}',
                     uname: '',
                     replyInfo: (
                       oid: videoDetailCtr.aid,
@@ -306,16 +321,14 @@ class PgcIntroController extends CommonIntroController {
               onPressed: () {
                 Get.back();
                 try {
-                  final item = pgcItem.episodes!.firstWhere(
-                    (item) => item.epId == epId,
-                  );
+                  final item = findEpisode(cid.value);
                   final title =
                       item.shareCopy ??
                       '${pgcItem.title} ${item.showTitle ?? item.longTitle}';
                   PageUtils.pmShare(
                     context,
                     content: {
-                      "id": epId!.toString(),
+                      "id": epId.toString(),
                       "title": title,
                       "url": item.shareUrl,
                       "headline": title,
@@ -334,9 +347,22 @@ class PgcIntroController extends CommonIntroController {
     );
   }
 
+  void _updateEpisodeIndex(int cid) {
+    final index = episodes.indexWhere((e) => e.cid == cid);
+    if (episodeType == .episode) {
+      episodeIndex = index;
+      pvIndex = -1;
+    } else {
+      episodeIndex = -1;
+      pvIndex = index;
+    }
+  }
+
   // 修改分P或番剧分集
+  @override
   Future<bool> onChangeEpisode(
     BaseEpisodeItem episode, {
+    PgcEpisodeType? episodeType,
     bool fromAudioPage = false,
     Duration? audioPosition,
   }) async {
@@ -403,7 +429,9 @@ class PgcIntroController extends CommonIntroController {
 
       // 重新获取视频资源
       this.epId = epId;
-      this.bvid = bvid;
+
+      if (episodeType != null) this.episodeType = episodeType;
+      _updateEpisodeIndex(cid);
 
       videoDetailCtr.plPlayerController.pause();
       if (!isCurrentSwitch()) {
@@ -473,10 +501,8 @@ class PgcIntroController extends CommonIntroController {
           return false;
         }
         try {
-          final replyCtr = Get.find<VideoReplyController>(tag: heroTag)
-            ..aid = aid;
-          if (replyCtr.loadingState.value is! Loading) {
-            replyCtr.onReload();
+          if (_replyCtr.loadingState.value is! Loading) {
+            _replyCtr.onReload();
           }
         } catch (_) {}
       }
@@ -492,7 +518,6 @@ class PgcIntroController extends CommonIntroController {
         return false;
       }
       hasLater.value = videoDetailCtr.sourceType == SourceType.watchLater;
-      this.cid.value = cid;
       queryOnlineTotal(isCurrent: isCurrentSwitch);
 
       // 异步查询视频简介，不阻止播放切换；返回时仍需确认本轮 switch 未过期。
@@ -550,10 +575,8 @@ class PgcIntroController extends CommonIntroController {
 
   @override
   bool prevPlay() {
-    final episodes = pgcItem.episodes;
-    if (episodes == null || episodes.isEmpty) {
-      return false;
-    }
+    final episodes = this.episodes;
+    if (episodes.isEmpty) return false;
     int currentIndex = episodes.indexWhere(
       (e) => e.cid == videoDetailCtr.cid.value,
     );
@@ -578,10 +601,8 @@ class PgcIntroController extends CommonIntroController {
   @override
   bool nextPlay() {
     try {
-      final episodes = pgcItem.episodes;
-      if (episodes == null || episodes.isEmpty) {
-        return false;
-      }
+      final episodes = this.episodes;
+      if (episodes.isEmpty) return false;
 
       PlayRepeat playRepeat = videoDetailCtr.plPlayerController.playRepeat;
 
@@ -611,6 +632,7 @@ class PgcIntroController extends CommonIntroController {
   // 一键三连
   @override
   Future<void> actionTriple() async {
+    if (epId == null || !pgcItemLoaded.value) return;
     await runWithActionLoading(IntroAction.triple, () async {
       feedBack();
       if (!isLogin) {
@@ -675,11 +697,32 @@ class PgcIntroController extends CommonIntroController {
     //   }
     // });
 
-    final res = await PgcHttp.seasonStatus(seasonId!);
+    final requestSeasonId = seasonId;
+    if (requestSeasonId == null) return;
+    final res = await PgcHttp.seasonStatus(requestSeasonId);
+    if (isClosed || seasonId != requestSeasonId) return;
     if (res case Success(:final response)) {
       isFollowed.value = response['follow'] == 1;
       followStatus.value = response['follow_status'];
     }
+  }
+
+  List<EpisodeItem> get episodes {
+    if (!pgcItemLoaded.value) return const [];
+    if (episodeType == .section) {
+      final sections = pgcItem.sections;
+      if (sections == null ||
+          sectionIndex < 0 ||
+          sectionIndex >= sections.length) {
+        return const [];
+      }
+      return sections[sectionIndex].episodes ?? const [];
+    }
+    return pgcItem.episodes ?? const [];
+  }
+
+  EpisodeItem findEpisode(int cid) {
+    return episodes.firstWhere((e) => e.cid == cid);
   }
 
   @override
@@ -700,11 +743,12 @@ class PgcIntroController extends CommonIntroController {
     bool Function()? isCurrent,
   }) {
     bool isCurrentIntro() => isCurrent?.call() ?? true;
-    if (!isCurrentIntro()) return;
+    if (isClosed || !isCurrentIntro()) return;
     // 如果 pgcItem 未加载，跳过（会在 _onPgcItemReady 中再次调用）
     if (!pgcItemLoaded.value) return;
 
-    episode ??= pgcItem.episodes!.firstWhere((e) => e.cid == cid.value);
+    episode ??= episodes.firstWhereOrNull((e) => e.cid == cid.value);
+    if (episode == null) return;
     if (!isCurrentIntro()) return;
     videoDetail
       ..value.title = episode.showTitle
@@ -727,6 +771,7 @@ class PgcIntroController extends CommonIntroController {
   }
 
   Future<void> onFavPugv(bool isFav) async {
+    if (seasonId == null || !pgcItemLoaded.value) return;
     await runWithActionLoading(IntroAction.pugvFavorite, () async {
       final res = isFav
           ? await FavHttp.delFavPugv(seasonId!)
@@ -743,7 +788,7 @@ class PgcIntroController extends CommonIntroController {
   bool _changingSeason = false;
   bool get changingSeason => _changingSeason;
 
-  Future<bool> changeSeason(int seasonId) async {
+  Future<bool> changeSeason(int seasonId, int seasonIndex) async {
     if (_changingSeason || isClosed || !pgcItemLoaded.value) return false;
     _changingSeason = true;
     final generation = ++_pgcInfoGeneration;
@@ -759,13 +804,19 @@ class PgcIntroController extends CommonIntroController {
         return false;
       }
       if (res case Success(:final response)) {
-        final episodes = response.episodes;
-        if (episodes != null && episodes.isNotEmpty) {
+        final (EpisodeItem? episode, int? sectionIndex) = response
+            .findEpisode();
+        if (episode != null) {
           pgcItem = response;
           isFav.value = pgcItem.userStatus?.favored == 1;
           this.seasonId = seasonId;
+          this.seasonIndex = seasonIndex;
+          this.sectionIndex = sectionIndex ?? 0;
           final expectedChange = _changeEpisodeGeneration + 1;
-          final changed = await onChangeEpisode(episodes.first);
+          final changed = await onChangeEpisode(
+            episode,
+            episodeType: sectionIndex != null ? .section : .episode,
+          );
           if (!isCurrentRequest() ||
               expectedChange != _changeEpisodeGeneration) {
             return false;
@@ -793,8 +844,8 @@ class PgcIntroController extends CommonIntroController {
   void onClose() {
     _pgcInfoGeneration++;
     _changeEpisodeGeneration++;
-    _seasonController?.dispose();
-    _seasonController = null;
+    seasonController?.dispose();
+    seasonController = null;
     super.onClose();
   }
 }

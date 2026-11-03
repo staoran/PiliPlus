@@ -6,14 +6,14 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/fav_order_type.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
-import 'package:PiliPlus/models/common/video/video_quality.dart';
+import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/data.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/media.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart';
 import 'package:PiliPlus/pages/common/multi_select/multi_select_controller.dart';
-import 'package:PiliPlus/pages/common/page_order_mixin.dart';
+import 'package:PiliPlus/pages/common/page_order/page_order_mixin.dart';
 import 'package:PiliPlus/pages/fav_sort/view.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -122,7 +122,7 @@ class FavDetailController
   }
 
   @override
-  bool? get hasFooter => true;
+  bool get hasFooter => true;
 
   @override
   List<FavDetailItemModel>? getDataList(FavDetailData response) {
@@ -132,9 +132,6 @@ class FavDetailController
       }
     } else if (response.hasMore == false) {
       isEnd = true;
-    }
-    if (pageDesc) {
-      return response.medias?.reversed.toList();
     }
     return response.medias;
   }
@@ -169,6 +166,7 @@ class FavDetailController
         ps: _ps,
         mediaId: mediaId,
         order: order.value,
+        pageDesc: pageDesc,
       );
 
   void toViewPlayAll() {

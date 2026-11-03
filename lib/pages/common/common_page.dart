@@ -11,7 +11,7 @@ import 'package:material_ui/material_ui.dart';
 
 abstract class CommonPageState<
   T extends StatefulWidget,
-  R extends CommonController
+  R extends ScrollOrRefreshMixin
 >
     extends State<T> {
   R get controller;
@@ -63,7 +63,9 @@ abstract class CommonPageState<
         child: child,
       );
     }
-    if (_showTopBar != null || _showBottomBar != null || _showSearchBar != null) {
+    if (_showTopBar != null ||
+        _showBottomBar != null ||
+        _showSearchBar != null) {
       return NotificationListener<UserScrollNotification>(
         onNotification: onNotificationType1,
         child: child,

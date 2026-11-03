@@ -8,7 +8,7 @@ import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/http/video.dart';
-import 'package:PiliPlus/models/common/video/video_quality.dart';
+import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/download/bili_download_media_file_info.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
@@ -421,6 +421,7 @@ class DownloadService extends GetxService {
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
     required VideoQuality videoQuality,
+    AudioQuality? audioQuality,
     SeasonInfo? seasonInfo,
   }) {
     final cid = page.cid!;
@@ -455,6 +456,7 @@ class DownloadService extends GetxService {
       typeTag: videoQuality.code.toString(),
       cover: (videoDetail?.pic ?? videoArc!.cover!).http2https,
       preferedVideoQuality: videoQuality.code,
+      preferedAudioQuality: audioQuality?.code,
       qualityPithyDescription: videoQuality.desc,
       guessedTotalBytes: 0,
       totalTimeMilli: (page.duration ?? 0) * 1000,
@@ -483,6 +485,7 @@ class DownloadService extends GetxService {
     required PgcInfoModel pgcItem,
     required pgc.EpisodeItem episode,
     required VideoQuality quality,
+    AudioQuality? audioQuality,
   }) {
     final cid = episode.cid!;
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
@@ -524,6 +527,7 @@ class DownloadService extends GetxService {
       typeTag: quality.code.toString(),
       cover: episode.cover!,
       preferedVideoQuality: quality.code,
+      preferedAudioQuality: audioQuality?.code,
       qualityPithyDescription: quality.desc,
       guessedTotalBytes: 0,
       totalTimeMilli:

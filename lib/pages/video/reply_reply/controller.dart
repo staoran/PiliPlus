@@ -1,10 +1,12 @@
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
-    show ReplyInfo, DetailListReply, Mode;
+    show ReplyInfo, DetailListReply;
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/common/reply/reply_sort_type.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
-import 'package:PiliPlus/pages/common/reply_controller.dart';
+import 'package:PiliPlus/pages/common/reply/fold/reply_fold_mixin.dart';
+import 'package:PiliPlus/pages/common/reply/reply_controller.dart';
 import 'package:PiliPlus/pages/video/reply_new/view.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -12,11 +14,13 @@ import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 class VideoReplyReplyController extends ReplyController
-    with GetSingleTickerProviderStateMixin {
+    with
+        GetSingleTickerProviderStateMixin,
+        ReplyLocateMixin,
+        BaseReplyFoldMixin {
   VideoReplyReplyController({
     required this.hasRoot,
     required this.id,
@@ -28,9 +32,11 @@ class VideoReplyReplyController extends ReplyController
   final int? dialog;
   int? id;
   // 视频aid 请求时使用的oid
+  @override
   int oid;
   // rpid 请求楼中楼回复
   int rpid;
+  @override
   int replyType;
 
   bool hasRoot = false;
@@ -40,23 +46,17 @@ class VideoReplyReplyController extends ReplyController
 
   final listController = ListController();
 
-  AnimationController? _controller;
-  AnimationController get animController => _controller ??= AnimationController(
-    duration: const Duration(milliseconds: 1000),
-    vsync: this,
-  );
-
   late final horizontalPreview = Pref.horizontalPreview;
 
   @override
   dynamic get sourceId => replyType == 1 ? IdUtils.av2bv(oid) : oid;
 
   @override
+  ReplySortType get prefSortType => Pref.reply2SortType;
+
+  @override
   void onInit() {
     super.onInit();
-    final cacheSortType = Pref.reply2SortType;
-    sortType.value = cacheSortType;
-    mode = cacheSortType == .time ? Mode.MAIN_LIST_TIME : Mode.MAIN_LIST_HOT;
     queryData();
   }
 
@@ -69,10 +69,9 @@ class VideoReplyReplyController extends ReplyController
   bool customHandleResponse(bool isRefresh, Success response) {
     final data = response.response;
 
-    subjectControl = data.subjectControl;
-    upMid ??= data.subjectControl.upMid;
-    paginationReply = data.paginationReply;
-    isEnd = data.cursor.isEnd;
+    if (isRefresh) {
+      haneleSubjectControl(data.subjectControl);
+    }
 
     // reply2Reply // isDialogue.not
     if (data is DetailListReply) {
@@ -84,7 +83,14 @@ class VideoReplyReplyController extends ReplyController
         setIndexById(Int64(id!), data.root.replies);
         id = null;
       }
+
+      getFoldCard(data.mixedCards);
     }
+
+    hanelePagination(
+      cursor: data.cursor,
+      offset: data.paginationReply.nextOffset,
+    );
 
     return false;
   }
@@ -106,7 +112,7 @@ class VideoReplyReplyController extends ReplyController
   @pragma('vm:notify-debugger-on-exception')
   void jumpToItem(int index) {
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      animController.forward(from: 0);
+      colorAnimController.forward(from: 0);
       try {
         // ignore: invalid_use_of_visible_for_testing_member
         final offset = listController.getOffsetToReveal(index, 0.25);
@@ -128,7 +134,7 @@ class VideoReplyReplyController extends ReplyController
           oid: oid,
           root: rpid,
           dialog: dialog!,
-          offset: paginationReply?.nextOffset,
+          offset: nextOffset,
         )
       : ReplyGrpc.detailList(
           type: replyType,
@@ -136,7 +142,7 @@ class VideoReplyReplyController extends ReplyController
           root: rpid,
           rpid: id ?? 0,
           mode: mode,
-          offset: paginationReply?.nextOffset,
+          offset: nextOffset,
         );
 
   @override
@@ -202,12 +208,5 @@ class VideoReplyReplyController extends ReplyController
             }
           }
         });
-  }
-
-  @override
-  void onClose() {
-    _controller?.dispose();
-    _controller = null;
-    super.onClose();
   }
 }

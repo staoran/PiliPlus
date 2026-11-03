@@ -64,6 +64,9 @@ class PlayerWindowArguments extends WindowArguments {
     this.progressAid,
     this.progressBvid,
     this.progressCid,
+    this.sectionIndex,
+    this.secondRpId,
+    this.rootRpId,
     this.videoType = 'ugc',
     this.roomId,
     this.extraArguments,
@@ -124,6 +127,9 @@ class PlayerWindowArguments extends WindowArguments {
       progressAid: readInt('progressAid'),
       progressBvid: readString('progressBvid'),
       progressCid: readInt('progressCid'),
+      sectionIndex: readInt('sectionIndex'),
+      secondRpId: readInt('secondRpId'),
+      rootRpId: readInt('rootRpId'),
       videoType: videoTypeStr,
       roomId: readInt('roomId'),
       extraArguments: convertMap(json['extraArguments']),
@@ -143,6 +149,9 @@ class PlayerWindowArguments extends WindowArguments {
   final int? progressAid;
   final String? progressBvid;
   final int? progressCid;
+  final int? sectionIndex;
+  final int? secondRpId;
+  final int? rootRpId;
   final String videoType;
   final int? roomId;
   final Map<String, dynamic>? extraArguments;
@@ -165,6 +174,9 @@ class PlayerWindowArguments extends WindowArguments {
       if (progressAid != null) 'progressAid': progressAid,
       if (progressBvid != null) 'progressBvid': progressBvid,
       if (progressCid != null) 'progressCid': progressCid,
+      if (sectionIndex != null) 'sectionIndex': sectionIndex,
+      if (secondRpId != null) 'secondRpId': secondRpId,
+      if (rootRpId != null) 'rootRpId': rootRpId,
       'videoType': videoType,
       if (roomId != null) 'roomId': roomId,
       if (extraArguments != null) 'extraArguments': extraArguments,

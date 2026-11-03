@@ -14,6 +14,8 @@ LoginAccount _account() => LoginAccount(
   }),
   'access-key',
   'refresh-token',
+  null,
+  'fixture-buvid',
 );
 
 void main() {

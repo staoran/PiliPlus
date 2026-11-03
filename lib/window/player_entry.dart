@@ -1,4 +1,10 @@
 import 'dart:io';
+import 'dart:async';
+
+import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/utils/desktop/calc_window_position.dart';
+import 'package:PiliPlus/utils/desktop/window_controller.dart' as desktop;
+import 'package:nativeapi/nativeapi.dart' as nativeapi;
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/back_detector.dart';
@@ -31,8 +37,6 @@ import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoThemeData;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:screen_retriever/screen_retriever.dart';
-import 'package:window_manager/window_manager.dart';
 
 bool get _shouldDisablePlayerWindowSemantics => Platform.isWindows;
 
@@ -77,7 +81,14 @@ class PlayerEntry extends StatefulWidget {
   State<PlayerEntry> createState() => _PlayerEntryState();
 }
 
-class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
+class _PlayerEntryState extends State<PlayerEntry> {
+  nativeapi.Window? get _window => desktop.WindowController.instance.window;
+  int? _windowListenerId;
+  bool _closing = false;
+  bool _allowClose = false;
+  PlPlayerController? _pausedPlayer;
+  int? _pauseRevision;
+  late final bool _pauseOnMinimize;
   // Settings from args
   late final Map<String, dynamic>? _settings;
   late final Size _windowSize;
@@ -165,6 +176,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     _themeMode = _parseThemeMode(_settings?['themeMode']);
     _textScale = (_settings?['defaultTextScale'] as num?)?.toDouble() ?? 1.0;
     _alwaysOnTop = _settings?['playerWindowAlwaysOnTop'] as bool? ?? false;
+    final allSettings = _settings?['allSettings'] as Map?;
+    _pauseOnMinimize = allSettings?['pauseOnMinimize'] as bool? ?? false;
   }
 
   int _readIndex(dynamic value, int length, int fallback) {
@@ -323,6 +336,10 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       if (playerArgs.progressBvid != null)
         'progressBvid': playerArgs.progressBvid,
       if (playerArgs.progressCid != null) 'progressCid': playerArgs.progressCid,
+      if (playerArgs.rootRpId != null) 'rootRpId': playerArgs.rootRpId,
+      if (playerArgs.secondRpId != null) 'secondRpId': playerArgs.secondRpId,
+      if (playerArgs.sectionIndex != null)
+        'sectionIndex': playerArgs.sectionIndex,
       'sourceType': ?sourceType,
       ...extraArgs,
     };
@@ -343,83 +360,66 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
   }
 
   Future<void> _initWindow() async {
-    await windowManager.ensureInitialized();
-
-    WindowOptions windowOptions = WindowOptions(
-      size: _windowSize,
-      minimumSize: const Size(640, 480),
-      skipTaskbar: false,
-      titleBarStyle: _showTitleBar
-          ? TitleBarStyle.normal
-          : TitleBarStyle.hidden,
-      title: '${Constants.appName} - 播放器',
-    );
-
-    windowManager
-      ..waitUntilReadyToShow(windowOptions, () async {
-        final pos = _windowPosition;
-        if (pos != null) {
-          // 校正多显示器不同缩放比例导致的位置偏移
-          final correctedPos = await _correctPositionForDpi(
-            Offset(pos[0], pos[1]),
-          );
-          await windowManager.setPosition(correctedPos);
-        } else {
-          // Calculate center position without using Pref
-          final position = await _calcCenterPosition(_windowSize);
-          await windowManager.setBounds(position & _windowSize);
-        }
-        // 预创建模式下不显示窗口，保持隐藏等待使用
-        if (!_isPreCreatedMode) {
-          await windowManager.show();
-          await windowManager.focus();
-        }
-        if (_alwaysOnTop) {
-          await windowManager.setAlwaysOnTop(true);
-        }
-      })
-      ..addListener(this)
-      ..setPreventClose(true);
-  }
-
-  /// Calculate center position for window (simplified, no Pref dependency)
-  Future<Offset> _calcCenterPosition(Size windowSize) async {
-    try {
-      final primaryDisplay = await screenRetriever.getPrimaryDisplay();
-      final screenSize = primaryDisplay.size;
-      return Offset(
-        (screenSize.width - windowSize.width) / 2,
-        (screenSize.height - windowSize.height) / 2,
-      );
-    } catch (_) {
-      return Offset.zero;
+    final window = _window;
+    if (window == null) return;
+    final underTitleBar = Platform.isMacOS && !_showTitleBar;
+    window
+      ..titleBarStyle = underTitleBar || _showTitleBar ? .normal : .hidden
+      ..isWindowControlButtonsVisible = true
+      ..minimumSize = const nativeapi.Size(width: 640, height: 480)
+      ..bounds = calcWindowBoundsFor(
+        _windowSize,
+        savedPosition: _windowPosition,
+        legacyScale: _savedScaleFactor,
+      )
+      ..isVisibleInTaskbar = true
+      ..title = '${Constants.appName} - 播放器'
+      ..isAlwaysOnTop = _alwaysOnTop;
+    if (underTitleBar) window.setContentUnderTitleBar(true);
+    _windowListenerId = window.addListener(_onWindowEvent);
+    if (!_isPreCreatedMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        window
+          ..show()
+          ..focus();
+      });
     }
   }
 
-  /// 校正多显示器不同缩放比例导致的位置偏移
-  ///
-  /// window_manager 的 getBounds() 和 setPosition() 使用 Flutter 的 devicePixelRatio 进行坐标转换，
-  /// 但这个值是当前窗口所在显示器的缩放比例。当窗口在不同缩放比例的显示器上保存和恢复时，
-  /// 坐标会出现偏移。此方法通过保存的缩放比例和当前的 devicePixelRatio 来校正坐标。
-  Future<Offset> _correctPositionForDpi(Offset savedPosition) async {
-    try {
-      var dx = savedPosition.dx;
-      var dy = savedPosition.dy;
-
-      // 如果有保存的缩放比例，进行 DPI 校正
-      final savedScale = _savedScaleFactor;
-      final currentScale = windowManager.getDevicePixelRatio();
-      if (savedScale != null && (savedScale - currentScale).abs() >= 0.01) {
-        // 计算物理坐标（保存的逻辑坐标 × 保存时的缩放比例）
-        // 将物理坐标转换为当前 devicePixelRatio 下的逻辑坐标
-        dx = (dx * savedScale) / currentScale;
-        dy = (dy * savedScale) / currentScale;
-      }
-
-      return Offset(dx, dy);
-    } catch (e) {
-      debugPrint('Failed to correct position for DPI: $e');
-      return savedPosition;
+  void _onWindowEvent(nativeapi.WindowEvent event) {
+    switch (event) {
+      case nativeapi.WindowMovedEvent() || nativeapi.WindowResizedEvent():
+        final window = _window;
+        if (window != null) {
+          PlPlayerController.instance?.updatePipBounds(window);
+        }
+      case nativeapi.WindowCloseRequestedEvent():
+        if (!_allowClose) {
+          event.request.cancel();
+          unawaited(onWindowClose());
+        }
+      case nativeapi.WindowMinimizedEvent():
+        final player = PlPlayerController.instance;
+        if (_pauseOnMinimize &&
+            player != null &&
+            player.playerStatus.isPlaying) {
+          _pausedPlayer = player;
+          player.pause();
+          _pauseRevision = player.playbackControlRevision;
+        }
+      case nativeapi.WindowRestoredEvent():
+        final player = _pausedPlayer;
+        _pausedPlayer = null;
+        if (_pauseOnMinimize &&
+            player != null &&
+            identical(player, PlPlayerController.instance) &&
+            player.playbackControlRevision == _pauseRevision &&
+            !player.playerStatus.isPlaying) {
+          player.play();
+        }
+      default:
+        break;
     }
   }
 
@@ -537,25 +537,38 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       await controller.setWindowMethodHandler((call) async {
         switch (call.method) {
           case 'window_center':
-            return windowManager.center();
+            _window?.center();
+            return;
           case 'window_close':
-            return windowManager.close();
+            _window?.close();
+            return;
+          case 'window_destroy':
+            await onWindowClose(force: true);
+            return;
           case 'window_show':
-            return windowManager.show();
+            desktop.WindowController.instance.show();
+            return;
           case 'window_focus':
-            return windowManager.focus();
+            _window?.focus();
+            return;
           case 'window_hide':
-            return windowManager.hide();
+            desktop.WindowController.instance.hide();
+            return;
           case 'window_minimize':
-            return windowManager.minimize();
+            _window?.minimize();
+            return;
           case 'window_maximize':
-            return windowManager.maximize();
+            _window?.maximize();
+            return;
           case 'window_restore':
-            return windowManager.restore();
+            _window?.restore();
+            return;
           case 'window_set_always_on_top':
             final args = call.arguments as Map?;
             final isOn = args?['isOn'] as bool? ?? false;
-            return windowManager.setAlwaysOnTop(isOn);
+            _alwaysOnTop = isOn;
+            _window?.isAlwaysOnTop = isOn;
+            return;
           case 'syncPlayerSettings':
             final args = call.arguments;
             if (args is Map) {
@@ -585,13 +598,13 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
   void _navigateToInitialPage() {
     if (_initialRoute == '/liveRoom' && _initialArguments != null) {
-      windowManager.setTitle('${Constants.appName} - 直播');
+      _window?.title = '${Constants.appName} - 直播';
       Get.offAllNamed(
         '/liveRoom',
         arguments: _initialArguments,
       );
     } else if (_initialRoute == '/videoV' && _initialArguments != null) {
-      windowManager.setTitle('${Constants.appName} - 播放器');
+      _window?.title = '${Constants.appName} - 播放器';
       _assignVideoPageTag(_initialArguments);
       Get.offAllNamed(
         '/videoV',
@@ -612,10 +625,10 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
     // 2. 返回 placeholder 页面
     Get.offAllNamed('/');
-    windowManager.setTitle('${Constants.appName} - 播放器');
+    _window?.title = '${Constants.appName} - 播放器';
 
     // 3. 隐藏窗口
-    await windowManager.hide();
+    _window?.hide();
   }
 
   Future<void> _pauseCurrentPlayerBeforeNavigation() async {
@@ -733,7 +746,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     final nextArgs = _buildVideoArguments(args);
 
     // Update window title for video
-    windowManager.setTitle('${Constants.appName} - 播放器');
+    _window?.title = '${Constants.appName} - 播放器';
 
     if (_isSameVideoRoute(nextArgs)) {
       if (kDebugMode) {
@@ -770,7 +783,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
   Future<void> _navigateToLiveInternal(Map<String, dynamic> args) async {
     final roomId = args['roomId'] as int?;
-    windowManager.setTitle('${Constants.appName} - 直播');
+    _window?.title = '${Constants.appName} - 直播';
 
     if (_isSameLiveRoute(args)) {
       if (kDebugMode) {
@@ -786,16 +799,6 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
       '/liveRoom',
       arguments: roomId,
     );
-  }
-
-  @override
-  void onWindowMoved() {
-    PlPlayerController.instance?.updatePipBounds();
-  }
-
-  @override
-  void onWindowResized() {
-    PlPlayerController.instance?.updatePipBounds();
   }
 
   KeyEventResult _onKeyEvent(KeyEvent event) {
@@ -819,63 +822,68 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     return KeyEventResult.handled;
   }
 
-  @override
-  Future<void> onWindowClose() async {
-    // 同步设置到主窗口
+  Future<void> onWindowClose({bool force = false}) async {
+    if (_closing) return;
+    _closing = true;
     try {
-      // 只同步播放器窗口特有的设置（尺寸、位置等），避免覆盖主窗口的其他设置
-      final bounds = await windowManager.getBounds();
-      final playerWindowSettings = <String, dynamic>{
-        'playerWindowSize': [bounds.width, bounds.height],
-        'playerWindowPosition': [bounds.left, bounds.top],
-        // 保存当前 devicePixelRatio，用于恢复时校正坐标
-        'playerWindowScaleFactor': windowManager.getDevicePixelRatio(),
-        'playerWindowAlwaysOnTop': _alwaysOnTop,
-      };
+      // 同步设置到主窗口
+      try {
+        // 只同步播放器窗口特有的设置（尺寸、位置等），避免覆盖主窗口的其他设置
+        final bounds = _window!.bounds;
+        final playerWindowSettings = <String, dynamic>{
+          'playerWindowSize': [bounds.width, bounds.height],
+          'playerWindowPosition': [bounds.x, bounds.y],
+          // 保存当前 devicePixelRatio，用于恢复时校正坐标
+          'playerWindowScaleFactor': null,
+          'playerWindowAlwaysOnTop': _alwaysOnTop,
+        };
 
-      // 发送到主窗口保存
-      final mainWindow = await PlayerWindowService.findMainWindow();
-      if (mainWindow != null) {
-        await mainWindow.invokeMethod(
-          'syncPlayerSettings',
-          playerWindowSettings,
-        );
+        // 发送到主窗口保存
+        final mainWindow = await PlayerWindowService.findMainWindow();
+        if (mainWindow != null) {
+          await mainWindow.invokeMethod(
+            'syncPlayerSettings',
+            playerWindowSettings,
+          );
+        }
+      } catch (e) {
+        debugPrint('Failed to sync player settings: $e');
       }
-    } catch (e) {
-      debugPrint('Failed to sync player settings: $e');
-    }
 
-    // 查询主窗口的最新 preInitPlayer 设置值
-    bool shouldHideInsteadOfClose = false;
-    try {
-      final mainWindow = await PlayerWindowService.findMainWindow();
-      if (mainWindow != null) {
-        final result = await mainWindow.invokeMethod('getPreInitPlayer');
-        shouldHideInsteadOfClose = result == true;
+      // 查询主窗口的最新 preInitPlayer 设置值
+      bool shouldHideInsteadOfClose = false;
+      try {
+        final mainWindow = await PlayerWindowService.findMainWindow();
+        if (mainWindow != null) {
+          final result = await mainWindow.invokeMethod('getPreInitPlayer');
+          shouldHideInsteadOfClose = result == true;
+        }
+      } catch (e) {
+        debugPrint('Failed to query preInitPlayer: $e');
       }
-    } catch (e) {
-      debugPrint('Failed to query preInitPlayer: $e');
-    }
 
-    // 如果启用了提前初始化播放器，则隐藏窗口并重置状态，而非真正关闭
-    if (shouldHideInsteadOfClose) {
-      await _resetToPreloadState();
-      return;
-    }
-
-    // 真正关闭窗口
-    // 销毁播放器，确保视频停止播放
-    try {
-      final plCtr = PlPlayerController.instance;
-      if (plCtr != null) {
-        plCtr.onCloseAll();
+      // 如果启用了提前初始化播放器，则隐藏窗口并重置状态，而非真正关闭
+      if (!force && shouldHideInsteadOfClose) {
+        await _resetToPreloadState();
+        return;
       }
-    } catch (e) {
-      // 忽略销毁错误
-    }
 
-    await windowManager.setPreventClose(false);
-    await windowManager.close();
+      // 真正关闭窗口
+      // 销毁播放器，确保视频停止播放
+      try {
+        final plCtr = PlPlayerController.instance;
+        if (plCtr != null) {
+          plCtr.onCloseAll();
+        }
+      } catch (e) {
+        // 忽略销毁错误
+      }
+
+      _allowClose = true;
+      _window?.close();
+    } finally {
+      _closing = false;
+    }
   }
 
   @override
@@ -883,7 +891,8 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
     if (PlatformUtils.isDesktop) {
       FocusManager.instance.removeEarlyKeyEventHandler(_onKeyEvent);
     }
-    windowManager.removeListener(this);
+    if (_windowListenerId case final id?) _window?.removeListener(id);
+    desktop.WindowController.instance.dispose();
     super.dispose();
   }
 
@@ -958,7 +967,7 @@ class _PlayerEntryState extends State<PlayerEntry> with WindowListener {
 
             if (Get.currentRoute != '/videoV') {
               // 仅在非首个视频或非视频页时才允许窗口级退回
-              windowManager.close();
+              _window?.close();
             }
           }
 

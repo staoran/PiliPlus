@@ -1,35 +1,44 @@
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart' as multi_window;
+import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
 
 /// WindowController 扩展，用于窗口间通信
-extension WindowControllerExtension on WindowController {
+extension WindowControllerExtension on multi_window.WindowController {
   /// 初始化窗口方法处理器（用于子窗口）
   Future<void> doCustomInitialize() {
-    return setWindowMethodHandler((call) {
+    return setWindowMethodHandler((call) async {
       switch (call.method) {
         case 'window_center':
-          return windowManager.center();
+          WindowController.instance.window?.center();
+          return;
         case 'window_close':
-          return windowManager.close();
+          WindowController.instance.window?.close();
+          return;
         case 'window_show':
-          return windowManager.show();
+          WindowController.instance.show();
+          return;
         case 'window_focus':
-          return windowManager.focus();
+          WindowController.instance.window?.focus();
+          return;
         case 'window_hide':
-          return windowManager.hide();
+          WindowController.instance.hide();
+          return;
         case 'window_minimize':
-          return windowManager.minimize();
+          WindowController.instance.window?.minimize();
+          return;
         case 'window_maximize':
-          return windowManager.maximize();
+          WindowController.instance.window?.maximize();
+          return;
         case 'window_restore':
-          return windowManager.restore();
+          WindowController.instance.window?.restore();
+          return;
         case 'window_set_always_on_top':
           final args = call.arguments as Map?;
           final isOn = args?['isOn'] as bool? ?? false;
-          return windowManager.setAlwaysOnTop(isOn);
+          WindowController.instance.window?.isAlwaysOnTop = isOn;
+          return;
         default:
           throw MissingPluginException(
             'Not implemented method: ${call.method}',
@@ -44,25 +53,32 @@ extension WindowControllerExtension on WindowController {
       dynamic result;
       switch (call.method) {
         case 'window_center':
-          await windowManager.center();
+          WindowController.instance.window?.center();
+          return;
         case 'window_close':
-          await windowManager.close();
+          WindowController.instance.window?.close();
+          return;
         case 'window_show':
-          await windowManager.show();
+          WindowController.instance.window?.show();
         case 'window_focus':
-          await windowManager.focus();
+          WindowController.instance.window?.focus();
+          return;
         case 'window_hide':
-          await windowManager.hide();
+          WindowController.instance.window?.hide();
         case 'window_minimize':
-          await windowManager.minimize();
+          WindowController.instance.window?.minimize();
+          return;
         case 'window_maximize':
-          await windowManager.maximize();
+          WindowController.instance.window?.maximize();
+          return;
         case 'window_restore':
-          await windowManager.restore();
+          WindowController.instance.window?.restore();
+          return;
         case 'window_set_always_on_top':
           final args = call.arguments as Map?;
           final isOn = args?['isOn'] as bool? ?? false;
-          await windowManager.setAlwaysOnTop(isOn);
+          WindowController.instance.window?.isAlwaysOnTop = isOn;
+          return;
         case 'syncPlayerSettings':
           // 接收并保存来自播放器子窗口的设置
           final args = call.arguments;

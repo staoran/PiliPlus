@@ -23,8 +23,9 @@ import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts/account_manager/account_mgr.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
-import 'package:PiliPlus/utils/calc_window_position.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/desktop/calc_window_position.dart';
+import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/core_palettes_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
@@ -44,7 +45,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/window/player_entry.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:collection/collection.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart' as multi_window;
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -57,7 +58,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
-import 'package:window_manager/window_manager.dart' hide calcWindowPosition;
+import 'package:window_manager/window_manager.dart';
 
 WebViewEnvironment? webViewEnvironment;
 
@@ -107,7 +108,8 @@ void main() async {
   String? startupWindowType;
   Map<String, dynamic>? windowArgs;
   try {
-    final windowController = await WindowController.fromCurrentEngine();
+    final windowController =
+        await multi_window.WindowController.fromCurrentEngine();
     final raw = windowController.arguments;
     if (raw.isNotEmpty) {
       try {
@@ -183,6 +185,8 @@ void main() async {
       if (kDebugMode) debugPrint('Sub-window init error: $e');
     }
 
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) WindowController.instance.bindForPlayerWindow(window);
     runApp(PlayerEntry(args: windowArgs));
     return;
   }
@@ -223,7 +227,7 @@ void main() async {
         ),
       );
     }
-  } else if (Platform.isMacOS) {
+  } else if (Platform.isMacOS || Platform.isLinux) {
     await setupServiceLocator();
   }
 
@@ -266,41 +270,6 @@ void main() async {
     } else {
       ScreenBrightnessPlatform.instance.setAutoReset(false);
     }
-  } else if (PlatformUtils.isDesktop) {
-    await windowManager.ensureInitialized();
-
-    // 初始化主窗口方法处理器，用于接收子窗口消息
-    try {
-      final mainWindowController = await WindowController.fromCurrentEngine();
-      await mainWindowController.initMainWindowHandler();
-    } catch (e) {
-      if (kDebugMode) debugPrint('Init main window handler error: $e');
-    }
-
-    final windowOptions = WindowOptions(
-      minimumSize: const Size(400, 720),
-      skipTaskbar: false,
-      titleBarStyle: Pref.showWindowTitleBar ? .normal : .hidden,
-      title: Constants.appName,
-    );
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      final windowSize = Pref.windowSize;
-      await windowManager.setBounds(
-        await calcWindowPosition(windowSize) & windowSize,
-      );
-      if (Pref.isWindowMaximized) await windowManager.maximize();
-      await windowManager.show();
-      await windowManager.focus();
-      if (Pref.mainWindowAlwaysOnTop) {
-        await windowManager.setAlwaysOnTop(true);
-      }
-
-      // 预创建播放器窗口（如果启用）
-      // 延迟执行以确保主窗口完全初始化
-      Future.delayed(const Duration(seconds: 1), () {
-        PlayerWindowService.instance.preCreatePlayerWindow();
-      });
-    });
   }
 
   if (Pref.dynamicColor) {
@@ -328,6 +297,50 @@ void main() async {
     );
   } else {
     runApp(const MyApp());
+  }
+
+  if (PlatformUtils.isDesktop) {
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) {
+      final showTitleBar = Pref.showWindowTitleBar;
+      // macOS 隐藏标题栏时改用 contentUnderTitleBar，保持窗口可拖动
+      final useContentUnderTitleBar = Platform.isMacOS && !showTitleBar;
+      window
+        ..titleBarStyle = useContentUnderTitleBar || showTitleBar
+            ? .normal
+            : .hidden
+        ..isWindowControlButtonsVisible = true
+        ..bounds = calcWindowBounds()
+        ..minimumSize = DeviceUtils.desktopMinSize
+        ..isVisibleInTaskbar = true
+        ..title = Constants.appName
+        ..isAlwaysOnTop = Pref.mainWindowAlwaysOnTop;
+      if (useContentUnderTitleBar) window.setContentUnderTitleBar(true);
+      try {
+        final controller =
+            await multi_window.WindowController.fromCurrentEngine();
+        await controller.initMainWindowHandler();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Init main window handler error: $e');
+      }
+      if (Pref.isWindowMaximized) window.maximize();
+      void show([_]) {
+        window
+          ..focus()
+          ..show();
+        Future.delayed(
+          const Duration(seconds: 1),
+          PlayerWindowService.instance.preCreatePlayerWindow,
+        );
+      }
+
+      switch (WidgetsBinding.instance.schedulerPhase) {
+        case .idle || .postFrameCallbacks:
+          WidgetsBinding.instance.scheduleFrameCallback(show);
+        case .transientCallbacks || .midFrameMicrotasks || .persistentCallbacks:
+          WidgetsBinding.instance.addPostFrameCallback(show);
+      }
+    }
   }
 }
 
@@ -435,7 +448,7 @@ class MyApp extends StatelessWidget {
     if (!_playerChannelInited && PlatformUtils.isDesktop) {
       try {
         final _ =
-            const WindowMethodChannel(
+            const multi_window.WindowMethodChannel(
               PlayerWindowManager.channelName,
             )..setMethodCallHandler((call) async {
               switch (call.method) {

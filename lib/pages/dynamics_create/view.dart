@@ -301,7 +301,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
                 color: theme.colorScheme.secondaryContainer,
                 child: InkWell(
                   borderRadius: Style.mdRadius,
-                  onTap: () => onPickImage(() {
+                  onTap: () => onPickImageThrottle(() {
                     if (imageList.isNotEmpty && !enablePublish.value) {
                       enablePublish.value = true;
                     }
@@ -702,28 +702,25 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
     selected: false,
   );
 
-  Widget _buildEditWidget() => Obx(
-    () => RichTextField(
-      key: key,
-      controller: editController,
-      minLines: 4,
-      maxLines: null,
-      focusNode: focusNode,
-      readOnly: readOnly.value,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
-      decoration: InputDecoration(
-        hintText: '说点什么吧',
-        visualDensity: .standard,
-        hintStyle: TextStyle(color: theme.colorScheme.outline),
-        border: const OutlineInputBorder(
-          borderSide: BorderSide.none,
-          gapPadding: 0,
-        ),
-        contentPadding: EdgeInsets.zero,
+  Widget _buildEditWidget() => RichTextField(
+    key: key,
+    controller: editController,
+    minLines: 4,
+    maxLines: null,
+    focusNode: focusNode,
+    onChanged: onChanged,
+    onSubmitted: onSubmitted,
+    decoration: InputDecoration(
+      hintText: '说点什么吧',
+      visualDensity: .standard,
+      hintStyle: TextStyle(color: theme.colorScheme.outline),
+      border: const OutlineInputBorder(
+        borderSide: BorderSide.none,
+        gapPadding: 0,
       ),
-      // inputFormatters: [LengthLimitingTextInputFormatter(1000)],
+      contentPadding: EdgeInsets.zero,
     ),
+    // inputFormatters: [LengthLimitingTextInputFormatter(1000)],
   );
 
   @override

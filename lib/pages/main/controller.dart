@@ -23,7 +23,8 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
-import 'package:flutter/foundation.dart' show clampDouble;import 'package:get/get.dart';
+import 'package:flutter/foundation.dart' show clampDouble;
+import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class MainController extends GetxController
@@ -33,7 +34,7 @@ class MainController extends GetxController
 
   List<NavigationBarType> navigationBars = <NavigationBarType>[];
 
-    RxDouble? barOffset;
+  RxDouble? barOffset;
   RxBool? showBottomBar;
   // 底栏滚动比例，1.0 = 完全显示，0.0 = 完全隐藏
   final RxDouble bottomBarRatio = 1.0.obs;
@@ -63,15 +64,12 @@ class MainController extends GetxController
   final enableMYBar = Pref.enableMYBar;
   final floatingNavBar = Pref.floatingNavBar;
   final useSideBar = Pref.useSideBar;
+  final hideSideBarLabel = Pref.hideSideBarLabel;
   final mainTabBarView = Pref.mainTabBarView;
   late final optTabletNav = Pref.optTabletNav;
   late RxBool showBottomLabel = Pref.showBottomLabel.obs;
 
   late bool directExitOnBack = Pref.directExitOnBack;
-  late final bool showTrayIcon = Pref.showTrayIcon;
-  late bool minimizeOnExit = Pref.minimizeOnExit;
-  late bool pauseOnMinimize = Pref.pauseOnMinimize;
-  late bool isPlaying = false;
 
   static const _period = 5 * 60 * 1000;
   late int _lastSelectTime = 0;
@@ -318,12 +316,10 @@ class MainController extends GetxController
         EasyThrottle.throttle(
           'topOrRefresh',
           const Duration(milliseconds: 500),
-          () {
-            if (currentNav == NavigationBarType.home) {
-              homeController.onRefresh();
-            } else if (currentNav == NavigationBarType.dynamics) {
-              dynamicController.onRefresh();
-            }
+          () => switch (currentNav) {
+            .home => homeController.onRefresh(),
+            .dynamics => dynamicController.onRefresh(),
+            .mine => null,
           },
         );
       } else {

@@ -8,7 +8,6 @@ import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/login.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
@@ -148,7 +147,7 @@ abstract final class VideoHttp {
       queryParameters: params,
       options: Options(
         headers: {
-          'buvid': LoginHttp.buvid,
+          'buvid': Accounts.get(.recommend).buvid,
           'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
           'fp_remote': '1111111111111111111111111111111111111111111111111111111111111111',
           'session_id': '11111111',
@@ -224,6 +223,7 @@ abstract final class VideoHttp {
     required VideoType videoType,
     String? language,
     bool voiceBalance = false,
+    bool fallback = false,
   }) async {
     final dmImgStr = Utils.base64EncodeRandomString(16, 64);
     final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
@@ -242,6 +242,13 @@ abstract final class VideoHttp {
       'gaia_source': 'pre-load',
       'isGaiaAvoided': true,
       'web_location': 1315873,
+      if (videoType != .ugc && !fallback) ...{
+        'biz_type': ?videoType.bizType,
+        'scene': 'normal',
+        'from_client': 'BROWSER',
+        'drm_tech_type': 0,
+        'app_id': 100,
+      },
       // 免登录查看1080p
       if (tryLook) 'try_look': 1,
       'dm_img_list': '[]',
@@ -252,13 +259,51 @@ abstract final class VideoHttp {
     });
 
     try {
-      final res = await Request().get(videoType.api, queryParameters: params);
+      final res = await Request().get(
+        fallback ? videoType.fallbackApi : videoType.api,
+        queryParameters: params,
+      );
 
       if (res.data['code'] == 0) {
         late PlayUrlModel data;
         switch (videoType) {
           case .ugc:
             data = PlayUrlModel.fromJson(res.data['data']);
+
+          // ogv
+          case .pgc || .pugv when !fallback:
+            final result = res.data['data'];
+            final videoInfo = result['video_info'];
+            if (videoInfo != null) {
+              data = PlayUrlModel.fromJson(videoInfo);
+              final progress = result['watch_progress'];
+              if (progress != null) {
+                data.lastPlayTime =
+                    progress['current_watch_progress'] ??
+                    progress['current_progress'];
+              }
+            } else if (result['arc']?['is_drm'] == true) {
+              return await videoUrl(
+                avid: avid,
+                bvid: bvid,
+                cid: cid,
+                qn: qn,
+                epid: epid,
+                seasonId: seasonId,
+                tryLook: tryLook,
+                videoType: videoType,
+                language: language,
+                voiceBalance: voiceBalance,
+                fallback: true,
+              );
+            } else {
+              final reason = result['not_playable_reason'];
+              if (reason != null) {
+                return Error(_parseVideoErr(reason['code'], reason['message']));
+              } else {
+                return Error(result.toString());
+              }
+            }
 
           case .pgc:
             final result = res.data['result'];
@@ -283,6 +328,9 @@ abstract final class VideoHttp {
           seasonId: seasonId,
           tryLook: tryLook,
           videoType: .pgc,
+          language: language,
+          voiceBalance: voiceBalance,
+          fallback: fallback,
         );
       }
       return Error(_parseVideoErr(res.data['code'], res.data['message']));
@@ -337,9 +385,9 @@ abstract final class VideoHttp {
       queryParameters: {'bvid': bvid},
     );
     if (res.data['code'] == 0) {
-      final items = (res.data['data'] as List?)?.map(
-        (i) => HotVideoItemModel.fromJson(i),
-      );
+      final items = (res.data['data'] as List?)
+          ?.whereNotBlocked((e) => e['owner']?['mid'])
+          .map((i) => HotVideoItemModel.fromJson(i));
       final list = RecommendFilter.applyFilterToRelatedVideos
           ? items?.where((i) => !RecommendFilter.filterAll(i)).toList()
           : items?.toList();

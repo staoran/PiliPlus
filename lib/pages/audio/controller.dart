@@ -1801,10 +1801,7 @@ class AudioController extends GetxController
           return Future.value(false);
         }
         position.value = Duration.zero;
-        final audio = audios.findClosestTarget(
-          (e) => e.id <= cacheAudioQa,
-          (a, b) => a.id > b.id ? a : b,
-        );
+        final audio = audios.findTargetMedia((e) => e.id, cacheAudioQa);
         return _onOpenMedia(
           VideoUtils.getCdnUrl(audio.playUrls, isAudio: true),
           volume: volume,

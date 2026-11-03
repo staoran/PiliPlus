@@ -140,30 +140,22 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   List<Widget> buildInputView() {
     return [
       Padding(
-        padding: const EdgeInsets.only(
-          top: 12,
-          right: 15,
-          left: 15,
-          bottom: 10,
-        ),
-        child: Obx(
-          () => RichTextField(
-            key: key,
-            controller: editController,
-            minLines: 4,
-            maxLines: 8,
-            autofocus: false,
-            readOnly: readOnly.value,
-            onChanged: onChanged,
-            onSubmitted: onSubmitted,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              hintText: widget.hint ?? "输入回复内容",
-              border: InputBorder.none,
-              hintStyle: const TextStyle(fontSize: 14),
-            ),
-            style: theme.textTheme.bodyLarge,
+        padding: const .only(top: 12, right: 15, left: 15, bottom: 10),
+        child: RichTextField(
+          key: key,
+          controller: editController,
+          minLines: 4,
+          maxLines: 8,
+          autofocus: false,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            hintText: widget.hint ?? "输入回复内容",
+            border: InputBorder.none,
+            hintStyle: const TextStyle(fontSize: 14),
           ),
+          style: theme.textTheme.bodyLarge,
         ),
       ),
       Divider(
@@ -185,7 +177,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     ? const Icon(Icons.image, size: 22)
                     : const Icon(Icons.image_not_supported, size: 22),
                 onPressed: widget.canUploadPic
-                    ? onPickImage
+                    ? onPickImageThrottle
                     : () => SmartDialog.showToast('当前评论区不支持发送图片'),
               ),
             ],

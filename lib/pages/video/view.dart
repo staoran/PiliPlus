@@ -19,11 +19,10 @@ import 'package:PiliPlus/common/widgets/simple_app_bar.dart';
 import 'package:PiliPlus/common/widgets/sliver/video_header.dart';
 import 'package:PiliPlus/common/widgets/svg/play_icon.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
+import 'package:PiliPlus/models/common/pgc_episode_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
-import 'package:PiliPlus/models_new/video/video_detail/page.dart';
-import 'package:PiliPlus/models_new/video/video_detail/ugc_season.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/audio/controller.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
@@ -153,7 +152,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       return ugcIntroController.videoDetail.value.hasSeasonOrParts;
     }
     return pgcIntroController.pgcItemLoaded.value &&
-        pgcIntroController.pgcItem.hasEpisodes;
+        pgcIntroController.pgcItem.hasEpisodesOrSeasons;
   }
 
   final videoReplyPanelKey = GlobalKey();
@@ -177,11 +176,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     if (videoDetailController.showReply) {
       _videoReplyController = Get.put(
-        VideoReplyController(
-          aid: videoDetailController.aid,
-          videoType: videoDetailController.videoType,
-          heroTag: heroTag,
-        ),
+        VideoReplyController(heroTag: heroTag),
         tag: heroTag,
       );
     }
@@ -2389,39 +2384,22 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           return const SizedBox.shrink();
         }
         final item = pgcIntroController.pgcItem;
-        if (!item.hasEpisodes) return const SizedBox.shrink();
+        if (!item.hasEpisodesOrSeasons) return const SizedBox.shrink();
         Widget child = EpisodePanel(
           key: ValueKey(item),
-          heroTag: heroTag,
-          enableSlide: false,
-          ugcIntroController: null,
           type: .pgc,
-          cover: null,
-          list: [item.episodes!],
-          bvid: videoDetailController.bvid,
-          aid: videoDetailController.aid,
-          cid: videoDetailController.cid.value,
-          onChangeEpisode: pgcIntroController.onChangeEpisode,
-          showTitle: false,
-          isSupportReverse: false,
+          isSidePanel: true,
+          enableSlide: false,
+          introController: introController,
         );
         if (item.hasSeasons) {
           child = Column(
             children: [
               Padding(
                 padding: const .only(left: 12, top: 8, right: 12),
-                child: Builder(
-                  builder: (context) {
-                    return pgc.SeasonPanel(
-                      seasons: item.seasons!,
-                      pgcController: pgcIntroController,
-                      onSeasonChanged: () {
-                        if (context.mounted) {
-                          (context as Element).markNeedsBuild();
-                        }
-                      },
-                    );
-                  },
+                child: pgc.SeasonPanel(
+                  pgcController: pgcIntroController,
+                  onSeasonChanged: () {},
                 ),
               ),
               Expanded(child: child),
@@ -2442,32 +2420,20 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             if (videoDetail.ugcSeason != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: PagesPanel(
-                  heroTag: heroTag,
-                  ugcIntroController: ugcIntroController,
-                  bvid: ugcIntroController.bvid,
+                child: PagePanel(
+                  showList: false,
                   showEpisodes: showEpisodes,
+                  ugcIntroController: ugcIntroController,
                 ),
               )
             else
               Expanded(
-                child: Obx(
-                  () => EpisodePanel(
-                    heroTag: heroTag,
-                    enableSlide: false,
-                    ugcIntroController: ugcIntroController,
-                    type: .part,
-                    list: [videoDetail.pages!],
-                    cover: videoDetailController.cover.value,
-                    bvid: videoDetailController.bvid,
-                    aid: videoDetailController.aid,
-                    cid: videoDetailController.cid.value,
-                    isReversed: videoDetail.isPageReversed,
-                    onChangeEpisode: ugcIntroController.onChangeEpisode,
-                    showTitle: false,
-                    isSupportReverse: true,
-                    onReverse: () => onReversePlay(isSeason: false),
-                  ),
+                child: EpisodePanel(
+                  type: .part,
+                  isSidePanel: true,
+                  enableSlide: false,
+                  onReverse: () => onReversePlay(isSeason: false),
+                  introController: introController,
                 ),
               ),
           if (videoDetail.ugcSeason != null) ...[
@@ -2480,55 +2446,20 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             ],
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Obx(
-                () => ugc.SeasonPanel(
-                  key: ValueKey(introController.videoDetail.value),
-                  heroTag: heroTag,
-                  canTap: false,
-                  showEpisodes: showEpisodes,
-                  ugcIntroController: ugcIntroController,
-                ),
+              child: ugc.SeasonPanel(
+                canTap: false,
+                showEpisodes: showEpisodes,
+                ugcIntroController: ugcIntroController,
               ),
             ),
             Expanded(
-              child: Obx(
-                () {
-                  final sections = videoDetail.ugcSeason!.sections;
-                  if (sections == null || sections.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  final safeSeasonIndex = _safeSeasonIndex(
-                    videoDetailController.seasonIndex.value,
-                    sections.length,
-                  );
-                  return EpisodePanel(
-                    key: ValueKey(
-                      'season-${videoDetailController.bvid}-'
-                      '${videoDetail.ugcSeason!.id}-'
-                      '${sections.map((item) => item.id).join(',')}',
-                    ),
-                    heroTag: heroTag,
-                    enableSlide: false,
-                    ugcIntroController: videoDetailController.isUgc
-                        ? ugcIntroController
-                        : null,
-                    type: EpisodeType.season,
-                    initialTabIndex: safeSeasonIndex,
-                    cover: videoDetailController.cover.value,
-                    seasonId: videoDetail.ugcSeason!.id,
-                    list: sections,
-                    bvid: videoDetailController.bvid,
-                    aid: videoDetailController.aid,
-                    cid: videoDetailController.seasonCid ?? 0,
-                    isReversed: sections[safeSeasonIndex].isReversed,
-                    onChangeEpisode: videoDetailController.isUgc
-                        ? ugcIntroController.onChangeEpisode
-                        : pgcIntroController.onChangeEpisode,
-                    showTitle: false,
-                    isSupportReverse: videoDetailController.isUgc,
-                    onReverse: () => onReversePlay(isSeason: true),
-                  );
-                },
+              child: EpisodePanel(
+                key: ValueKey(videoDetail.ugcSeason),
+                type: .season,
+                isSidePanel: true,
+                enableSlide: false,
+                onReverse: () => onReversePlay(isSeason: true),
+                introController: introController,
               ),
             ),
           ],
@@ -2565,71 +2496,21 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     );
   }
 
-  void showEpisodes([
-    int? index,
-    UgcSeason? season,
-    List<ugc.BaseEpisodeItem>? episodes,
-    String? bvid,
-    int? aid,
-    int? cid,
-  ]) {
-    assert((cid == null) == (bvid == null));
-    final isFullScreen = this.isFullScreen;
-    if (cid == null) {
+  void showEpisodes({EpisodeType? type, PgcEpisodeType? episodeType}) {
+    if (type == null) {
       videoDetailController.showMediaListPanel(context);
       return;
     }
-    Widget listSheetContent({bool enableSlide = true}) {
-      final sections = season?.sections;
-      if (season != null && (sections == null || sections.isEmpty)) {
-        return const SizedBox.shrink();
-      }
-      final safeSeasonIndex = season == null
-          ? index ?? 0
-          : _safeSeasonIndex(index ?? 0, sections!.length);
-      return EpisodePanel(
-        key: season == null
-            ? null
-            : ValueKey(
-                'season-sheet-$bvid-${season.id}-'
-                '${sections!.map((item) => item.id).join(',')}',
-              ),
-        heroTag: heroTag,
-        ugcIntroController: videoDetailController.isUgc
-            ? ugcIntroController
-            : null,
-        type: season != null
-            ? EpisodeType.season
-            : episodes is List<Part>
-            ? EpisodeType.part
-            : EpisodeType.pgc,
-        cover: videoDetailController.cover.value,
-        enableSlide: enableSlide,
-        initialTabIndex: safeSeasonIndex,
-        bvid: bvid!,
-        aid: aid,
-        cid: cid,
-        seasonId: season?.id,
-        list: season != null ? sections! : [episodes],
-        isReversed: !videoDetailController.isUgc
-            ? null
-            : season != null
-            ? sections![safeSeasonIndex].isReversed
-            : ugcIntroController.videoDetail.value.isPageReversed,
-        isSupportReverse: videoDetailController.isUgc,
-        onChangeEpisode: videoDetailController.isUgc
-            ? ugcIntroController.onChangeEpisode
-            : pgcIntroController.onChangeEpisode,
-        onClose: Get.back,
-        onReverse: () {
-          Get.back();
-          onReversePlay(isSeason: season != null);
-        },
-      );
-    }
-
-    if (isFullScreen || videoDetailController.showVideoSheet) {
-      final child = listSheetContent(enableSlide: false);
+    final isModal = isFullScreen || videoDetailController.showVideoSheet;
+    final child = EpisodePanel(
+      type: type,
+      episodeType: episodeType,
+      isSidePanel: false,
+      enableSlide: !isModal,
+      onReverse: () => onReversePlay(isSeason: type == .season),
+      introController: introController,
+    );
+    if (isModal) {
       PageUtils.showVideoBottomSheet(
         context,
         child: videoDetailController.plPlayerController.darkVideoPage
@@ -2639,7 +2520,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     } else {
       videoDetailController.childKey.currentState?.showBottomSheet(
         constraints: const BoxConstraints(),
-        (context) => listSheetContent(),
+        (context) => child,
       );
     }
   }
@@ -2651,60 +2532,53 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     final videoDetail = ugcIntroController.videoDetail.value;
+
+    void updateIndex() {
+      ugcIntroController.updateIndex(data: videoDetail, force: true);
+    }
+
     if (isSeason) {
       final sections = videoDetail.ugcSeason?.sections;
-      if (sections == null || sections.isEmpty) {
-        return;
-      }
-      final safeSeasonIndex = _safeSeasonIndex(
-        videoDetailController.seasonIndex.value,
+      if (sections == null || sections.isEmpty) return;
+      final sectionIndex = _safeSeasonIndex(
+        ugcIntroController.sectionIndex,
         sections.length,
       );
-      if (videoDetailController.seasonIndex.value != safeSeasonIndex) {
-        videoDetailController.seasonIndex.value = safeSeasonIndex;
-      }
-      // reverse season
-      final item = sections[safeSeasonIndex];
-      final itemEpisodes = item.episodes;
-      if (itemEpisodes == null || itemEpisodes.isEmpty) {
-        return;
-      }
-      item
-        ..isReversed = !item.isReversed
-        ..episodes = itemEpisodes.reversed.toList();
+      final section = sections[sectionIndex];
+      final episodes = section.episodes;
+      if (episodes == null || episodes.isEmpty) return;
+      section
+        ..isReversed = !section.isReversed
+        ..episodes = episodes.reversed.toList();
 
       if (!videoDetailController.plPlayerController.reverseFromFirst) {
         // keep current episode
-        videoDetailController
-          ..seasonIndex.refresh()
-          ..cid.refresh();
+        updateIndex();
       } else {
         // switch to first episode
-        final episode = item.episodes!.first;
+        final episode = section.episodes!.first;
         if (episode.cid != videoDetailController.cid.value) {
           ugcIntroController.onChangeEpisode(episode);
-          videoDetailController.seasonCid = episode.cid;
         } else {
-          videoDetailController
-            ..seasonIndex.refresh()
-            ..cid.refresh();
+          updateIndex();
         }
       }
     } else {
+      if (!videoDetail.hasParts) return;
       // reverse part
       videoDetail
         ..isPageReversed = !videoDetail.isPageReversed
         ..pages = videoDetail.pages!.reversed.toList();
       if (!videoDetailController.plPlayerController.reverseFromFirst) {
         // keep current episode
-        videoDetailController.cid.refresh();
+        updateIndex();
       } else {
         // switch to first episode
         final episode = videoDetail.pages!.first;
         if (episode.cid != videoDetailController.cid.value) {
           ugcIntroController.onChangeEpisode(episode);
         } else {
-          videoDetailController.cid.refresh();
+          updateIndex();
         }
       }
     }

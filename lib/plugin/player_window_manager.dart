@@ -24,6 +24,7 @@ class PlayerWindowManager {
     'aid', 'bvid', 'cid', 'seasonId', 'epId', 'pgcType',
     'cover', 'title', 'progress', 'progressAid', 'progressBvid', 'progressCid',
     'videoType', 'heroTag', 'pic',
+    'rootRpId', 'secondRpId', 'sectionIndex',
     'roomId', // For live streaming
     'settings', 'extraArguments', 'businessId',
   };

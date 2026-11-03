@@ -56,6 +56,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   int? chargeCount;
   bool get hasCharge => chargeCount != null && chargeCount! > 0;
 
+  int? medal;
   List<Owner>? guards;
   Object? guardCount;
   bool get hasGuard => guards?.isNotEmpty ?? false;
@@ -89,6 +90,8 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
     final guard = data.guard;
     guards = guard?.item;
     guardCount = guard?.count;
+    // medal
+    medal = data.medal;
 
     reserves = data.reservationCardList;
 

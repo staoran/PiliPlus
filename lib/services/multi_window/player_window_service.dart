@@ -22,6 +22,7 @@ class PlayerWindowService {
 
   /// 预创建的窗口控制器（待命状态）
   WindowController? _preCreatedController;
+  bool _shuttingDown = false;
 
   /// 是否正在预创建窗口
   bool _isPreCreating = false;
@@ -36,18 +37,20 @@ class PlayerWindowService {
   /// 预创建播放器窗口（隐藏状态，等待使用）
   /// 应在主窗口启动后调用
   Future<void> preCreatePlayerWindow() async {
+    if (_shuttingDown) return;
     if (!preInitPlayerWindow) return;
     if (_isPreCreating) return;
     if (_preCreatedController != null) return;
 
     // 检查是否已有播放器窗口存在
     final existing = await findPlayerWindow();
-    if (existing != null) return;
+    if (_shuttingDown || existing != null) return;
 
     _isPreCreating = true;
     try {
       // 创建带有设置快照但无视频参数的空播放器窗口
       final settingsSnapshot = await _getSettingsSnapshot();
+      if (_shuttingDown) return;
       final preCreateArgs = PlayerWindowArguments(
         settings: {
           ...settingsSnapshot,
@@ -62,6 +65,10 @@ class PlayerWindowService {
         ),
       );
 
+      if (_shuttingDown) {
+        await controller.invokeMethod('window_destroy');
+        return;
+      }
       _preCreatedController = controller;
 
       if (kDebugMode) {
@@ -167,6 +174,9 @@ class PlayerWindowService {
         progressAid: arguments.progressAid,
         progressBvid: arguments.progressBvid,
         progressCid: arguments.progressCid,
+        sectionIndex: arguments.sectionIndex,
+        secondRpId: arguments.secondRpId,
+        rootRpId: arguments.rootRpId,
         videoType: arguments.videoType,
         extraArguments: arguments.extraArguments,
         settings: {
@@ -280,8 +290,20 @@ class PlayerWindowService {
   }
 
   /// 关闭播放器窗口
-  Future<void> closePlayerWindow() async {
+  Future<void> closePlayerWindow({bool force = false}) async {
     try {
+      if (force) {
+        _shuttingDown = true;
+        _preCreatedController = null;
+        final controllers = await WindowController.getAll();
+        for (final controller in controllers) {
+          final args = WindowArguments.fromArguments(controller.arguments);
+          if (args.businessId == WindowArguments.businessIdPlayer) {
+            await controller.invokeMethod('window_destroy');
+          }
+        }
+        return;
+      }
       // 关闭预创建的窗口
       final preCreated = _preCreatedController;
       if (preCreated != null) {

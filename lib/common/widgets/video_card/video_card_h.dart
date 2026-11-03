@@ -231,7 +231,7 @@ class _VideoCardHState extends State<VideoCardH> {
               fontSize: 12,
               height: 1,
               color: theme.colorScheme.outline,
-              overflow: .clip,
+              overflow: .ellipsis,
             ),
           ),
           if (videoItem.isLive != true) ...[
