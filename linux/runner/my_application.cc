@@ -8,6 +8,7 @@
 #include "flutter/generated_plugin_registrant.h"
 
 void RegisterLinuxContextMenu(FlView* view);
+void RegisterDesktopWindowControl(FlView* view, GtkWindow* window);
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -99,6 +100,7 @@ static void my_application_activate(GApplication *application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   RegisterLinuxContextMenu(view);
+  RegisterDesktopWindowControl(view, window);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

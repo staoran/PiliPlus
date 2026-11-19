@@ -753,6 +753,7 @@ abstract final class VideoHttp {
     required VideoType videoType,
   }) {
     final isPugv = videoType == VideoType.pugv;
+    final account = Accounts.heartbeat;
     return Request().post(
       Api.heartBeat,
       data: {
@@ -763,9 +764,12 @@ abstract final class VideoHttp {
         'type': videoType.type,
         'sub_type': ?subType,
         'played_time': progress,
-        'csrf': Accounts.heartbeat.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
   }
 

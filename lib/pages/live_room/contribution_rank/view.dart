@@ -14,6 +14,7 @@ import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ContributionRankPanel extends StatefulWidget {
@@ -21,10 +22,12 @@ class ContributionRankPanel extends StatefulWidget {
     super.key,
     required this.ruid,
     required this.roomId,
+    required this.playbackTag,
   });
 
   final Object ruid;
   final Object roomId;
+  final String playbackTag;
 
   @override
   State<ContributionRankPanel> createState() => _ContributionRankPanelState();
@@ -67,7 +70,7 @@ class _ContributionRankPanelState extends State<ContributionRankPanel>
               if (!_tabController.indexIsChanging) {
                 Get.find<ContributionRankController>(
                   tag:
-                      '${widget.roomId}${LiveContributionRankType.values[index].name}',
+                      '${widget.playbackTag}:${LiveContributionRankType.values[index].name}',
                 ).scrollController.animToTop();
               }
             },
@@ -81,6 +84,7 @@ class _ContributionRankPanelState extends State<ContributionRankPanel>
                   (e) => _ContributionRankType(
                     ruid: widget.ruid,
                     roomId: widget.roomId,
+                    playbackTag: widget.playbackTag,
                     type: e,
                   ),
                 )
@@ -97,11 +101,13 @@ class _ContributionRankType extends StatefulWidget {
     required this.ruid,
     required this.roomId,
     required this.type,
+    required this.playbackTag,
   });
 
   final Object ruid;
   final Object roomId;
   final LiveContributionRankType type;
+  final String playbackTag;
 
   @override
   State<_ContributionRankType> createState() => _ContributionRankTypeState();
@@ -114,14 +120,19 @@ class _ContributionRankTypeState extends State<_ContributionRankType>
   @override
   void initState() {
     super.initState();
-    _controller = Get.put(
-      ContributionRankController(
+    final tag = '${widget.playbackTag}:${widget.type.name}';
+    if (Get.isRegistered<ContributionRankController>(tag: tag)) {
+      _controller = Get.find(tag: tag);
+    } else {
+      final controller = ContributionRankController(
         ruid: widget.ruid,
         roomId: widget.roomId,
         type: widget.type,
-      ),
-      tag: '${widget.roomId}${widget.type.name}',
-    );
+      );
+      _controller = PlayerWindowNavigation.maybeOf(context) != null
+          ? PlayerWindowNavigation.putController(controller, tag: tag)
+          : Get.put(controller, tag: tag);
+    }
   }
 
   @override
@@ -214,7 +225,8 @@ class _Item extends StatelessWidget {
       }
     }
     return InkWell(
-      onTap: () => Get.toNamed('/member?mid=${item.uid}'),
+      onTap: () =>
+          PlayerWindowNavigation.openInMain(context, '/member?mid=${item.uid}'),
       child: Padding(
         padding: const .only(left: 10, top: 9, bottom: 8, right: 16),
         child: Row(

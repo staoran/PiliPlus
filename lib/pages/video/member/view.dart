@@ -32,6 +32,7 @@ import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class HorizontalMemberPage extends StatefulWidget {
@@ -60,13 +61,14 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
   @override
   void initState() {
     super.initState();
-    _controller = Get.put(
-      HorizontalMemberPageController(
-        mid: widget.mid,
-        currAid: widget.videoDetailController.aid.toString(),
-      ),
-      tag: widget.videoDetailController.heroTag,
+    final controller = HorizontalMemberPageController(
+      mid: widget.mid,
+      currAid: widget.videoDetailController.aid.toString(),
     );
+    final tag = widget.videoDetailController.heroTag;
+    _controller = widget.videoDetailController.plPlayerController.isDetached
+        ? PlayerWindowNavigation.putController(controller, tag: tag)
+        : Get.put(controller, tag: tag);
     _bvid = widget.videoDetailController.bvid;
     if (_controller.loadingState.value
         case Success<List<SpaceArchiveItem>?> res) {
@@ -357,7 +359,7 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
               ),
               onPressed: () {
                 if (widget.mid == account.mid) {
-                  Get.toNamed('/editProfile');
+                  PlayerWindowNavigation.openInMain(context, '/editProfile');
                 } else {
                   if (!account.isLogin) {
                     SmartDialog.showToast('账号未登录');
@@ -393,7 +395,10 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
                 tapTargetSize: .shrinkWrap,
                 visualDensity: const VisualDensity(vertical: -2),
               ),
-              onPressed: () => Get.toNamed('/member?mid=${widget.mid}'),
+              onPressed: () => PlayerWindowNavigation.openInMain(
+                context,
+                '/member?mid=${widget.mid}',
+              ),
               child: const Text(
                 '查看主页',
                 maxLines: 1,

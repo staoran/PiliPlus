@@ -24,9 +24,6 @@ abstract final class GStorage {
   static late final Box<int> watchProgress;
   static late final Box<Uint8List>? reply;
 
-  /// Whether this is a sub-window with in-memory storage
-  static bool isSubWindow = false;
-
   static Future<void> init() async {
     Hive.init(path.join(appSupportDirPath, 'hive'));
     regAdapter();
@@ -80,79 +77,11 @@ abstract final class GStorage {
     }
   }
 
-  /// Initialize in-memory storage for sub-windows (player window)
-  /// This avoids Hive lock conflicts with main window
-  static Future<void> initForSubWindow(
-    String appSupportPath,
-    Map<String, dynamic>? initialSettings, {
-    Map<String, dynamic>? accountData,
-    String subWindowType = 'player',
-  }) async {
-    isSubWindow = true;
-
-    // Initialize Hive with a separate path for sub-window to avoid lock conflicts
-    Hive.init(path.join(appSupportPath, 'hive_subwindow'));
-    regAdapter();
-
-    Future<Box<T>> openSubBox<T>(String name) async {
-      try {
-        return await Hive.openBox<T>(name);
-      } catch (e) {
-        // 残留 .lock 文件（如上次窗口异常退出）会导致 errno 33 锁冲突，
-        // 降级为纯内存 Box（bytes 为空且不落盘），保证子窗口可用。
-        if (kDebugMode) {
-          debugPrint('openBox($name) locked, fallback to memory: $e');
-        }
-        return await Hive.openBox<T>(
-          '${name}_subwindow_mem',
-          bytes: Uint8List(0),
-        );
-      }
-    }
-
-    // Open boxes (separate Hive instance, no name conflicts)
-    setting = await openSubBox('setting');
-    video = await openSubBox('video');
-    localCache = await openSubBox('localCache');
-    watchProgress = await openSubBox<int>('watchProgress');
-    historyWord = await openSubBox('historyWord');
-    userInfo = await openSubBox<UserInfoData>('userInfo');
-    reply = null;
-
-    // Initialize accounts for sub-window with account data from main window
-    await Accounts.initForSubWindow(accountData);
-
-    // Pre-populate settings from main window
-    if (initialSettings != null) {
-      await setting.putAll(initialSettings);
-    }
-  }
-
   static String exportAllSettings() {
     return Utils.jsonEncoder.convert({
       setting.name: setting.toMap(),
       video.name: video.toMap(),
     });
-  }
-
-  /// Export all GStorage.setting entries as JSON-safe Map
-  /// 用于窗口间传递设置数据
-  static Map<String, dynamic> exportAllSettingsAsJson() {
-    final result = <String, dynamic>{};
-    final box = setting;
-    for (final key in box.keys) {
-      final value = box.get(key);
-      // Only include JSON-serializable values
-      if (value == null ||
-          value is num ||
-          value is String ||
-          value is bool ||
-          value is List ||
-          value is Map) {
-        result[key.toString()] = value;
-      }
-    }
-    return result;
   }
 
   static Future<void> importAllSettings(String data) =>

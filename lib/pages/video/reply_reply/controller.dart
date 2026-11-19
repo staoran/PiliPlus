@@ -13,6 +13,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart' show BuildContext, Navigator;
 import 'package:get/get.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
@@ -28,8 +29,12 @@ class VideoReplyReplyController extends ReplyController
     required this.rpid,
     required this.dialog,
     required this.replyType,
+    this.pageContext,
+    this.videoHeroTag,
   });
   final int? dialog;
+  final BuildContext? pageContext;
+  final String? videoHeroTag;
   int? id;
   // 视频aid 请求时使用的oid
   @override
@@ -172,7 +177,11 @@ class VideoReplyReplyController extends ReplyController
     final root = replyItem.id.toInt();
     final key = oid + root;
 
-    Get.key.currentState!
+    final context = pageContext;
+    final navigator = context != null && context.mounted
+        ? Navigator.of(context)
+        : Get.key.currentState!;
+    navigator
         .push(
           PublishRoute(
             pageBuilder: (buildContext, animation, secondaryAnimation) {
@@ -182,6 +191,7 @@ class VideoReplyReplyController extends ReplyController
                 root: root,
                 parent: root,
                 replyType: this.replyType,
+                videoHeroTag: videoHeroTag,
                 replyItem: replyItem,
                 items: savedReplies[key],
                 onSave: (reply) {

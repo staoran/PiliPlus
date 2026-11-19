@@ -17,6 +17,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 part 'package:PiliPlus/common/widgets/context_menu/live_menu_helper.dart';
@@ -110,7 +111,10 @@ class _SuperChatCardState extends State<SuperChatCard> {
       items: [
         PopupMenuItem(
           height: 38,
-          onTap: () => Get.toNamed('/member?mid=${item.uid}'),
+          onTap: () => PlayerWindowNavigation.openInMain(
+            context,
+            '/member?mid=${item.uid}',
+          ),
           child: Text(
             '访问: ${item.userInfo.uname}',
             style: const TextStyle(fontSize: 13),

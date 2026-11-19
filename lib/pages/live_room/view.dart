@@ -33,6 +33,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
@@ -60,7 +61,10 @@ import 'package:screen_brightness_platform_interface/screen_brightness_platform_
 const baseWhite = Color(0xFFEEEEEE);
 
 class LiveRoomPage extends StatefulWidget {
-  const LiveRoomPage({super.key});
+  const LiveRoomPage({super.key, this.roomId, this.player});
+
+  final int? roomId;
+  final PlPlayerController? player;
 
   @override
   State<LiveRoomPage> createState() => _LiveRoomPageState();
@@ -84,10 +88,15 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   void initState() {
     super.initState();
     addObserverMobile(this);
-    _liveRoomController = Get.put(
-      LiveRoomController(heroTag),
-      tag: heroTag,
+    final controller = LiveRoomController(
+      heroTag,
+      roomId: widget.roomId ?? Get.arguments,
+      player: widget.player?.retain(isLive: true),
+      pageContext: context,
     );
+    _liveRoomController = widget.player == null
+        ? Get.put(controller, tag: heroTag)
+        : PlayerWindowNavigation.putController(controller, tag: heroTag);
     plPlayerController = _liveRoomController.plPlayerController
       ..addStatusLister(playerListener);
     _setPlayCallBack();
@@ -97,10 +106,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   }
 
   void _setPlayCallBack() {
-    PlPlayerController.setPlayCallBack(
-      plPlayerController.play,
-      playOwner: _playOwner,
-    );
+    plPlayerController.bindMediaControls(plPlayerController.play, _playOwner);
   }
 
   @override
@@ -128,7 +134,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
 
   void _onPopPopupRoute() {
     if (!mounted) return;
-    if (PlPlayerController.playOwner != _playOwner) {
+    if (!plPlayerController.ownsPlayback(heroTag)) {
       _onPopNext();
     }
   }
@@ -141,6 +147,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   }
 
   Future<void> _onPopNext() async {
+    _liveRoomController.setPlaybackPageActive(true);
     if (!plPlayerController.isLive) {
       plPlayerController.isLive = true;
       _liveRoomController.isLoaded.refresh();
@@ -161,7 +168,11 @@ class _LiveRoomPageState extends State<LiveRoomPage>
           ..danmakuController?.resume()
           ..startLiveMsg();
       }
-      await _liveRoomController.playerInit(autoplay: shouldPlay);
+      if (_liveRoomController.videoUrl == null) {
+        await _liveRoomController.queryLiveUrl();
+      } else {
+        await _liveRoomController.playerInit(autoplay: shouldPlay);
+      }
     }
     if (!mounted) return;
     plPlayerController.addStatusLister(playerListener);
@@ -175,7 +186,9 @@ class _LiveRoomPageState extends State<LiveRoomPage>
       ..danmakuController?.clear()
       ..cancelLiveTimer()
       ..closeLiveMsg()
-      ..isPlaying = plPlayerController.playerStatus.isPlaying;
+      ..isPlaying = plPlayerController.playerStatus.isPlaying
+      ..setPlaybackPageActive(false);
+    if (plPlayerController.isDetached) plPlayerController.pause();
     super.didPushNext();
   }
 
@@ -201,12 +214,18 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     if (Platform.isAndroid && !plPlayerController.setSystemBrightness) {
       ScreenBrightnessPlatform.instance.resetApplicationScreenBrightness();
     }
-    PlPlayerController.setPlayCallBack(null);
+    _liveRoomController.setPlaybackPageActive(false);
+    plPlayerController.unbindMediaControls(heroTag);
     plPlayerController.removeStatusLister(playerListener);
-    PlPlayerController.updatePlayCount();
+    plPlayerController.releasePage();
+    if (plPlayerController.isDetached) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Get.delete<LiveRoomController>(tag: heroTag);
+      });
+    }
     for (final e in LiveContributionRankType.values) {
       Get.delete<ContributionRankController>(
-        tag: '${_liveRoomController.roomId}${e.name}',
+        tag: '$heroTag:${e.name}',
       );
     }
     super.dispose();
@@ -573,6 +592,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
           widthFactor: 1.0,
           heightFactor: heightFactor,
           child: ContributionRankPanel(
+            playbackTag: heroTag,
             ruid: ruid,
             roomId: _liveRoomController.roomId,
           ),
@@ -597,10 +617,17 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                 if (roomInfoH5 == null) {
                   return const SizedBox.shrink();
                 }
+                final anchor = roomInfoH5.anchorInfo?.baseInfo;
+                final room = roomInfoH5.roomInfo;
+                final uid = room?.uid;
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () =>
-                      Get.toNamed('/member?mid=${roomInfoH5.roomInfo?.uid}'),
+                  onTap: uid == null
+                      ? null
+                      : () => PlayerWindowNavigation.openInMain(
+                          context,
+                          '/member?mid=$uid',
+                        ),
                   child: Row(
                     spacing: 10,
                     mainAxisSize: .min,
@@ -609,7 +636,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                         width: 34,
                         height: 34,
                         type: .avatar,
-                        src: roomInfoH5.anchorInfo!.baseInfo!.face,
+                        src: anchor?.face,
                       ),
                       Flexible(
                         child: Column(
@@ -623,7 +650,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                               children: [
                                 Flexible(
                                   child: Text(
-                                    roomInfoH5.anchorInfo!.baseInfo!.uname!,
+                                    anchor?.uname ?? room?.title ?? '',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       color: Colors.white,

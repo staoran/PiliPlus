@@ -44,6 +44,7 @@ import 'package:PiliPlus/pages/video/introduction/ugc/widgets/season.dart'
     as ugc;
 import 'package:PiliPlus/pages/video/member/controller.dart';
 import 'package:PiliPlus/pages/video/member/view.dart';
+import 'package:PiliPlus/pages/video/related/controller.dart';
 import 'package:PiliPlus/pages/video/related/view.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/pages/video/reply/view.dart';
@@ -59,7 +60,8 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
-import 'package:PiliPlus/services/multi_window/player_window_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
+import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/services/playback/completed_gate.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
@@ -87,7 +89,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
 
 class VideoDetailPageV extends StatefulWidget {
-  const VideoDetailPageV({super.key});
+  const VideoDetailPageV({super.key, this.arguments, this.player});
+
+  final Map? arguments;
+  final PlPlayerController? player;
 
   @override
   State<VideoDetailPageV> createState() => _VideoDetailPageVState();
@@ -95,7 +100,13 @@ class VideoDetailPageV extends StatefulWidget {
 
 class _VideoDetailPageVState extends State<VideoDetailPageV>
     with RouteAware, RouteAwareMixin, WidgetsBindingObserver {
-  final heroTag = Get.arguments['heroTag'];
+  late final Map _arguments = widget.arguments ?? Get.arguments;
+  late final String heroTag = _arguments['heroTag'];
+  bool get _inPlaybackWindow => widget.player?.isDetached ?? false;
+
+  T _register<T>(T controller) => _inPlaybackWindow
+      ? PlayerWindowNavigation.putController(controller, tag: heroTag)
+      : Get.put(controller, tag: heroTag);
 
   late final VideoDetailController videoDetailController;
   late final VideoReplyController _videoReplyController;
@@ -110,11 +121,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   // dart format off
   CommonIntroController _initIntroCtr() {
     if (videoDetailController.isFileSource) {
-      return localIntroController = Get.put(LocalIntroController(), tag: heroTag);
+      return localIntroController = _register(LocalIntroController(arguments: _arguments));
     } else if (videoDetailController.isUgc) {
-      return ugcIntroController = Get.put(UgcIntroController(), tag: heroTag);
+      return ugcIntroController = _register(UgcIntroController(arguments: _arguments));
     } else {
-      return pgcIntroController = Get.put(PgcIntroController(), tag: heroTag);
+      return pgcIntroController = _register(PgcIntroController(arguments: _arguments));
     }
   }
   // dart format on
@@ -164,7 +175,13 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void initState() {
     super.initState();
 
-    videoDetailController = Get.put(VideoDetailController(), tag: heroTag);
+    videoDetailController = _register(
+      VideoDetailController(
+        arguments: _arguments,
+        pageContext: context,
+        playerController: widget.player?.retain(),
+      ),
+    );
 
     introController = _initIntroCtr();
 
@@ -175,10 +192,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     if (videoDetailController.showReply) {
-      _videoReplyController = Get.put(
-        VideoReplyController(heroTag: heroTag),
-        tag: heroTag,
-      );
+      _videoReplyController = _register(VideoReplyController(heroTag: heroTag));
     }
 
     videoSourceInit();
@@ -199,20 +213,17 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   void _handleWindowBack() {
-    if (PlayerWindowService.isPlayerWindow) {
-      if (Get.key.currentState?.canPop() ?? false) {
-        Get.back();
-      } else {
-        SmartDialog.showToast('已经是第一个视频了');
-      }
+    final navigator = Navigator.of(context);
+    if (_inPlaybackWindow && !navigator.canPop()) {
+      PlayerWindowNavigation.showToast(context, '已经是第一个视频了');
       return;
     }
-    Get.back();
+    navigator.pop();
   }
 
   void _handleWindowHome() {
-    if (PlayerWindowService.isPlayerWindow) {
-      PlayerWindowService.showMainWindow();
+    if (_inPlaybackWindow) {
+      WindowController.instance.show();
       return;
     }
     videoDetailController.plPlayerController.onCloseAll();
@@ -378,7 +389,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     _syncCompletedProgress();
     bool exitFlag = true;
-    final skipCompletedRefresh = PlayerWindowService.isPlayerWindow;
+    final skipCompletedRefresh = _inPlaybackWindow;
 
     /// 顺序播放 列表循环
     if (shutdownTimerService.isWaiting) {
@@ -471,9 +482,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   void _setPlayCallBack() {
-    PlPlayerController.setPlayCallBack(
+    videoDetailController.plPlayerController.bindMediaControls(
       playCallBack,
-      playOwner: (tag: heroTag, type: introController.runtimeType),
+      (tag: heroTag, type: introController.runtimeType),
     );
   }
 
@@ -481,15 +492,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (!isShowing) {
       _bindPlayerListeners();
     }
-    return PlPlayerController.instance?.play();
+    return videoDetailController.plPlayerController.play();
   }
 
   // 播放器状态监听
   Future<void> playerListener(PlayerStatus status) async {
     final isPlaying = status.isPlaying;
     final isCompleted = status.isCompleted;
-    final skipCompletedRefresh =
-        isCompleted && PlayerWindowService.isPlayerWindow;
+    final skipCompletedRefresh = isCompleted && _inPlaybackWindow;
     if (isPlaying) {
       _completedProgressSynced = false;
     }
@@ -581,6 +591,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         Get.isRegistered<HorizontalMemberPageController>(tag: currentHeroTag)
         ? Get.find<HorizontalMemberPageController>(tag: currentHeroTag)
         : null;
+    final currentRelatedController =
+        _inPlaybackWindow &&
+            Get.isRegistered<RelatedController>(tag: currentHeroTag)
+        ? Get.find<RelatedController>(tag: currentHeroTag)
+        : null;
     final currentVideoReplyController = videoDetailController.showReply
         ? _videoReplyController
         : null;
@@ -616,11 +631,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         if (!persistedCompleted) {
           videoDetailController.makeHeartBeat();
         }
-        PlPlayerController.updatePlayCount();
-      } else {
-        PlPlayerController.updatePlayCount();
       }
+      videoDetailController.plPlayerController.releasePage();
     }
+    videoDetailController.plPlayerController.unbindMediaControls(heroTag);
     videoDetailController.setPlaybackPageActive(false);
     removeObserverMobile(this);
 
@@ -628,6 +642,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       _deleteControllerIfSame<HorizontalMemberPageController>(
         currentHeroTag,
         currentHorizontalMemberController,
+      );
+      _deleteControllerIfSame<RelatedController>(
+        currentHeroTag,
+        currentRelatedController,
       );
       if (currentVideoReplyController != null) {
         _deleteControllerIfSame<VideoReplyController>(
@@ -689,14 +707,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     introController.cancelTimer();
 
-    final playerStatusBeforeNavigation = PlayerWindowService.isPlayerWindow
-        ? PageUtils.takePlayerWindowStatusBeforeNavigation(heroTag)
-        : null;
     videoDetailController
       ..videoState.value = false
       ..cancelBlockListener()
-      ..playerStatus =
-          playerStatusBeforeNavigation ?? plPlayerController?.playerStatus.value
+      ..playerStatus = plPlayerController?.playerStatus.value
       ..brightness = plPlayerController?.brightness.value;
     if (plPlayerController != null) {
       if (!persistedCompleted) videoDetailController.saveProgressBeforeChange();
@@ -1384,7 +1398,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                           size: 15,
                           color: colorScheme.onSurface,
                         ),
-                        onPressed: Get.back,
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
                     ),
                     SizedBox(

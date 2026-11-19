@@ -1,0 +1,105 @@
+--- a/video_output_manager.h
++++ b/video_output_manager.h
+@@ -41,7 +41,7 @@
+                std::optional<int64_t> height);
+ 
+   // Destroys the |VideoOutput| with given handle.
+-  void Dispose(int64_t handle);
++  void Dispose(int64_t handle, std::function<void()> on_disposed);
+ 
+   ~VideoOutputManager();
+ 
+--- a/video_output_manager.cc
++++ b/video_output_manager.cc
+@@ -38,12 +38,14 @@
+   }).detach();
+ }
+ 
+-void VideoOutputManager::Dispose(int64_t handle) {
++void VideoOutputManager::Dispose(int64_t handle,
++                                 std::function<void()> on_disposed) {
+   std::thread([=]() {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (video_outputs_.find(handle) != video_outputs_.end()) {
++    {
++      std::lock_guard<std::mutex> lock(mutex_);
+       video_outputs_.erase(handle);
+     }
++    on_disposed();
+   }).detach();
+ }
+ 
+--- a/media_kit_video_plugin.cc
++++ b/media_kit_video_plugin.cc
+@@ -108,8 +108,13 @@
+     auto handle =
+         std::get<std::string>(arguments[flutter::EncodableValue("handle")]);
+     auto handle_value = static_cast<int64_t>(std::stoll(handle.c_str()));
+-    video_output_manager_->Dispose(handle_value);
+-    result->Success(flutter::EncodableValue(std::monostate{}));
++    // Texture unregistration runs on Flutter's raster runner. Reply after
++    // the worker has retired it, while the platform thread keeps pumping.
++    auto reply = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
++        std::move(result));
++    video_output_manager_->Dispose(handle_value, [reply]() {
++      reply->Success(flutter::EncodableValue(std::monostate{}));
++    });
+   } else if (method_call.method_name().compare("VideoOutputManager.SetSize") ==
+              0) {
+     auto arguments = std::get<flutter::EncodableMap>(*method_call.arguments());
+--- a/video_output.h
++++ b/video_output.h
+@@ -9,6 +9,7 @@
+ #ifndef VIDEO_OUTPUT_H_
+ #define VIDEO_OUTPUT_H_
+ 
++#include <atomic>
+ #include <optional>
+ 
+ #include <client.h>
+@@ -101,7 +102,7 @@
+   // For preventing any asynchronous operations (primarily texture objects
+   // deletion after unregister in |Resize|) access this object after
+   // destruction.
+-  bool destroyed_ = false;
++  std::atomic_bool destroyed_ = false;
+ 
+   std::mutex textures_mutex_ = std::mutex();
+ 
+--- a/video_output.cc
++++ b/video_output.cc
+@@ -109,8 +109,13 @@
+ 
+ VideoOutput::~VideoOutput() {
+   destroyed_ = true;
+-  auto promise = std::promise<void>();
++  thread_pool_ref_->Post([this]() {
++    if (render_context_) {
++      mpv_render_context_set_update_callback(render_context_, nullptr, nullptr);
++    }
++  }).wait();
+   if (texture_id_) {
++    auto promise = std::promise<void>();
+     registrar_->texture_registrar()->UnregisterTexture(
+         texture_id_, [&, texture_id = texture_id_]() {
+           // Add one more task into the thread pool queue & exit the destructor
+@@ -137,14 +142,13 @@
+             promise.set_value();
+           });
+         });
+-  }
+-
+-  promise.get_future().wait();
+-  texture_id_ = 0;
++    promise.get_future().wait();
++    texture_id_ = 0;
++  }
+ 
+   thread_pool_ref_->Post([render_context = render_context_]() {
+-    mpv_render_context_free(render_context);
+-  });
++    if (render_context) mpv_render_context_free(render_context);
++  }).wait();
+ }
+ 
+ void VideoOutput::NotifyRender() {

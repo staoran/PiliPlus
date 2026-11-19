@@ -1,26 +1,9 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:flutter/services.dart'
     show SystemChrome, SystemUiOverlay, DeviceOrientation;
-
-bool _isDesktopFullScreen = false;
-
-void enterDesktopFullScreen({bool inAppFullScreen = false}) {
-  if (!inAppFullScreen && !_isDesktopFullScreen) {
-    WindowController.instance.window?.isFullScreen = _isDesktopFullScreen =
-        true;
-  }
-}
-
-void exitDesktopFullScreen() {
-  if (_isDesktopFullScreen) {
-    WindowController.instance.window?.isFullScreen = _isDesktopFullScreen =
-        false;
-  }
-}
 
 List<DeviceOrientation>? _lastOrientation;
 Future<void>? _setPreferredOrientations(List<DeviceOrientation> orientations) {

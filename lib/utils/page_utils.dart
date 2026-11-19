@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math';
 
@@ -20,9 +19,7 @@ import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/contact/view.dart';
 import 'package:PiliPlus/pages/fav_panel/view.dart';
 import 'package:PiliPlus/pages/share/view.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
-import 'package:PiliPlus/plugin/player_window_manager.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
@@ -39,7 +36,6 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/url_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:collection/collection.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -47,35 +43,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 abstract final class PageUtils {
-  static final Map<String, PlayerStatus> _playerWindowStatusBeforeNavigation =
-      {};
-
-  static PlayerStatus? takePlayerWindowStatusBeforeNavigation(String heroTag) {
-    return _playerWindowStatusBeforeNavigation.remove(heroTag);
-  }
-
-  static void _cachePlayerWindowStatusBeforeNavigation() {
-    final currentArgs = Get.arguments;
-    final heroTag = currentArgs is Map ? currentArgs['heroTag'] : null;
-    final status = PlPlayerController.getPlayerStatusIfExists();
-    if (heroTag is String && status != null) {
-      _playerWindowStatusBeforeNavigation[heroTag] = status;
-    }
-  }
-
-  static Future<void> _pausePlayerWindowBeforeNavigation() async {
-    _cachePlayerWindowStatusBeforeNavigation();
-    try {
-      await PlPlayerController.pauseIfExists(notify: false);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-          '[PageUtils] pause player window before navigation failed: $e',
-        );
-      }
-    }
-  }
-
   static RelativeRect menuPosition(Offset offset) {
     return .fromLTRB(offset.dx, offset.dy, offset.dx, 0);
   }
@@ -515,7 +482,7 @@ abstract final class PageUtils {
     if (!context.mounted) {
       return null;
     }
-    return Get.key.currentState!.push(
+    return Navigator.of(context).push(
       PublishRoute(
         pageBuilder: (context, animation, secondaryAnimation) {
           final isPortrait = context.isPortrait;
@@ -547,45 +514,29 @@ abstract final class PageUtils {
             child: child,
           );
         },
-        settings: RouteSettings(arguments: Get.arguments),
+        settings: RouteSettings(
+          arguments: ModalRoute.of(context)?.settings.arguments,
+        ),
       ),
     );
   }
 
-  static void toLiveRoom(
+  static Future<void> toLiveRoom(
     int? roomId, {
     bool off = false,
-    String? cover,
     String? title,
-    Map<String, dynamic>? extraArguments,
-  }) {
+    BuildContext? context,
+  }) async {
     if (roomId == null) {
       return;
     }
-    // If already in a live/player window, navigate within this window
-    if (PlayerWindowService.isPlayerWindow) {
-      Get.offOrToNamed(
-        '/liveRoom',
-        arguments: roomId,
-        off: off,
-        preventDuplicates: off,
-      );
-      return;
-    }
-
-    // If desktop preference is to open player in new window, open live window
-    if (PlatformUtils.isDesktop && Pref.usePlayerWindow) {
-      try {
-        PlayerWindowManager.openLiveWindow(
-          roomId: roomId,
-          cover: cover,
+    if (_usePlaybackWindow(context) &&
+        await PlayerWindowService.instance.open(
+          roomId,
+          replace: off,
           title: title,
-          extraArguments: extraArguments,
-        );
-        return;
-      } catch (e) {
-        // fallback to in-app navigation on error
-      }
+        )) {
+      return;
     }
 
     Get.offOrToNamed(
@@ -613,6 +564,7 @@ abstract final class PageUtils {
     Dimension? dimension,
     int? rootRpId,
     int? secondRpId,
+    BuildContext? context,
   }) async {
     final Map<String, dynamic> arguments = {
       'aid': aid ?? IdUtils.bv2av(bvid!),
@@ -635,37 +587,10 @@ abstract final class PageUtils {
       ...?extraArguments,
     };
 
-    // If already in player window, navigate within this window
-    if (PlayerWindowService.isPlayerWindow) {
-      await _pausePlayerWindowBeforeNavigation();
-      return Get.offOrToNamed(
-        '/videoV',
-        arguments: arguments,
-        off: off,
-        preventDuplicates: false,
-      );
+    if (_usePlaybackWindow(context) &&
+        await PlayerWindowService.instance.open(arguments, replace: off)) {
+      return;
     }
-
-    // If desktop preference is to open player in new window, delegate to window manager
-    if (PlatformUtils.isDesktop && Pref.usePlayerWindow) {
-      try {
-        await PlayerWindowManager.openPlayerWindow(arguments);
-        return;
-      } catch (e) {
-        // fallback to in-app navigation on error
-      }
-    }
-    // Avoid opening a new player window if current engine is already a player window
-    try {
-      final controller = await WindowController.fromCurrentEngine();
-      final raw = controller.arguments;
-      if (raw.isNotEmpty) {
-        final parsed = jsonDecode(raw) as Map<String, dynamic>?;
-        if (parsed != null && parsed['type'] == 'player') {
-          // in player window, continue with in-window navigation
-        }
-      }
-    } catch (_) {}
 
     return Get.offOrToNamed(
       '/videoV',
@@ -674,6 +599,10 @@ abstract final class PageUtils {
       preventDuplicates: false,
     );
   }
+
+  static bool _usePlaybackWindow(BuildContext? context) =>
+      PlayerWindowService.supported &&
+      (PlayerWindowNavigation.maybeOf(context) != null || Pref.usePlayerWindow);
 
   static final _pgcRegex = RegExp(r'(ep|ss)(\d+)');
   static bool viewPgcFromUri(

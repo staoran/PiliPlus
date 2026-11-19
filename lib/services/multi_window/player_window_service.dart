@@ -1,386 +1,367 @@
-import 'dart:ui' as ui;
+// Flutter 3.50.0 exposes native windowing through these internal SDK APIs.
+// ignore_for_file: implementation_imports, invalid_use_of_internal_member
 
-import 'package:PiliPlus/services/multi_window/window_arguments.dart';
-import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
-import 'package:PiliPlus/utils/accounts.dart';
+import 'dart:async';
+import 'dart:io' show Platform;
+import 'dart:ui' show FlutterView;
+
+import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/widgets/back_detector.dart';
+import 'package:PiliPlus/pages/live_room/view.dart';
+import 'package:PiliPlus/pages/video/controller.dart';
+import 'package:PiliPlus/pages/video/view.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/services/multi_window/player_window_identity.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
+import 'package:PiliPlus/utils/desktop/desktop_window.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/src/foundation/_features.dart' as flutter_features;
+import 'package:flutter/src/widgets/_window.dart' as native;
+import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 
-/// 播放器窗口服务
-/// 管理播放器窗口的创建、查找、通信
 class PlayerWindowService {
   PlayerWindowService._();
-  static final PlayerWindowService _instance = PlayerWindowService._();
-  static PlayerWindowService get instance => _instance;
+  static final instance = PlayerWindowService._();
+  static bool get supported => Platform.isWindows;
 
-  /// 当前是否在播放器窗口中
-  static bool isPlayerWindow = false;
+  static void enableWindowing() {
+    if (supported) flutter_features.isWindowingEnabled = true;
+  }
 
-  /// 预创建的窗口控制器（待命状态）
-  WindowController? _preCreatedController;
+  static const minimumSize = Size(640, 480);
+  final _mountedWindow = ValueNotifier<_PlayerWindow?>(null);
+  _PlayerWindow? _window;
+  Future<_PlayerWindow>? _opening;
+  Future<void>? _closing;
+  int _requestVersion = 0;
   bool _shuttingDown = false;
 
-  /// 是否正在预创建窗口
-  bool _isPreCreating = false;
+  Widget anchor(Widget child) {
+    if (!supported) return child;
+    return ValueListenableBuilder(
+      valueListenable: _mountedWindow,
+      child: child,
+      builder: (context, window, child) => ViewAnchor(
+        view: window == null
+            ? null
+            : native.Window(
+                controller: window.controller,
+                child: _PlayerWindowContent(window: window),
+              ),
+        child: child!,
+      ),
+    );
+  }
 
-  /// 检查是否启用播放器窗口
-  static bool get usePlayerWindow => Pref.usePlayerWindow;
+  bool ownsView(FlutterView? view) =>
+      view != null && view == _mountedWindow.value?.controller.rootView;
 
-  /// 检查是否启用预创建播放器窗口
-  /// 复用「提前初始化播放器」设置
-  static bool get preInitPlayerWindow => usePlayerWindow && Pref.preInitPlayer;
+  void back() => _mountedWindow.value?.back();
 
-  /// 预创建播放器窗口（隐藏状态，等待使用）
-  /// 应在主窗口启动后调用
-  Future<void> preCreatePlayerWindow() async {
-    if (_shuttingDown) return;
-    if (!preInitPlayerWindow) return;
-    if (_isPreCreating) return;
-    if (_preCreatedController != null) return;
+  void setAlwaysOnTop(bool value) {
+    final window = _window;
+    if (window != null) window.player.setAlwaysOnTop(value);
+  }
 
-    // 检查是否已有播放器窗口存在
-    final existing = await findPlayerWindow();
-    if (_shuttingDown || existing != null) return;
-
-    _isPreCreating = true;
+  /// A false result asks the caller to open the same request in the main view.
+  Future<bool> open(
+    Object arguments, {
+    bool replace = false,
+    String? title,
+  }) async {
+    if (_shuttingDown) return true;
+    if (!supported) return false;
+    final version = ++_requestVersion;
     try {
-      // 创建带有设置快照但无视频参数的空播放器窗口
-      final settingsSnapshot = await _getSettingsSnapshot();
-      if (_shuttingDown) return;
-      final preCreateArgs = PlayerWindowArguments(
-        settings: {
-          ...settingsSnapshot,
-          'businessId': WindowArguments.businessIdPlayer,
-        },
-      );
+      await _closing;
+      if (version != _requestVersion) return true;
 
-      final controller = await WindowController.create(
-        WindowConfiguration(
-          hiddenAtLaunch: true, // 保持隐藏
-          arguments: preCreateArgs.toArguments(),
-        ),
-      );
+      final opening = _opening;
+      final window = opening != null
+          ? await opening
+          : _window ?? await _ensureWindow();
+      if (version != _requestVersion || !identical(window, _window)) {
+        return true;
+      }
+      window.navigate(arguments, replace: replace, title: title);
+      window.desktop.focus();
+      return true;
+    } catch (error, stack) {
+      debugPrint('Could not open the native playback window: $error\n$stack');
+      return version != _requestVersion;
+    }
+  }
 
-      if (_shuttingDown) {
-        await controller.invokeMethod('window_destroy');
-        return;
-      }
-      _preCreatedController = controller;
-
-      if (kDebugMode) {
-        debugPrint(
-          '[PlayerWindowService] Pre-created player window: ${controller.windowId}',
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[PlayerWindowService] preCreatePlayerWindow error: $e');
-      }
+  Future<_PlayerWindow> _ensureWindow() async {
+    final opening = _opening = _createWindow();
+    try {
+      return await opening;
     } finally {
-      _isPreCreating = false;
+      _opening = null;
     }
   }
 
-  /// 检查播放器窗口是否存在
-  Future<WindowController?> findPlayerWindow() async {
+  Future<_PlayerWindow> _createWindow() async {
+    // Native window creation must leave the Flutter frame callback.
+    await Future<void>.delayed(Duration.zero);
+    final controller = native.WindowController.shrinkWrap(
+      resizable: true,
+      title: Constants.appName,
+      delegate: _WindowDelegate(close),
+    );
+    final window = _window = _PlayerWindow(controller);
     try {
-      final controllers = await WindowController.getAll();
-      for (var controller in controllers) {
-        final args = WindowArguments.fromArguments(controller.arguments);
-        if (args.businessId == WindowArguments.businessIdPlayer) {
-          return controller;
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('findPlayerWindow error: $e');
-      }
-    }
-    return null;
-  }
-
-  /// 打开或重用播放器窗口（支持视频和直播）
-  Future<void> openPlayerWindow(PlayerWindowArguments arguments) async {
-    try {
-      // 查找现有播放器窗口
-      final existingController = await findPlayerWindow();
-
-      if (existingController != null) {
-        // 已存在播放器窗口，尝试发送新的视频参数
-        try {
-          await _sendVideoToPlayer(existingController, arguments);
-          await existingController.show();
-          await existingController.focus();
-          return;
-        } catch (e) {
-          // 窗口可能已关闭，继续创建新窗口
-          if (kDebugMode) {
-            debugPrint(
-              'Existing player window not responding, creating new one: $e',
-            );
-          }
-        }
-      }
-
-      // 尝试使用预创建的窗口
-      final preCreated = _preCreatedController;
-      if (preCreated != null) {
-        _preCreatedController = null; // 清除引用，窗口已被使用
-        try {
-          // 向预创建的窗口发送视频参数
-          await _sendVideoToPlayer(preCreated, arguments);
-          await preCreated.show();
-          await preCreated.focus();
-
-          if (kDebugMode) {
-            debugPrint(
-              '[PlayerWindowService] Using pre-created window: ${preCreated.windowId}',
-            );
-          }
-
-          // 异步预创建下一个窗口
-          Future.delayed(
-            const Duration(seconds: 2),
-            preCreatePlayerWindow,
-          );
-          return;
-        } catch (e) {
-          // 预创建的窗口可能已失效，继续创建新窗口
-          if (kDebugMode) {
-            debugPrint(
-              '[PlayerWindowService] Pre-created window failed, creating new one: $e',
-            );
-          }
-        }
-      }
-
-      // 添加设置快照到参数中
-      final settingsSnapshot = await _getSettingsSnapshot();
-      final argsWithSettings = PlayerWindowArguments(
-        aid: arguments.aid,
-        bvid: arguments.bvid,
-        cid: arguments.cid,
-        seasonId: arguments.seasonId,
-        epId: arguments.epId,
-        pgcType: arguments.pgcType,
-        roomId: arguments.roomId,
-        cover: arguments.cover,
-        title: arguments.title,
-        progress: arguments.progress,
-        progressAid: arguments.progressAid,
-        progressBvid: arguments.progressBvid,
-        progressCid: arguments.progressCid,
-        sectionIndex: arguments.sectionIndex,
-        secondRpId: arguments.secondRpId,
-        rootRpId: arguments.rootRpId,
-        videoType: arguments.videoType,
-        extraArguments: arguments.extraArguments,
-        settings: {
-          ...settingsSnapshot,
-          'businessId':
-              WindowArguments.businessIdPlayer, // Add businessId to settings
-        },
+      window.initialClientSizeInPixels = await window.desktop.configure(
+        title: Constants.appName,
+        size: Pref.playerWindowSize,
+        minimumSize: minimumSize,
+        position: Pref.playerWindowPosition,
+        legacyScale: Pref.playerWindowScaleFactor,
+        showTitleBar: true,
+        alwaysOnTop: Pref.playerWindowAlwaysOnTop,
+        sizeToContentOnFirstFrame: true,
       );
-
-      // 创建新窗口
-      final controller = await WindowController.create(
-        WindowConfiguration(
-          hiddenAtLaunch: true,
-          arguments: argsWithSettings.toArguments(),
-        ),
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          'Created player window: ${controller.windowId} ${controller.arguments}',
-        );
+      window.player.isAlwaysOnTop.value = Pref.playerWindowAlwaysOnTop;
+      if (_closing == null) {
+        _mountedWindow.value = window;
+        final binding = WidgetsBinding.instance;
+        binding.platformDispatcher.scheduleFrame();
+        await binding.endOfFrame;
+        await Future<void>.delayed(Duration.zero);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('openPlayerWindow error: $e');
-      }
+      return window;
+    } catch (_) {
+      _mountedWindow.value = null;
+      _window = null;
+      await Future<void>.delayed(Duration.zero);
+      window.destroy();
       rethrow;
     }
   }
 
-  /// 获取需要传递给子窗口的设置快照
-  Future<Map<String, dynamic>> _getSettingsSnapshot() async {
-    return {
-      ...await _getThemeSettingsSnapshot(),
-      'showWindowTitleBar': Pref.showWindowTitleBar,
-      'defaultTextScale': Pref.defaultTextScale,
-      'playerWindowSize': [
-        Pref.playerWindowSize.width,
-        Pref.playerWindowSize.height,
-      ],
-      'playerWindowPosition': Pref.playerWindowPosition,
-      'playerWindowScaleFactor': Pref.playerWindowScaleFactor,
-      'playerWindowAlwaysOnTop': Pref.playerWindowAlwaysOnTop,
-      // 传递提前初始化播放器设置，用于子窗口判断关闭时是隐藏还是销毁
-      'preInitPlayer': Pref.preInitPlayer,
-      // Export all settings for sub-window in-memory storage
-      'allSettings': GStorage.exportAllSettingsAsJson(),
-      // Export account data for sub-window
-      'accountData': _exportAccountData(),
-    };
+  Future<void> close() {
+    if (_closing case final closing?) return closing;
+    ++_requestVersion;
+    return _closing = _retire().whenComplete(() => _closing = null);
   }
 
-  /// 获取主题设置和动态色 seed，不读取子窗口存储。
-  Future<Map<String, dynamic>> _getThemeSettingsSnapshot() async {
-    final dynamicColor = Pref.dynamicColor;
-    final snapshot = <String, dynamic>{
-      'customColor': Pref.customColor,
-      'dynamicColor': dynamicColor,
-      'schemeVariant': Pref.schemeVariant.index,
-      'themeMode': Pref.themeMode.index,
-      'dynamicColorSeed': null,
-    };
-
-    if (dynamicColor) {
+  Future<void> _retire() async {
+    await Future<void>.delayed(Duration.zero);
+    final opening = _opening;
+    if (opening != null) {
       try {
-        final accentColor = await DynamicColorPlugin.getAccentColor();
-        snapshot['dynamicColorSeed'] = accentColor?.toARGB32();
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint(
-            '[PlayerWindowService] Failed to read dynamic color seed: $e',
-          );
-        }
-      }
-    }
-
-    return snapshot;
-  }
-
-  /// Export account data as JSON for sub-window
-  Map<String, dynamic>? _exportAccountData() {
-    final account = Accounts.main;
-    if (kDebugMode) {
-      debugPrint(
-        '[PlayerWindowService] Exporting account, isLogin: ${account.isLogin}',
-      );
-    }
-    if (!account.isLogin) return null;
-    final json = account.toJson();
-    if (kDebugMode) {
-      debugPrint('[PlayerWindowService] Exported account data: $json');
-    }
-    return json;
-  }
-
-  /// 向播放器窗口发送新视频参数
-  Future<void> _sendVideoToPlayer(
-    WindowController controller,
-    PlayerWindowArguments arguments,
-  ) async {
-    // 复用/预创建窗口只在启动时收到过一次参数，播放前先刷新主题快照。
-    await controller.invokeMethod(
-      'syncPlayerSettings',
-      await _getThemeSettingsSnapshot(),
-    );
-
-    // 使用 WindowController.invokeMethod 向特定窗口发送消息
-    // 根据参数类型决定发送playVideo还是playLive
-    final method = arguments.roomId != null ? 'playLive' : 'playVideo';
-    await controller.invokeMethod(method, arguments.toJson());
-  }
-
-  /// 关闭播放器窗口
-  Future<void> closePlayerWindow({bool force = false}) async {
-    try {
-      if (force) {
-        _shuttingDown = true;
-        _preCreatedController = null;
-        final controllers = await WindowController.getAll();
-        for (final controller in controllers) {
-          final args = WindowArguments.fromArguments(controller.arguments);
-          if (args.businessId == WindowArguments.businessIdPlayer) {
-            await controller.invokeMethod('window_destroy');
-          }
-        }
+        await opening;
+      } catch (_) {
         return;
       }
-      // 关闭预创建的窗口
-      final preCreated = _preCreatedController;
-      if (preCreated != null) {
-        _preCreatedController = null;
-        try {
-          await preCreated.close();
-        } catch (_) {}
-      }
-
-      // 关闭正在使用的播放器窗口
-      final controller = await findPlayerWindow();
-      if (controller != null) {
-        await controller.close();
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('closePlayerWindow error: $e');
-      }
     }
-  }
-
-  /// 关闭预创建的窗口（程序退出时调用）
-  Future<void> closePreCreatedWindow() async {
-    final preCreated = _preCreatedController;
-    if (preCreated != null) {
-      _preCreatedController = null;
-      try {
-        await preCreated.close();
-      } catch (_) {}
+    final window = _window;
+    if (window == null) return;
+    if (window.desktop.isFullScreen) {
+      await window.desktop.setFullScreen(false);
     }
-  }
-
-  /// 保存播放器窗口位置和大小
-  static void savePlayerWindowBounds(double x, double y, double w, double h) {
-    GStorage.setting.put(SettingBoxKey.playerWindowSize, [w, h]);
-    GStorage.setting.put(SettingBoxKey.playerWindowPosition, [x, y]);
-  }
-
-  /// 获取保存的播放器窗口大小
-  static ui.Size get savedPlayerWindowSize => Pref.playerWindowSize;
-
-  /// 获取保存的播放器窗口位置
-  static List<double>? get savedPlayerWindowPosition =>
-      Pref.playerWindowPosition;
-
-  /// 查找主窗口
-  static Future<WindowController?> findMainWindow() async {
+    final bounds =
+        window.player.boundsBeforePip ?? await window.desktop.readBounds();
+    _mountedWindow.value = null;
+    final binding = WidgetsBinding.instance;
+    binding.platformDispatcher.scheduleFrame();
+    await binding.endOfFrame;
+    await window.player.closePlayback();
     try {
-      final controllers = await WindowController.getAll();
-      for (var controller in controllers) {
-        final args = WindowArguments.fromArguments(controller.arguments);
-        // 主窗口的 businessId 是 'main' 或空
-        if (args.businessId == WindowArguments.businessIdMain ||
-            args.businessId.isEmpty) {
-          return controller;
+      if (!bounds.isEmpty &&
+          !window.desktop.isMinimized &&
+          !window.desktop.isMaximized) {
+        await GStorage.setting.putAll({
+          SettingBoxKey.playerWindowSize: [bounds.width, bounds.height],
+          SettingBoxKey.playerWindowPosition: [bounds.left, bounds.top],
+          SettingBoxKey.playerWindowScaleFactor: window.desktop.positionScale,
+        });
+      }
+    } finally {
+      await Future<void>.delayed(Duration.zero);
+      window.destroy();
+      _window = null;
+    }
+  }
+
+  Future<void> shutdown() {
+    _shuttingDown = true;
+    return close();
+  }
+}
+
+class _WindowDelegate extends native.WindowControllerDelegate {
+  _WindowDelegate(this.close);
+  final Future<void> Function() close;
+
+  @override
+  void onWindowCloseRequested(native.WindowController controller) {
+    unawaited(close());
+  }
+}
+
+class _PlayerWindow {
+  _PlayerWindow(this.controller) {
+    desktop = DesktopWindow(
+      controller.rootView.viewId,
+      changeFullscreen: controller.setFullscreen,
+    );
+    player = PlPlayerController.forWindow(desktop, navigatorKey);
+    desktop
+      ..onActivated = player.activateMediaControls
+      ..onMinimized = _onMinimized
+      ..onGeometryChanged = () => player.updatePipBounds(desktop);
+  }
+
+  final native.WindowController controller;
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final observer = _PlaybackRouteObserver();
+  final heroController = HeroController();
+  late final DesktopWindow desktop;
+  late final PlPlayerController player;
+  Size? initialClientSizeInPixels;
+  int? _pauseRevision;
+
+  void _onMinimized(bool minimized) {
+    if (minimized) {
+      if (Pref.pauseOnMinimize && player.playerStatus.isPlaying) {
+        player.pause();
+        _pauseRevision = player.playbackControlRevision;
+      }
+    } else {
+      if (_pauseRevision == player.playbackControlRevision &&
+          Pref.pauseOnMinimize) {
+        player.play();
+      }
+      _pauseRevision = null;
+    }
+  }
+
+  void back() => unawaited(navigatorKey.currentState?.maybePop());
+
+  void navigate(Object arguments, {required bool replace, String? title}) {
+    final navigator = navigatorKey.currentState!;
+    final current = observer.currentPage;
+    final previous = current?.settings.arguments;
+    final Widget page;
+    final RouteSettings settings;
+    switch (arguments) {
+      case final int roomId:
+        if (previous == roomId) return;
+        page = LiveRoomPage(roomId: roomId, player: player);
+        settings = RouteSettings(name: '/liveRoom', arguments: roomId);
+      case final Map<String, dynamic> video:
+        final tag = previous is Map ? previous['heroTag'] : null;
+        final detail =
+            tag is String && Get.isRegistered<VideoDetailController>(tag: tag)
+            ? Get.find<VideoDetailController>(tag: tag)
+            : null;
+        if (previous is Map &&
+            PlayerWindowIdentity.shouldSkipVideoNavigation(
+              routeArguments: previous,
+              nextArguments: video,
+              currentVideoType: detail?.videoType,
+              currentAid: detail?.aid,
+              currentBvid: detail?.bvid,
+              currentCid: detail?.cid.value,
+              currentEpId: detail?.epId,
+            )) {
+          return;
         }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('findMainWindow error: $e');
-      }
+        final args = <String, dynamic>{
+          ...video,
+          'heroTag': PlayerWindowIdentity.heroTag(
+            aid: video['aid'],
+            bvid: video['bvid'],
+            cid: video['cid'],
+            seasonId: video['seasonId'],
+            epId: video['epId'],
+            pgcType: video['pgcType'],
+            videoType: video['videoType'],
+            sourceType: video['sourceType'],
+          ),
+        };
+        page = VideoDetailPageV(arguments: Map.of(args), player: player);
+        settings = RouteSettings(name: '/videoV', arguments: args);
+        title ??= video['title'] as String?;
+      default:
+        throw ArgumentError.value(arguments.runtimeType, 'arguments');
     }
-    return null;
+    desktop.title = title?.isNotEmpty == true ? title! : Constants.appName;
+    final route = MaterialPageRoute<void>(
+      builder: (_) => page,
+      settings: settings,
+    );
+    if (current?.settings.name == '/' || replace) {
+      navigator.pushReplacement(route);
+    } else {
+      navigator.push(route);
+    }
   }
 
-  /// 显示主窗口（从子窗口调用）
-  static Future<void> showMainWindow() async {
-    try {
-      final controller = await findMainWindow();
-      if (controller != null) {
-        await controller.show();
-        await controller.focus();
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('showMainWindow error: $e');
-      }
-    }
+  void destroy() {
+    desktop.dispose();
+    controller
+      ..destroy()
+      ..dispose();
+  }
+}
+
+class _PlaybackRouteObserver extends RouteObserver<PageRoute<dynamic>> {
+  PageRoute<dynamic>? currentPage;
+
+  @override
+  void didChangeTop(Route<dynamic> topRoute, Route<dynamic>? previousTopRoute) {
+    if (topRoute is PageRoute<dynamic>) currentPage = topRoute;
+  }
+}
+
+class _PlayerWindowContent extends StatelessWidget {
+  const _PlayerWindowContent({required this.window});
+  final _PlayerWindow window;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = MediaQuery.of(context);
+    final scale = Pref.uiScale;
+    final devicePixelRatio = data.devicePixelRatio * scale;
+    final clientSizeInPixels = window.initialClientSizeInPixels;
+    return MediaQuery(
+      data: data.copyWith(
+        size: data.size / scale,
+        devicePixelRatio: devicePixelRatio,
+        padding: data.padding / scale,
+        viewPadding: data.viewPadding / scale,
+        viewInsets: data.viewInsets / scale,
+        textScaler: TextScaler.linear(Pref.defaultTextScale),
+      ),
+      child: SizedBox.fromSize(
+        // Tight view constraints take over after the shrink-wrap first frame.
+        size: clientSizeInPixels == null
+            ? null
+            : clientSizeInPixels / devicePixelRatio,
+        child: PlayerWindowNavigation(
+          observer: window.observer,
+          child: HeroControllerScope(
+            controller: window.heroController,
+            child: BackDetector(
+              onBack: window.back,
+              child: Navigator(
+                key: window.navigatorKey,
+                observers: [window.observer],
+                onGenerateRoute: (settings) => MaterialPageRoute<void>(
+                  settings: settings,
+                  builder: (_) => const ColoredBox(color: Colors.black),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -7,6 +7,7 @@ project(runner LANGUAGES CXX)
 #
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME}
+  "desktop_window.cc"
   "main.cc"
   "my_application.cc"
   "plugins/linux_context_menu.cc"

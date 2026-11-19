@@ -182,7 +182,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
     );
     if (res.isSuccess) {
       hasPub = true;
-      Get.back();
+      if (mounted) Navigator.of(context).pop();
       liveRoomController
         ..savedDanmaku?.clear()
         ..savedDanmaku = null;

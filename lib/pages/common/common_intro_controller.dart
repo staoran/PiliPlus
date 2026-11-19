@@ -95,10 +95,15 @@ abstract class CommonIntroController extends GetxController
   late final RxString total = '1'.obs;
   Timer? timer;
 
+  CommonIntroController({this._arguments});
+
+  final Map? _arguments;
+  Map get routeArguments => _arguments ?? Get.arguments;
+
   @override
   void onInit() {
     super.onInit();
-    final args = Get.arguments;
+    final args = routeArguments;
     heroTag = args['heroTag'];
     hasLater = RxBool(
       args['viewLater'] ?? args['sourceType'] == SourceType.watchLater,

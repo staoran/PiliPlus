@@ -24,15 +24,10 @@ Future<Directory> _cacheDirectoryProvider() async {
 abstract final class CacheManager {
   static late final DefaultCacheManager manager;
 
-  static Future<void> ensureInitialized({String? cacheSubDir}) async {
+  static Future<void> ensureInitialized() async {
     final i = await DefaultCacheManager.init(
       maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
-      cacheDirectoryProvider: cacheSubDir == null
-          ? _cacheDirectoryProvider
-          : () async {
-              final root = await _cacheDirectoryProvider();
-              return Directory(path.join(root.path, cacheSubDir));
-            },
+      cacheDirectoryProvider: _cacheDirectoryProvider,
     );
     manager = i;
     CachedNetworkImageProvider.defaultCacheManager = i;

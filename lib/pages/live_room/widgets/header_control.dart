@@ -327,7 +327,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
             return Column(
               children: [
                 InkWell(
-                  onTap: Get.back,
+                  onTap: () => Navigator.of(context).maybePop(),
                   borderRadius: Style.bottomSheetRadius,
                   child: SizedBox(
                     height: 35,
@@ -415,7 +415,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
                                     onTap: isCurrUrl
                                         ? null
                                         : () {
-                                            Get.back();
+                                            Navigator.of(context).pop();
                                             controller.initLiveUrl(
                                               streamIndex: si,
                                               formatIndex: fi,

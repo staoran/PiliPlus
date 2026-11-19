@@ -49,6 +49,7 @@ class ReplyPage extends CommonRichTextPubPage {
     this.hint,
     this.canUploadPic = true,
     this.mentionItem,
+    this.videoHeroTag,
   });
 
   final int oid;
@@ -60,6 +61,7 @@ class ReplyPage extends CommonRichTextPubPage {
   final bool canUploadPic;
   // mention
   final MentionItem? mentionItem;
+  final String? videoHeroTag;
 
   @override
   State<ReplyPage> createState() => _ReplyPageState();
@@ -67,7 +69,9 @@ class ReplyPage extends CommonRichTextPubPage {
 
 class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   final RxBool _syncToDynamic = false.obs;
-  final heroTag = Get.arguments?['heroTag'];
+  late final String? heroTag =
+      widget.videoHeroTag ??
+      (Get.arguments is Map ? Get.arguments['heroTag'] : null);
 
   final RxBool _latexOn = false.obs;
 
@@ -84,8 +88,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
     theme = darkVideoPage ? ThemeUtils.darkTheme : Theme.of(context);
   }
 
-  late final darkVideoPage =
-      Get.currentRoute == '/videoV' && Pref.darkVideoPage;
+  late final darkVideoPage = heroTag != null && Pref.darkVideoPage;
 
   @override
   Widget build(BuildContext context) {
@@ -404,7 +407,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
     if (res case Success(:final response)) {
       hasPub = true;
       SmartDialog.showToast('发送成功');
-      Get.back(result: response);
+      if (mounted) Navigator.of(context).pop(response);
     } else {
       res.toast();
     }

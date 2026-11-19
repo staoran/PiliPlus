@@ -54,15 +54,33 @@ const int _kTrimCount = _kMaxChatCount + 50;
 const int _kSafeTrimIndex = 200;
 
 class LiveRoomController extends GetxController {
-  LiveRoomController(this.heroTag);
-  final String heroTag;
+  LiveRoomController(
+    this.heroTag, {
+    required this.roomId,
+    required this.pageContext,
+    PlPlayerController? player,
+  }) : plPlayerController =
+           player ?? PlPlayerController.getInstance(isLive: true);
 
-  int roomId = Get.arguments;
+  final String heroTag;
+  final BuildContext pageContext;
+  final PlPlayerController plPlayerController;
+  int roomId;
   int? ruid;
   DanmakuController<DanmakuExtra>? danmakuController;
-  final plPlayerController = PlPlayerController.getInstance(
-    isLive: true,
-  );
+  bool _pageActive = true;
+  int _queryVersion = 0;
+  int _messageVersion = 0;
+  bool _requestingDanmaku = false;
+
+  void setPlaybackPageActive(bool active) {
+    if (_pageActive == active) return;
+    _pageActive = active;
+    if (!active) {
+      _queryVersion++;
+      plPlayerController.deactivatePlayback(heroTag);
+    }
+  }
 
   final isLoaded = false.obs;
   final roomInfoH5 = Rxn<RoomInfoH5Data>();
@@ -137,8 +155,8 @@ class LiveRoomController extends GetxController {
         : .fromCode(Pref.liveQuality),
   );
 
-  late final bool isLogin;
-  late final int mid;
+  bool get isLogin => Accounts.main.isLogin;
+  int get mid => Accounts.main.mid;
 
   String? videoUrl;
   bool? isPlaying;
@@ -207,9 +225,6 @@ class LiveRoomController extends GetxController {
   void onInit() {
     super.onInit();
     scrollController = ScrollController()..addListener(listener);
-    final account = Accounts.main;
-    isLogin = account.isLogin;
-    mid = account.mid;
     queryLiveUrl(autoFullScreenFlag: true);
     queryLiveInfoH5();
     if (Accounts.heartbeat.isLogin && !Pref.historyPause) {
@@ -224,12 +239,20 @@ class LiveRoomController extends GetxController {
     bool autoplay = true,
     bool autoFullScreenFlag = false,
   }) {
-    if (videoUrl == null) {
+    if (videoUrl == null || !_pageActive || isClosed) {
       return null;
     }
+    final version = _queryVersion;
+    final account = Accounts.main;
     return plPlayerController.setDataSource(
       NetworkSource(videoSource: videoUrl!, audioSource: null),
       isLive: true,
+      ownerTag: heroTag,
+      isCurrent: () =>
+          _pageActive &&
+          !isClosed &&
+          version == _queryVersion &&
+          identical(account, Accounts.main),
       autoplay: autoplay,
       isVertical: isPortrait.value,
       autoFullScreenFlag: autoFullScreenFlag,
@@ -237,16 +260,27 @@ class LiveRoomController extends GetxController {
   }
 
   Future<void> queryLiveUrl({bool autoFullScreenFlag = false}) async {
-    currentQn.value ??= .fromCode(
-      await ConnectivityUtils.isWiFi
-          ? Pref.liveQuality
-          : Pref.liveQualityCellular,
-    );
+    if (!_pageActive || isClosed) return;
+    final version = ++_queryVersion;
+    final account = Accounts.main;
+    bool isCurrent() =>
+        _pageActive &&
+        !isClosed &&
+        version == _queryVersion &&
+        identical(account, Accounts.main);
+    if (currentQn.value == null) {
+      final wifi = await ConnectivityUtils.isWiFi;
+      if (!isCurrent()) return;
+      currentQn.value = .fromCode(
+        wifi ? Pref.liveQuality : Pref.liveQualityCellular,
+      );
+    }
     final res = await LiveHttp.liveRoomInfo(
       roomId: roomId,
       qn: currentQn.value!.code,
       onlyAudio: plPlayerController.onlyPlayAudio.value,
     );
+    if (!isCurrent()) return;
     if (res case Success(:final response)) {
       if (response.liveStatus != 1) {
         _showDialog('当前直播间未开播');
@@ -272,10 +306,11 @@ class LiveRoomController extends GetxController {
           formatIndex: formatIndex,
           codecIndex: codecIndex,
           liveUrlIndex: liveUrlIndex,
+          autoFullScreenFlag: autoFullScreenFlag,
         ),
         if (!isLoaded.value && Accounts.heartbeat.isLogin) _fetchBlockRules(),
       ]);
-      isLoaded.value = true;
+      if (isCurrent()) isLoaded.value = true;
     } else {
       _showDialog(res.toString());
     }
@@ -319,6 +354,7 @@ class LiveRoomController extends GetxController {
     int formatIndex = 0,
     int codecIndex = 0,
     int liveUrlIndex = 0,
+    bool autoFullScreenFlag = false,
   }) {
     this.streamIndex = streamIndex;
     this.formatIndex = formatIndex;
@@ -335,11 +371,19 @@ class LiveRoomController extends GetxController {
     // 以服务端返回的码率为准
     currentQn.value = item.currentQn;
     videoUrl = VideoUtils.getLiveCdnUrl(item, index: liveUrlIndex);
-    return playerInit()?.whenComplete(_startSizeSub);
+    return playerInit(autoFullScreenFlag: autoFullScreenFlag)?.whenComplete(() {
+      if (_pageActive &&
+          !isClosed &&
+          plPlayerController.ownsPlayback(heroTag)) {
+        _startSizeSub();
+      }
+    });
   }
 
   Future<void> queryLiveInfoH5() async {
+    final account = Accounts.main;
     final res = await LiveHttp.liveRoomInfoH5(roomId: roomId);
+    if (isClosed || !identical(account, Accounts.main)) return;
     if (res case Success(:final response)) {
       if (isClosed) {
         return;
@@ -347,20 +391,32 @@ class LiveRoomController extends GetxController {
       roomInfoH5.value = response;
       title.value = response.roomInfo?.title ?? '';
       watchedShow.value = response.watchedShow?.textLarge;
-      videoPlayerServiceHandler?.onVideoDetailChange(response, roomId, heroTag);
+      if (_pageActive &&
+          plPlayerController.isDetached &&
+          title.value.isNotEmpty) {
+        plPlayerController.desktopWindow?.title = title.value;
+      }
+      if (plPlayerController.ownsMediaControls) {
+        videoPlayerServiceHandler?.onVideoDetailChange(
+          response,
+          roomId,
+          heroTag,
+        );
+      }
     } else {
       res.toast();
     }
   }
 
   void _showDialog(String title) {
+    if (!pageContext.mounted || !_pageActive) return;
     showDialog(
-      context: Get.context!,
-      builder: (_) => AlertDialog(
+      context: pageContext,
+      builder: (context) => AlertDialog(
         title: Text(title),
         actions: [
           TextButton(
-            onPressed: Get.back,
+            onPressed: () => Navigator.of(context).pop(),
             child: Text(
               '关闭',
               style: TextStyle(color: ThemeUtils.theme.colorScheme.outline),
@@ -371,9 +427,11 @@ class LiveRoomController extends GetxController {
               if (plPlayerController.isDesktopPip) {
                 plPlayerController.exitDesktopPip();
               }
-              Get
-                ..back()
-                ..back();
+              final navigator = Navigator.of(context);
+              navigator.pop();
+              if (navigator.canPop()) {
+                navigator.pop();
+              }
             },
             child: const Text('退出'),
           ),
@@ -384,7 +442,7 @@ class LiveRoomController extends GetxController {
 
   void scrollToBottom() {
     EasyThrottle.throttle(
-      'liveDm',
+      'liveDm$heroTag',
       const Duration(milliseconds: 500),
       () => WidgetsBinding.instance.addPostFrameCallback(_scrollToBottom),
     );
@@ -417,6 +475,9 @@ class LiveRoomController extends GetxController {
   }
 
   void closeLiveMsg() {
+    _messageVersion++;
+    _requestingDanmaku = false;
+    EasyThrottle.cancel('liveDm$heroTag');
     _msgStream?.close();
     _msgStream = null;
   }
@@ -471,23 +532,30 @@ class LiveRoomController extends GetxController {
   }
 
   void startLiveMsg() {
+    if (!_pageActive || isClosed) return;
     if (messages.isEmpty) {
       prefetch();
       if (showSuperChat) {
         getSuperChatMsg();
       }
     }
-    if (_msgStream != null) {
+    if (_msgStream != null || _requestingDanmaku) {
       return;
     }
     if (dmInfo != null) {
       initDm(dmInfo!);
       return;
     }
+    final account = Accounts.heartbeat;
+    _requestingDanmaku = true;
+    final version = _messageVersion;
     LiveHttp.liveRoomGetDanmakuToken(roomId: roomId).then((res) {
-      if (res case Success(:final response)) {
-        initDm(dmInfo = response);
+      if (version != _messageVersion) return;
+      _requestingDanmaku = false;
+      if (!_pageActive || isClosed || !identical(account, Accounts.heartbeat)) {
+        return;
       }
+      if (res case Success(:final response)) initDm(dmInfo = response);
     });
   }
 
@@ -741,7 +809,8 @@ class LiveRoomController extends GetxController {
       toastNotLogin();
       return;
     }
-    Get.key.currentState!.push(
+    if (!pageContext.mounted) return;
+    Navigator.of(pageContext).push(
       PublishRoute(
         barrierColor: Colors.transparent,
         pageBuilder: (context, animation, secondaryAnimation) {
@@ -790,7 +859,7 @@ class LiveRoomController extends GetxController {
       return;
     }
     autoWrapReportDialog(
-      Get.context!,
+      pageContext,
       ReportOptions.liveDanmakuReport,
       withContent: ReportOptions.liveDanmakuReportCheck,
       contentRequired: ReportOptions.liveDanmakuReportCheck,

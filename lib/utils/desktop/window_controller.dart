@@ -1,210 +1,135 @@
-import 'dart:async' show Timer;
+import 'dart:async';
+import 'dart:ui' show FlutterView;
 
+import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
-
-import 'dart:io' show Platform;
-
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/utils/desktop/desktop_window.dart';
 import 'package:PiliPlus/utils/desktop/tray_controller.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:nativeapi/nativeapi.dart' as nativeapi;
-import 'package:window_manager/window_manager.dart';
+import 'package:flutter/foundation.dart';
 
+/// Owns the implicit desktop view and its tray/exit behavior.
 class WindowController {
   WindowController._();
-  static WindowController get instance => _instance;
-  static final WindowController _instance = WindowController._();
+  static final instance = WindowController._();
 
-  int? _windowId;
-  nativeapi.Window? _window;
-  nativeapi.Window? get window => _window;
+  DesktopWindow? _window;
+  DesktopWindow? get window => _window;
 
-  double? _opacity;
-
-  late final _setting = GStorage.setting;
-  bool _isMaximized = false;
-  set windowMaximizedPref(bool value) {
-    _setting.put(SettingBoxKey.isWindowMaximized, value);
-  }
-
-  Timer? _moveTimer;
-  Timer? _resizeTimer;
-  static const _kDuration = Duration(milliseconds: 200);
-
-  late bool minimizeOnExit = Pref.minimizeOnExit;
-  late bool pauseOnMinimize = Pref.pauseOnMinimize;
+  Timer? _geometryTimer;
   PlPlayerController? _pausedPlayer;
   int? _pauseRevision;
-  bool _closing = false;
+  Future<void>? _closing;
 
-  void init() {
-    assert(_window == null);
-
-    final window = WindowManager.instance.getCurrent();
-    if (window == null) return;
-    _window = window;
-    _windowId = window.addListener(_windowListener);
-    _isMaximized = window.isMaximized;
+  Future<void> init(FlutterView view) async {
+    final window = _window = DesktopWindow(view.viewId)
+      ..onClose = _onCloseRequested
+      ..onGeometryChanged = _scheduleSaveGeometry
+      ..onMinimized = _onMinimized
+      ..onActivated = () =>
+          PlPlayerController.instance?.activateMediaControls();
+    await window.configure(
+      title: Constants.appName,
+      size: Pref.windowSize,
+      minimumSize: DeviceUtils.desktopMinSize,
+      position: Pref.windowPosition,
+      legacyScale: Pref.windowScaleFactor,
+      maximized: Pref.isWindowMaximized,
+      showTitleBar: Pref.showWindowTitleBar,
+      alwaysOnTop: Pref.mainWindowAlwaysOnTop,
+      interceptClose: true,
+    );
   }
 
-  // A player engine only binds its own native window; it owns its listeners.
-  void bindForPlayerWindow(nativeapi.Window window) {
-    assert(_window == null);
-    _window = window;
-  }
+  @visibleForTesting
+  set testWindow(DesktopWindow window) => _window = window;
 
-  void _windowListener(WindowEvent event) {
-    switch (event) {
-      case WindowFocusedEvent():
-        // https://github.com/leanflutter/window_manager/issues/571
-        _setOpacityOnWindows(1.0);
-        break;
-      case WindowBlurredEvent():
-        break;
-      case WindowMinimizedEvent():
-        _pauseIfNeeded();
-        break;
-      case WindowMaximizedEvent():
-        windowMaximizedPref = _isMaximized = true;
-        break;
-      case WindowRestoredEvent():
-        _playIfNeeded();
-        if (_isMaximized) {
-          windowMaximizedPref = _isMaximized = false;
-        }
-        break;
-      case WindowMovedEvent():
-        _moveTimer?.cancel();
-        _moveTimer = Timer(_kDuration, onWindowMoved);
-        break;
-      case WindowResizedEvent():
-        _resizeTimer?.cancel();
-        _resizeTimer = Timer(_kDuration, onWindowResized);
-        break;
-      case WindowCreatedEvent():
-        break;
-      case WindowClosedEvent():
-        break;
-      case WindowEnteredFullScreenEvent():
-        break;
-      case WindowExitedFullScreenEvent():
-        break;
-      case WindowCloseRequestedEvent():
-        event.request.cancel();
-        if (TrayController.instance.showTrayIcon && minimizeOnExit) {
-          _hide();
-        } else {
-          onClose();
-        }
-        break;
-      case WindowPropertyChangedEvent():
-        break;
-      case WindowOcclusionChangedEvent():
-        break;
-      case nativeapi.WindowDockedEvent():
-        break;
-      case nativeapi.WindowUndockedEvent():
-        break;
-    }
-  }
-
-  void onWindowMoved() {
-    final window = _window;
-    if (window == null) return;
-    if (PlPlayerController.instance?.updatePipBounds(window) ?? false) {
-      return;
-    }
-    final position = window.position;
-    _setting.putAll({
-      SettingBoxKey.windowPosition: [position.x, position.y],
-      SettingBoxKey.windowScaleFactor: null,
+  void _scheduleSaveGeometry() {
+    _geometryTimer?.cancel();
+    _geometryTimer = Timer(const Duration(milliseconds: 200), () {
+      unawaited(_saveGeometry());
     });
   }
 
-  void onWindowResized() {
+  Future<void> _saveGeometry() async {
     final window = _window;
-    if (window == null) return;
-    if (PlPlayerController.instance?.updatePipBounds(window) ?? false) {
-      return;
-    }
+    if (window == null || window.isMinimized || window.isFullScreen) return;
+    if (PlPlayerController.instance?.updatePipBounds(window) ?? false) return;
     final bounds = window.bounds;
-    _setting.putAll({
-      SettingBoxKey.windowSize: [bounds.width, bounds.height],
-      SettingBoxKey.windowScaleFactor: null,
-      SettingBoxKey.windowPosition: [bounds.x, bounds.y],
+    await GStorage.setting.putAll({
+      SettingBoxKey.isWindowMaximized: window.isMaximized,
+      if (!window.isMaximized && !bounds.isEmpty) ...{
+        SettingBoxKey.windowSize: [bounds.width, bounds.height],
+        SettingBoxKey.windowPosition: [bounds.left, bounds.top],
+        SettingBoxKey.windowScaleFactor: window.positionScale,
+      },
     });
   }
 
-  void _playIfNeeded() {
-    final player = _pausedPlayer;
-    _pausedPlayer = null;
-    if (pauseOnMinimize &&
-        player != null &&
-        identical(player, PlPlayerController.instance) &&
-        player.playbackControlRevision == _pauseRevision &&
-        !player.playerStatus.isPlaying) {
-      player.play();
+  void _onMinimized(bool minimized) {
+    if (minimized) {
+      final player = PlPlayerController.instance;
+      if (Pref.pauseOnMinimize &&
+          player != null &&
+          player.playerStatus.isPlaying) {
+        _pausedPlayer = player;
+        player.pause();
+        _pauseRevision = player.playbackControlRevision;
+      }
+    } else {
+      final player = _pausedPlayer;
+      _pausedPlayer = null;
+      if (Pref.pauseOnMinimize &&
+          player != null &&
+          identical(player, PlPlayerController.instance) &&
+          player.playbackControlRevision == _pauseRevision) {
+        player.play();
+      }
     }
   }
 
-  void _pauseIfNeeded() {
-    final player = PlPlayerController.instance;
-    if (pauseOnMinimize && player != null && player.playerStatus.isPlaying) {
-      _pausedPlayer = player;
-      player.pause();
-      _pauseRevision = player.playbackControlRevision;
+  void _onCloseRequested() {
+    if (TrayController.instance.showTrayIcon && Pref.minimizeOnExit) {
+      hide();
+    } else {
+      unawaited(onClose());
     }
   }
 
-  Future<void> onClose() async {
-    if (_closing) return;
-    _closing = true;
-    await PlayerWindowService.instance.closePlayerWindow(force: true);
+  Future<void> onClose() => _closing ??= _exit();
+
+  Future<void> _exit() async {
+    await PlayerWindowService.instance.shutdown();
+    _geometryTimer?.cancel();
+    await _saveGeometry();
+    await PlPlayerController.instance?.closePlayback();
     await GStorage.compact();
     await GStorage.close();
     TrayController.instance.dispose();
     DeviceUtils.exitApp();
   }
 
-  void _setOpacityOnWindows(double opacity) {
-    if (Platform.isWindows && _opacity != opacity) {
-      _opacity = opacity;
-      _window?.opacity = opacity;
-    }
-  }
-
-  void _hide() {
-    _pauseIfNeeded();
-    // https://github.com/leanflutter/window_manager/issues/571
-    _setOpacityOnWindows(0.0);
+  void hide() {
+    _onMinimized(true);
     _window?.hide();
   }
 
-  void hide() => _hide();
-
   void show() {
-    _window
-      ?..focus()
-      ..show();
-    _playIfNeeded();
+    _window?.focus();
+    _onMinimized(false);
   }
 
-  void toggleVisibility() {
-    final window = _window;
-    if (window == null) return;
-    window.isVisible ? _hide() : show();
-  }
+  void toggleVisibility() => _window?.isVisible == true ? hide() : show();
 
   void dispose() {
-    _moveTimer?.cancel();
-    _resizeTimer?.cancel();
-    if (_windowId case final id?) _window?.removeListener(id);
-    _windowId = null;
+    _geometryTimer?.cancel();
     _pausedPlayer = null;
+    _window?.dispose();
     _window = null;
   }
 }

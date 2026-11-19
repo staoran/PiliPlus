@@ -15,10 +15,10 @@ import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/ios/pip_helper.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -148,7 +148,7 @@ List<SettingsModel> get playSettings => [
   ),
   const SwitchModel(
     title: '提前初始化播放器',
-    subtitle: '相对减少手动播放加载时间',
+    subtitle: '进入视频详情后准备播放器，缩短手动播放等待',
     leading: Icon(Icons.play_circle_outlined),
     setKey: SettingBoxKey.preInitPlayer,
     defaultVal: false,
@@ -283,7 +283,7 @@ List<SettingsModel> get playSettings => [
     getSubtitle: () => '当前选择偏好：${Pref.subtitlePreferenceV2.desc}',
     onTap: _showSubtitleDialog,
   ),
-  if (PlatformUtils.isDesktop) ...[
+  if (PlayerWindowService.supported)
     const SwitchModel(
       title: '新窗口播放',
       subtitle: '在独立窗口中打开播放器',
@@ -291,14 +291,13 @@ List<SettingsModel> get playSettings => [
       setKey: SettingBoxKey.usePlayerWindow,
       defaultVal: false,
     ),
-    SwitchModel(
+  if (PlatformUtils.isDesktop)
+    const SwitchModel(
       title: '最小化时暂停/还原时播放',
-      leading: const Icon(Icons.pause_circle_outline),
+      leading: Icon(Icons.pause_circle_outline),
       setKey: SettingBoxKey.pauseOnMinimize,
       defaultVal: false,
-      onChanged: (value) => WindowController.instance.pauseOnMinimize = value,
     ),
-  ],
   const SwitchModel(
     title: '启用键盘控制',
     leading: Icon(Icons.keyboard_alt_outlined),

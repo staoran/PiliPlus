@@ -38,7 +38,8 @@ import 'package:PiliPlus/pages/video/widgets/header_mixin.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
-import 'package:PiliPlus/services/multi_window/player_window_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
+import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
     show shutdownTimerService, ShutdownPanel;
 import 'package:PiliPlus/utils/accounts.dart';
@@ -365,11 +366,12 @@ class HeaderControlState extends State<HeaderControl>
   }
 
   void _handleWindowBack() {
-    if (PlayerWindowService.isPlayerWindow) {
-      if (Get.key.currentState?.canPop() ?? false) {
-        Get.back();
+    if (plPlayerController.isDetached) {
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
       } else {
-        SmartDialog.showToast('已经是第一个视频了');
+        PlayerWindowNavigation.showToast(context, '已经是第一个视频了');
       }
       return;
     }
@@ -377,9 +379,8 @@ class HeaderControlState extends State<HeaderControl>
   }
 
   void _handleWindowHome() {
-    if (PlayerWindowService.isPlayerWindow) {
-      PlayerWindowService.showMainWindow();
-      plPlayerController.onPopInvokedWithResult(false, null);
+    if (plPlayerController.isDetached) {
+      WindowController.instance.show();
       return;
     }
     plPlayerController.onCloseAll();
@@ -403,7 +404,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () {
-                    Get.back();
+                    Navigator.of(context).pop();
                     introController.viewLater();
                   },
                   leading: const Icon(Icons.watch_later_outlined, size: 20),
@@ -413,7 +414,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       videoDetailCtr.showNoteList(context);
                     },
                     leading: const Icon(Icons.note_alt_outlined, size: 20),
@@ -423,7 +424,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       videoDetailCtr.onDownload(this.context);
                     },
                     leading: const Icon(
@@ -436,7 +437,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       ImageUtils.downloadImg([
                         widget.videoDetailCtr.cover.value,
                       ]);
@@ -447,7 +448,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () {
-                    Get.back();
+                    Navigator.of(context).pop();
                     shutdownTimerService.showScheduleExitDialog(
                       this.context,
                       isFullScreen: isFullScreen,
@@ -472,7 +473,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       videoDetailCtr.editPlayUrl();
                     },
                     leading: const Icon(
@@ -484,7 +485,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       videoDetailCtr.queryVideoUrl(fromReset: true);
                     },
                     leading: const Icon(Icons.refresh_outlined, size: 20),
@@ -541,7 +542,7 @@ class HeaderControlState extends State<HeaderControl>
                       style: subTitleStyle,
                     ),
                     onTap: () async {
-                      Get.back();
+                      Navigator.of(context).pop();
                       final result = await showDialog<CDNService>(
                         context: context,
                         builder: (context) => CdnSelectDialog(
@@ -592,7 +593,7 @@ class HeaderControlState extends State<HeaderControl>
                           selectStatus: plPlayerController.flipY.value,
                         ),
                       ),
-                      if (!PlayerWindowService.isPlayerWindow &&
+                      if (!plPlayerController.isDetached &&
                           ((isFileSource &&
                                   !(plPlayerController.dataSource as FileSource)
                                       .isMp4) ||
@@ -643,7 +644,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       showSetVideoQa();
                     },
                     leading: const Icon(Icons.play_circle_outline, size: 20),
@@ -657,7 +658,7 @@ class HeaderControlState extends State<HeaderControl>
                     ListTile(
                       dense: true,
                       onTap: () {
-                        Get.back();
+                        Navigator.of(context).pop();
                         showSetAudioQa();
                       },
                       leading: const Icon(Icons.album_outlined, size: 20),
@@ -670,7 +671,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       showSetDecodeFormats();
                     },
                     leading: const Icon(Icons.av_timer_outlined, size: 20),
@@ -701,7 +702,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () {
-                    Get.back();
+                    Navigator.of(context).pop();
                     showDanmakuPool();
                   },
                   leading: const Icon(CustomIcons.dm_on, size: 20),
@@ -710,7 +711,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () {
-                    Get.back();
+                    Navigator.of(context).pop();
                     showSetDanmaku();
                   },
                   leading: const Icon(CustomIcons.dm_settings, size: 20),
@@ -719,7 +720,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () {
-                    Get.back();
+                    Navigator.of(context).pop();
                     showSetSubtitle();
                   },
                   leading: const Icon(Icons.subtitles_outlined, size: 20),
@@ -728,7 +729,7 @@ class HeaderControlState extends State<HeaderControl>
                 ListTile(
                   dense: true,
                   onTap: () async {
-                    Get.back();
+                    Navigator.of(context).pop();
                     try {
                       final result = await FilePicker.pickFile(
                         type: .custom,
@@ -792,7 +793,7 @@ class HeaderControlState extends State<HeaderControl>
                   ListTile(
                     dense: true,
                     onTap: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       onExportSubtitle();
                     },
                     leading: const Icon(Icons.download_outlined, size: 20),
@@ -812,7 +813,7 @@ class HeaderControlState extends State<HeaderControl>
                       SmartDialog.showToast('账号未登录');
                       return;
                     }
-                    Get.back();
+                    Navigator.of(context).pop();
                     PageUtils.reportVideo(videoDetailCtr.aid);
                   },
                   leading: const Icon(Icons.error_outline, size: 20),
@@ -914,7 +915,7 @@ class HeaderControlState extends State<HeaderControl>
           ),
           actions: [
             TextButton(
-              onPressed: Get.back,
+              onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 '确定',
                 style: TextStyle(color: colorScheme.outline),
@@ -982,7 +983,7 @@ class HeaderControlState extends State<HeaderControl>
                         if (isCurr) {
                           return;
                         }
-                        Get.back();
+                        Navigator.of(context).pop();
                         final int quality = item.quality!;
                         final newQa = VideoQuality.fromCode(quality);
                         videoDetailCtr
@@ -1062,7 +1063,7 @@ class HeaderControlState extends State<HeaderControl>
                         if (isCurr) {
                           return;
                         }
-                        Get.back();
+                        Navigator.of(context).pop();
                         final int quality = item.id;
                         final newQa = AudioQuality.fromCode(quality);
                         videoDetailCtr
@@ -1151,7 +1152,7 @@ class HeaderControlState extends State<HeaderControl>
                             dense: true,
                             onTap: () {
                               if (isCurr) return;
-                              Get.back();
+                              Navigator.of(context).pop();
                               videoDetailCtr
                                 ..currentDecodeFormats = format
                                 ..updatePlayer();
@@ -1236,7 +1237,7 @@ class HeaderControlState extends State<HeaderControl>
             final item = subtitles[i];
             return DialogOption(
               onPressed: () async {
-                Get.back();
+                Navigator.of(context).pop();
                 final url = item.subtitleUrl;
                 if (url == null || url.isEmpty) return;
                 try {
@@ -1817,8 +1818,7 @@ class HeaderControlState extends State<HeaderControl>
                   }),
                 if (!isFileSource) ...[
                   if (!isFSOrPip) ...[
-                    if (videoDetailCtr.isUgc &&
-                        !PlayerWindowService.isPlayerWindow)
+                    if (videoDetailCtr.isUgc && !plPlayerController.isDetached)
                       SizedBox(
                         width: btnWidth,
                         height: btnHeight,

@@ -52,9 +52,7 @@ abstract final class PiliScheme {
   }
 
   static Future<bool> _desktopRoutePush(Uri uri) {
-    WindowController.instance.window
-      ?..show()
-      ..focus();
+    WindowController.instance.show();
     return routePush(uri);
   }
 

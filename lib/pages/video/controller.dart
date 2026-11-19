@@ -18,7 +18,6 @@ import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
-import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/action_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/post_segment_model.dart';
 import 'package:PiliPlus/models/common/sponsor_block/segment_model.dart';
@@ -58,11 +57,10 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
-import 'package:PiliPlus/services/multi_window/player_window_service.dart';
 import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/nested_scroll_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
@@ -105,7 +103,7 @@ class VideoDetailController extends GetxController
   late final VideoType videoType;
   @override
   late final isUgc = videoType == VideoType.ugc;
-  VideoType? _actualVideoType;
+  Account? _listAccount;
   late final ugcIntroCtr = Get.find<UgcIntroController>(tag: heroTag);
   late final pgcIntroCtr = Get.find<PgcIntroController>(tag: heroTag);
 
@@ -155,13 +153,18 @@ class VideoDetailController extends GetxController
   final videoPlayerKey = GlobalKey();
   final childKey = GlobalKey<MiniScaffoldState>();
 
-  VideoDetailController({PlPlayerController? playerController})
-    : plPlayerController =
-          playerController ?? PlPlayerController.getInstance() {
+  VideoDetailController({
+    PlPlayerController? playerController,
+    this._arguments,
+    this.pageContext,
+  }) : plPlayerController =
+           playerController ?? PlPlayerController.getInstance() {
     plPlayerController.brightness.value = -1;
   }
 
   final PlPlayerController plPlayerController;
+  final Map? _arguments;
+  final BuildContext? pageContext;
   bool _playbackPageActive = true;
   int _pageActivityGeneration = 0;
   bool get canStartPlayback => _playbackPageActive && !isClosed;
@@ -193,6 +196,7 @@ class VideoDetailController extends GetxController
 
   bool Function() _captureMediaRequest() {
     final isActive = capturePageActivity();
+    final account = Accounts.video;
     final generation = _videoUrlQueryGeneration;
     final requestBvid = bvid;
     final requestCid = cid.value;
@@ -200,6 +204,7 @@ class VideoDetailController extends GetxController
     final requestSeasonId = seasonId;
     return () =>
         isActive() &&
+        (isFileSource || identical(account, Accounts.video)) &&
         _isCurrentVideoUrlQuery(
           generation: generation,
           bvid: requestBvid,
@@ -531,7 +536,7 @@ class VideoDetailController extends GetxController
     String? title,
     String? subTitle,
   }) async {
-    if (!PlatformUtils.isDesktop || !PlayerWindowService.isPlayerWindow) return;
+    if (!plPlayerController.isDetached || !canStartPlayback) return;
     final base = title?.trim();
     if (base == null || base.isEmpty) return;
 
@@ -541,9 +546,7 @@ class VideoDetailController extends GetxController
       display = '$base - $sub';
     }
 
-    try {
-      WindowController.instance.window?.title = display;
-    } catch (_) {}
+    plPlayerController.desktopWindow?.title = display;
   }
 
   bool _needAnimOnDimensionChanged(bool isVertical) {
@@ -739,7 +742,7 @@ class VideoDetailController extends GetxController
     _heightSubscription = null;
   }
 
-  final isLoginVideo = Accounts.get(AccountType.video).isLogin;
+  bool get isLoginVideo => Accounts.video.isLogin;
 
   late final watchProgress = GStorage.watchProgress;
   void cacheLocalProgress() {
@@ -785,13 +788,9 @@ class VideoDetailController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    args = Get.arguments;
+    args = _arguments ?? Get.arguments;
     videoType = args['videoType'];
-    if (videoType == VideoType.pgc) {
-      if (!isLoginVideo) {
-        _actualVideoType = VideoType.ugc;
-      }
-    }
+    _listAccount = Accounts.main;
 
     bvid = args['bvid'];
     aid = args['aid'];
@@ -812,17 +811,10 @@ class VideoDetailController extends GetxController
         (sourceType != SourceType.normal && !isFileSource);
 
     if (isFileSource) {
-      // 尝试从 args 获取 entry，如果为 null 则从下载服务中查找
-      BiliDownloadEntryInfo? entryArg;
       final rawEntry = args['entry'];
-      if (rawEntry is BiliDownloadEntryInfo) {
-        entryArg = rawEntry;
-      } else if (rawEntry is Map<String, dynamic>) {
-        // 处理序列化传递的 entry（在已打开的窗口中切换视频时）
-        try {
-          entryArg = BiliDownloadEntryInfo.fromJson(rawEntry);
-        } catch (_) {}
-      }
+      BiliDownloadEntryInfo? entryArg = rawEntry is BiliDownloadEntryInfo
+          ? rawEntry
+          : null;
 
       if (entryArg == null && Get.isRegistered<DownloadService>()) {
         // 从下载服务中通过 cid 查找 entry
@@ -872,6 +864,7 @@ class VideoDetailController extends GetxController
     if (!isReverse && count != null && mediaList.length >= count) {
       return;
     }
+    final account = Accounts.main;
     final res = await UserHttp.getMediaList(
       type: args['mediaType'] ?? sourceType.mediaType,
       bizId: args['mediaId'] ?? -1,
@@ -899,7 +892,9 @@ class VideoDetailController extends GetxController
           ? true
           : false,
     );
+    if (isClosed || !identical(account, Accounts.main)) return;
     if (res case Success(:final response)) {
+      _listAccount = account;
       if (response.mediaList.isNotEmpty) {
         if (isReverse) {
           mediaList.value = response.mediaList;
@@ -1188,7 +1183,7 @@ class VideoDetailController extends GetxController
     if (isPlaying) {
       await plPlayerController.pause();
     }
-    await Get.key.currentState!.push(
+    await plPlayerController.navigator!.push(
       PublishRoute(
         pageBuilder: (buildContext, animation, secondaryAnimation) {
           final child = SendDanmakuPanel(
@@ -1441,7 +1436,7 @@ class VideoDetailController extends GetxController
     if (useFileSource) {
       final String? dirPath = playFromLocal
           ? effectiveLocalEntry?.entryDirPath
-          : args['dirPath'];
+          : args['dirPath'] ?? entry.entryDirPath;
       final String? typeTag = playFromLocal
           ? effectiveLocalEntry?.typeTag
           : entry.typeTag;
@@ -1584,7 +1579,9 @@ class VideoDetailController extends GetxController
       epid: epId,
       seasonId: seasonId,
       tryLook: plPlayerController.tryLook,
-      videoType: _actualVideoType ?? videoType,
+      videoType: videoType == VideoType.pgc && !isLoginVideo
+          ? VideoType.ugc
+          : videoType,
       language: currLang.value,
       voiceBalance: plPlayerController.enableAudioNormalization,
     );
@@ -1662,9 +1659,11 @@ class VideoDetailController extends GetxController
   }) async {
     if (!canStartPlayback) return;
     final pageIsActive = capturePageActivity();
+    final account = Accounts.video;
     // switchGeneration 为空表示普通刷新；带 generation 的请求必须随视频切换一起失效。
     bool isCurrentSwitch() =>
         pageIsActive() &&
+        (isFileSource || identical(account, Accounts.video)) &&
         (switchGeneration == null || isCurrentVideoSwitch(switchGeneration));
 
     if (isFileSource) {
@@ -1762,14 +1761,6 @@ class VideoDetailController extends GetxController
             passed.isCompleted &&
             passed.cid == requestCid) {
           localEntry = passed;
-        } else if (passed is Map<String, dynamic>) {
-          // 处理序列化传递的 entry（在已打开的窗口中切换视频时）
-          try {
-            final entry = BiliDownloadEntryInfo.fromJson(passed);
-            if (entry.isCompleted && entry.cid == requestCid) {
-              localEntry = entry;
-            }
-          } catch (_) {}
         }
 
         localEntry ??= await _findLocalCompletedEntryByCid(requestCid);
@@ -2445,7 +2436,7 @@ class VideoDetailController extends GetxController
     }
   }
 
-  /// 更新列表页面中当前视频的播放进度（仅主窗口和移动端）
+  /// 更新列表页面中当前视频的播放进度
   void _updateListProgress(
     int progressSeconds,
     int videoAid,
@@ -2453,7 +2444,6 @@ class VideoDetailController extends GetxController
     int videoCid,
     int videoDuration,
   ) {
-    // 仅在主窗口和移动端更新进度（不支持跨窗口同步）
     _updateListProgressSync(
       progressSeconds,
       videoAid,
@@ -2587,6 +2577,8 @@ class VideoDetailController extends GetxController
     int videoAid,
     String videoBvid,
   ) {
+    final listAccount = _listAccount;
+    if (listAccount != null && !identical(listAccount, Accounts.main)) return;
     try {
       // 尝试获取稍后再看页面的 controller
       // tag 为 "0" (全部) 和 "2" (未看完)
@@ -2594,6 +2586,7 @@ class VideoDetailController extends GetxController
         if (!Get.isRegistered<LaterController>(tag: tag)) continue;
 
         final laterController = Get.find<LaterController>(tag: tag);
+        if (laterController.mid != Accounts.main.mid) continue;
         if (laterController.loadingState.value.data case List list?) {
           // 查找当前播放的视频（使用 aid 和 bvid 双重匹配确保准确性）
           final targetItem = list.firstWhereOrNull(
@@ -2610,6 +2603,10 @@ class VideoDetailController extends GetxController
               targetItem.progress = newProgress;
               // 延迟到下一帧更新状态，避免在 widget tree 锁定时触发重建
               SchedulerBinding.instance.addPostFrameCallback((_) {
+                if (listAccount != null &&
+                    !identical(listAccount, Accounts.main)) {
+                  return;
+                }
                 // 再次确认该 item 仍然在列表中，避免在异步过程中列表已变化
                 if (laterController.loadingState.value.data
                     case List currentList?) {
@@ -3077,7 +3074,7 @@ class VideoDetailController extends GetxController
       ),
     );
     showDialog(
-      context: Get.context!,
+      context: pageContext ?? Get.context!,
       builder: (context) => AlertDialog(
         constraints: Style.dialogFixedConstraints,
         title: const Text('播放地址'),
@@ -3101,7 +3098,7 @@ class VideoDetailController extends GetxController
         actions: [
           TextButton(
             onPressed: () {
-              Get.back();
+              Navigator.of(context).pop();
               this.videoUrl = videoUrl;
               this.audioUrl = audioUrl;
               playerInit();

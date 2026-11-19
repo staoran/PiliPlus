@@ -59,6 +59,34 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Use the locked media_kit_video sources with a Windows texture-release
+# acknowledgement. Only the build copy is patched.
+find_package(Git REQUIRED)
+get_target_property(MEDIA_KIT_VIDEO_SOURCE media_kit_video_plugin SOURCE_DIR)
+get_target_property(MEDIA_KIT_VIDEO_FILES media_kit_video_plugin SOURCES)
+set(MEDIA_KIT_VIDEO_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/media_kit_video_dispose.patch")
+set(MEDIA_KIT_VIDEO_COPY "${CMAKE_CURRENT_BINARY_DIR}/media_kit_video_80b")
+file(GLOB MEDIA_KIT_VIDEO_INPUTS
+  "${MEDIA_KIT_VIDEO_SOURCE}/*.cc" "${MEDIA_KIT_VIDEO_SOURCE}/*.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${MEDIA_KIT_VIDEO_PATCH}" ${MEDIA_KIT_VIDEO_INPUTS})
+file(COPY ${MEDIA_KIT_VIDEO_INPUTS} DESTINATION "${MEDIA_KIT_VIDEO_COPY}")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env "GIT_CEILING_DIRECTORIES=${CMAKE_CURRENT_BINARY_DIR}"
+    "${GIT_EXECUTABLE}" apply --no-index "${MEDIA_KIT_VIDEO_PATCH}"
+  WORKING_DIRECTORY "${MEDIA_KIT_VIDEO_COPY}"
+  RESULT_VARIABLE MEDIA_KIT_VIDEO_PATCH_RESULT)
+if(NOT MEDIA_KIT_VIDEO_PATCH_RESULT EQUAL 0)
+  message(FATAL_ERROR "Could not apply the media_kit_video texture-release patch")
+endif()
+set(MEDIA_KIT_VIDEO_PATCHED_FILES)
+foreach(SOURCE IN LISTS MEDIA_KIT_VIDEO_FILES)
+  get_filename_component(NAME "${SOURCE}" NAME)
+  list(APPEND MEDIA_KIT_VIDEO_PATCHED_FILES "${MEDIA_KIT_VIDEO_COPY}/${NAME}")
+endforeach()
+set_property(TARGET media_kit_video_plugin PROPERTY SOURCES "${MEDIA_KIT_VIDEO_PATCHED_FILES}")
+target_include_directories(media_kit_video_plugin PRIVATE "${MEDIA_KIT_VIDEO_SOURCE}")
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can

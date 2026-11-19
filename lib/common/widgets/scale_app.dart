@@ -23,8 +23,6 @@ class ScaledWidgetsFlutterBinding extends WidgetsFlutterBinding {
     handleMetricsChanged();
   }
 
-  double devicePixelRatioScaled = 0;
-
   static ScaledWidgetsFlutterBinding? _binding;
 
   static ScaledWidgetsFlutterBinding get instance => _binding!;
@@ -44,7 +42,7 @@ class ScaledWidgetsFlutterBinding extends WidgetsFlutterBinding {
   ViewConfiguration createViewConfigurationFor(RenderView renderView) {
     final view = renderView.flutterView;
     final devicePixelRatio = view.devicePixelRatio;
-    devicePixelRatioScaled = devicePixelRatio * _scaleFactor;
+    final devicePixelRatioScaled = devicePixelRatio * _scaleFactor;
     final BoxConstraints physicalConstraints =
         BoxConstraints.fromViewConstraints(view.physicalConstraints);
     return ViewConfiguration(
@@ -96,7 +94,10 @@ class ScaledWidgetsFlutterBinding extends WidgetsFlutterBinding {
     }
   }
 
-  double _devicePixelRatioForView(int viewId) => devicePixelRatioScaled;
+  double? _devicePixelRatioForView(int viewId) {
+    final view = platformDispatcher.view(id: viewId);
+    return view == null ? null : view.devicePixelRatio * _scaleFactor;
+  }
 
   /// Dispatch a [PointerCancelEvent] for the given pointer soon.
   ///

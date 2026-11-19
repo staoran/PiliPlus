@@ -22,7 +22,6 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:nativeapi/nativeapi.dart' as nativeapi;
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -49,7 +48,6 @@ class _MainAppState extends PopScopeState<MainApp>
       HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     }
     if (PlatformUtils.isDesktop) {
-      WindowController.instance.init();
       TrayController.instance.init();
     }
     if (!Platform.isMacOS) {
@@ -68,9 +66,7 @@ class _MainAppState extends PopScopeState<MainApp>
     if (PlatformUtils.isDesktop) {
       if (_brightness != brightness) {
         _brightness = brightness;
-        nativeapi.Application.instance.setBrightness(
-          brightness == .dark ? .dark : .light,
-        );
+        WindowController.instance.window?.dark = brightness == .dark;
       }
     }
     if (!_mainController.useSideBar) {

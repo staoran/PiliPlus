@@ -73,14 +73,15 @@ index 6f8fee0..203d992 100644
  class _TabBarState extends State<TabBar> {
    TabBarScrollController? _internalScrollController;
    TabController? _controller;
-@@ -1747,6 +1757,38 @@ class _TabBarState extends State<TabBar> {
+@@ -1747,6 +1757,40 @@ class _TabBarState extends State<TabBar> {
      }
    }
  
-+ IndicatorPainter buildIndicator({
++  IndicatorPainter buildIndicator({
 +    required TabController controller,
 +    required Decoration indicator,
 +    required TabBarIndicatorSize indicatorSize,
++    required double? minimumIndicatorWidth,
 +    required List<GlobalKey> tabKeys,
 +    required _IndicatorPainter? old,
 +    required EdgeInsetsGeometry indicatorPadding,
@@ -96,6 +97,7 @@ index 6f8fee0..203d992 100644
 +      controller: controller,
 +      indicator: indicator,
 +      indicatorSize: indicatorSize,
++      minimumIndicatorWidth: minimumIndicatorWidth,
 +      indicatorPadding: indicatorPadding,
 +      tabKeys: tabKeys,
 +      old: old,

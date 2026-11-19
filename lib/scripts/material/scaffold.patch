@@ -137,7 +137,7 @@ index 168fc5b..8e53ddc 100644
      // Allow the bottom sheet to animate smoothly from its current position.
      animationCurve = Split(widget.animationController.value, endCurve: _standardBottomSheetCurve);
    }
-@@ -3535,8 +3540,8 @@ class _StandardBottomSheetState extends State<_StandardBottomSheet> {
+@@ -3626,8 +3631,8 @@ class _StandardBottomSheetState extends State<_StandardBottomSheet> {
              animationController: widget.animationController,
              enableDrag: widget.enableDrag,
              showDragHandle: widget.showDragHandle,
@@ -146,9 +146,9 @@ index 168fc5b..8e53ddc 100644
 +            onDragStart: handleDragStart,
 +            onDragEnd: handleDragEnd,
              onClosing: widget.onClosing!,
-             builder: widget.builder,
-             backgroundColor: widget.backgroundColor,
-@@ -3568,7 +3573,17 @@ class PersistentBottomSheetController
+             // Extends the Material behind the keyboard. Always present, so the
+             // content keeps its state when the keyboard shows or hides.
+@@ -3667,7 +3672,17 @@ class PersistentBottomSheetController
      this._isLocalHistoryEntry,
    ) : super._();
  
@@ -165,4 +165,4 @@ index 168fc5b..8e53ddc 100644
 +  bool get isLocalHistoryEntry => _isLocalHistoryEntry;
  }
  
- class _ScaffoldScope extends InheritedWidget {
+ enum _ScaffoldAspect { geometry, hasDrawer, drawerExpanded, endDrawerExpanded }

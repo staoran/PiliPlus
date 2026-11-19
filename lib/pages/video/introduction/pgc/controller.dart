@@ -42,6 +42,8 @@ typedef OnChangePgcEpisode = Function(
 });
 
 class PgcIntroController extends CommonIntroController {
+  PgcIntroController({super.arguments});
+
   int? seasonId;
   int? epId;
   int _changeEpisodeGeneration = 0;
@@ -75,7 +77,7 @@ class PgcIntroController extends CommonIntroController {
 
   @override
   void onInit() {
-    final args = Get.arguments;
+    final args = routeArguments;
     seasonId = args['seasonId'];
     epId = args['epId'];
     isPgc = args['videoType'] == VideoType.pgc;
@@ -249,14 +251,14 @@ class PgcIntroController extends CommonIntroController {
           DialogOption(
             child: const Text('复制链接', style: TextStyle(fontSize: 14)),
             onPressed: () {
-              Get.back();
+              Navigator.of(context).pop();
               Utils.copyText(videoUrl);
             },
           ),
           DialogOption(
             child: const Text('其它app打开', style: TextStyle(fontSize: 14)),
             onPressed: () {
-              Get.back();
+              Navigator.of(context).pop();
               PiliAndroidHelper.openUrl(videoUrl);
             },
           ),
@@ -265,7 +267,7 @@ class PgcIntroController extends CommonIntroController {
               child: const Text('分享视频', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 final item = findEpisode(cid.value);
-                Get.back();
+                Navigator.of(context).pop();
                 ShareUtils.shareText(
                   '${pgcItem.title} ${item.showTitle}'
                   ' - $videoUrl',
@@ -276,7 +278,7 @@ class PgcIntroController extends CommonIntroController {
             DialogOption(
               child: const Text('分享至动态', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                Get.back();
+                Navigator.of(context).pop();
                 final item = findEpisode(cid.value);
                 showModalBottomSheet(
                   context: context,
@@ -319,7 +321,7 @@ class PgcIntroController extends CommonIntroController {
                 style: TextStyle(fontSize: 14),
               ),
               onPressed: () {
-                Get.back();
+                Navigator.of(context).pop();
                 try {
                   final item = findEpisode(cid.value);
                   final title =

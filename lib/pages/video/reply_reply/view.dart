@@ -23,6 +23,7 @@ import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
@@ -39,6 +40,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
     required this.replyType,
     this.isNested = false,
     this.upMid,
+    this.videoHeroTag,
   });
   final int? id;
   final int oid;
@@ -49,6 +51,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
   final int replyType;
   final bool isNested;
   final Int64? upMid;
+  final String? videoHeroTag;
 
   static Future<void>? toReply({
     required int oid,
@@ -120,17 +123,20 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   @override
   void initState() {
     super.initState();
-    controller = Get.put(
-      VideoReplyReplyController(
-        hasRoot: widget.firstFloor != null,
-        id: widget.id,
-        oid: widget.oid,
-        rpid: widget.rpid,
-        dialog: widget.dialog,
-        replyType: widget.replyType,
-      ),
-      tag: _tag,
+    final scoped = PlayerWindowNavigation.maybeOf(context) != null;
+    final reply = VideoReplyReplyController(
+      hasRoot: widget.firstFloor != null,
+      id: widget.id,
+      oid: widget.oid,
+      rpid: widget.rpid,
+      dialog: widget.dialog,
+      replyType: widget.replyType,
+      pageContext: context,
+      videoHeroTag: widget.videoHeroTag,
     );
+    controller = scoped
+        ? PlayerWindowNavigation.putController(reply, tag: _tag)
+        : Get.put(reply, tag: _tag);
   }
 
   @override
@@ -166,7 +172,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                         IconButton(
                           tooltip: '关闭',
                           icon: const Icon(Icons.close, size: 20),
-                          onPressed: Get.back,
+                          onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
                     ),
@@ -324,6 +330,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           replyType: widget.replyType,
           isVideoDetail: true,
           isNested: widget.isNested,
+          videoHeroTag: widget.videoHeroTag,
         ),
       ),
       jumpToDialogue: () {

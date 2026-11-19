@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:PiliPlus/build_config.dart';
@@ -11,20 +10,16 @@ import 'package:PiliPlus/common/widgets/scroll_behavior.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
-import 'package:PiliPlus/plugin/player_window_manager.dart';
 import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
-import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
 import 'package:PiliPlus/services/service_locator.dart';
-import 'package:PiliPlus/utils/accounts/account_manager/account_mgr.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/desktop/calc_window_position.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/core_palettes_ext.dart';
@@ -33,7 +28,6 @@ import 'package:PiliPlus/utils/font_utils.dart';
 import 'package:PiliPlus/utils/ios/pip_helper.dart';
 import 'package:PiliPlus/utils/json_file_handler.dart';
 import 'package:PiliPlus/utils/max_screen_size.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
@@ -42,10 +36,8 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:PiliPlus/window/player_entry.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:collection/collection.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart' as multi_window;
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -58,7 +50,6 @@ import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
-import 'package:window_manager/window_manager.dart';
 
 WebViewEnvironment? webViewEnvironment;
 
@@ -103,94 +94,8 @@ Future<void> _initAppPath() async {
 }
 
 void main() async {
-  ScaledWidgetsFlutterBinding.ensureInitialized();
-  // Determine if this engine was launched for a sub-window (player)
-  String? startupWindowType;
-  Map<String, dynamic>? windowArgs;
-  try {
-    final windowController =
-        await multi_window.WindowController.fromCurrentEngine();
-    final raw = windowController.arguments;
-    if (raw.isNotEmpty) {
-      try {
-        final parsed = jsonDecode(raw) as Map<String, dynamic>?;
-        // Check for 'businessId' (our format) or 'type' (legacy)
-        startupWindowType =
-            parsed?['businessId'] as String? ?? parsed?['type'] as String?;
-        windowArgs = parsed;
-      } catch (_) {}
-    }
-  } catch (_) {}
-
-  // If this is a player sub-window, skip most initialization and run directly
-  if (startupWindowType == 'player') {
-    MediaKit.ensureInitialized();
-
-    // Initialize paths for sub-window
-    tmpDirPath = (await getTemporaryDirectory()).path;
-    appSupportDirPath = (await getApplicationSupportDirectory()).path;
-
-    // Initialize storage for sub-window (uses separate Hive path)
-    try {
-      // Get settings from window args
-      final settings = windowArgs?['settings'] as Map<String, dynamic>?;
-      final allSettings = settings?['allSettings'] as Map<String, dynamic>?;
-      final accountData = settings?['accountData'] as Map<String, dynamic>?;
-      // Get businessId from settings to determine window type
-      final businessIdFromSettings = settings?['businessId'] as String?;
-      // This also initializes Accounts.initForSubWindow() internally
-      await GStorage.initForSubWindow(
-        appSupportDirPath,
-        allSettings,
-        accountData: accountData,
-        subWindowType: businessIdFromSettings ?? startupWindowType ?? 'player',
-      );
-      HttpOverrides.global = _CustomHttpOverrides();
-      await CacheManager.ensureInitialized(cacheSubDir: 'player_window');
-
-      // Initialize downloadPath for sub-window so offline cache list works.
-      if (PlatformUtils.isDesktop) {
-        final customDownPath = Pref.downloadPath;
-        if (customDownPath != null && customDownPath.isNotEmpty) {
-          try {
-            final dir = Directory(customDownPath);
-            if (!dir.existsSync()) {
-              await dir.create(recursive: true);
-            }
-            downloadPath = customDownPath;
-          } catch (e) {
-            downloadPath = defDownloadPath;
-            await GStorage.setting.delete(SettingBoxKey.downloadPath);
-            if (kDebugMode) {
-              debugPrint('download path error (sub-window): $e');
-            }
-          }
-        } else {
-          downloadPath = defDownloadPath;
-        }
-      }
-
-      // Initialize HTTP client after storage is ready
-      Request();
-      // Set up AccountManager interceptor for sub-window (without full setCookie)
-      Request.accountManager = AccountManager();
-      Request.dio.interceptors.add(Request.accountManager);
-
-      // Provide DownloadService in sub-window so offline cache playlists can load.
-      // This is lightweight (reads local download list) and does not start downloads.
-      if (!Get.isRegistered<DownloadService>()) {
-        Get.put(DownloadService(), permanent: true);
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('Sub-window init error: $e');
-    }
-
-    final window = WindowManager.instance.getCurrent();
-    if (window != null) WindowController.instance.bindForPlayerWindow(window);
-    runApp(PlayerEntry(args: windowArgs));
-    return;
-  }
-
+  PlayerWindowService.enableWindowing();
+  final binding = ScaledWidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await _initAppPath();
   try {
@@ -276,6 +181,13 @@ void main() async {
     await MyApp.initPlatformState();
   }
 
+  if (PlatformUtils.isDesktop) {
+    await WindowController.instance.init(
+      binding.platformDispatcher.implicitView!,
+    );
+    binding.addPostFrameCallback((_) => WindowController.instance.show());
+  }
+
   if (Pref.enableLog) {
     // 异常捕获 logo记录
     final customParameters = {
@@ -298,55 +210,17 @@ void main() async {
   } else {
     runApp(const MyApp());
   }
-
-  if (PlatformUtils.isDesktop) {
-    final window = WindowManager.instance.getCurrent();
-    if (window != null) {
-      final showTitleBar = Pref.showWindowTitleBar;
-      // macOS 隐藏标题栏时改用 contentUnderTitleBar，保持窗口可拖动
-      final useContentUnderTitleBar = Platform.isMacOS && !showTitleBar;
-      window
-        ..titleBarStyle = useContentUnderTitleBar || showTitleBar
-            ? .normal
-            : .hidden
-        ..isWindowControlButtonsVisible = true
-        ..bounds = calcWindowBounds()
-        ..minimumSize = DeviceUtils.desktopMinSize
-        ..isVisibleInTaskbar = true
-        ..title = Constants.appName
-        ..isAlwaysOnTop = Pref.mainWindowAlwaysOnTop;
-      if (useContentUnderTitleBar) window.setContentUnderTitleBar(true);
-      try {
-        final controller =
-            await multi_window.WindowController.fromCurrentEngine();
-        await controller.initMainWindowHandler();
-      } catch (e) {
-        if (kDebugMode) debugPrint('Init main window handler error: $e');
-      }
-      if (Pref.isWindowMaximized) window.maximize();
-      void show([_]) {
-        window
-          ..focus()
-          ..show();
-        Future.delayed(
-          const Duration(seconds: 1),
-          PlayerWindowService.instance.preCreatePlayerWindow,
-        );
-      }
-
-      switch (WidgetsBinding.instance.schedulerPhase) {
-        case .idle || .postFrameCallbacks:
-          WidgetsBinding.instance.scheduleFrameCallback(show);
-        case .transientCallbacks || .midFrameMicrotasks || .persistentCallbacks:
-          WidgetsBinding.instance.addPostFrameCallback(show);
-      }
-    }
-  }
 }
 
 KeyEventResult _onKeyEvent(KeyEvent event) {
   if (event is KeyDownEvent && event.logicalKey == .escape) {
-    _onBack();
+    final context = FocusManager.instance.primaryFocus?.context;
+    final playerWindow = PlayerWindowService.instance;
+    if (playerWindow.ownsView(context == null ? null : View.maybeOf(context))) {
+      playerWindow.back();
+    } else {
+      _onBack();
+    }
     return .handled;
   }
   return .ignored;
@@ -377,7 +251,6 @@ class MyApp extends StatelessWidget {
 
   static ColorScheme? _light, _dark;
 
-  static bool _playerChannelInited = false;
   static (ThemeData, ThemeData) getAllTheme() {
     final dynamicColor = _light != null && _dark != null && Pref.dynamicColor;
 
@@ -443,57 +316,6 @@ class MyApp extends StatelessWidget {
   }
 
   static Widget _builder(BuildContext context, Widget? child) {
-    // Register channel handler once to accept openInMain requests from player window
-    // Only on desktop platforms where multi-window is supported
-    if (!_playerChannelInited && PlatformUtils.isDesktop) {
-      try {
-        final _ =
-            const multi_window.WindowMethodChannel(
-              PlayerWindowManager.channelName,
-            )..setMethodCallHandler((call) async {
-              switch (call.method) {
-                case 'openInMain':
-                  final data = call.arguments as Map?;
-                  if (data != null) {
-                    final route = data['route'] as String?;
-                    final args = data['arguments'];
-                    if (route != null && route.isNotEmpty) {
-                      // Navigate in main window
-                      Future.microtask(
-                        () => Get.toNamed(route, arguments: args),
-                      );
-                      return 'ok';
-                    }
-
-                    // fallback: if data contains video params, open video page
-                    if (data.containsKey('cid')) {
-                      Future.microtask(
-                        () => PageUtils.toVideoPage(
-                          videoType: data['videoType'] ?? 0,
-                          aid: data['aid'] as int?,
-                          bvid: data['bvid'] as String?,
-                          cid: data['cid'] as int? ?? 0,
-                          seasonId: data['seasonId'] as int?,
-                          epId: data['epId'] as int?,
-                          pgcType: data['pgcType'] as int?,
-                          cover: data['cover'] as String?,
-                          title: data['title'] as String?,
-                          progress: data['progress'] as int?,
-                          extraArguments: data['extraArguments'] as Map?,
-                        ),
-                      );
-                      return 'ok';
-                    }
-                  }
-                  break;
-                default:
-                  break;
-              }
-              return null;
-            });
-        _playerChannelInited = true;
-      } catch (_) {}
-    }
     final uiScale = Pref.uiScale;
     final mediaQuery = MediaQuery.of(context);
     final textScaler = TextScaler.linear(Pref.defaultTextScale);
@@ -520,9 +342,8 @@ class MyApp extends StatelessWidget {
       );
     }
     if (PlatformUtils.isDesktop) {
-      return BackDetector(
-        onBack: _onBack,
-        child: child,
+      return PlayerWindowService.instance.anchor(
+        BackDetector(onBack: _onBack, child: child),
       );
     }
     return child;

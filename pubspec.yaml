@@ -20,8 +20,8 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 2.2.0+1
 
 environment:
-  sdk: ">=3.13.0"
-  flutter: 3.47.9
+  sdk: ">=3.14.0"
+  flutter: 3.50.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -141,7 +141,6 @@ dependencies:
   media_kit_libs_video: 1.0.5
   media_kit_video: 1.2.5
   mime: ^2.0.0
-  nativeapi: ^0.5.2
   native_device_orientation:
     git:
       url: https://github.com/bggRGjQaUbCoE/flutter_native_device_orientation.git
@@ -159,7 +158,6 @@ dependencies:
   re_highlight: ^0.0.3
   saver_gallery: ^5.0.2
   screen_brightness_platform_interface: ^2.1.0
-  screen_retriever: ^0.3.0
   share_plus: ^13.1.0
   stream_transform: ^2.1.1
   super_sliver_list:
@@ -167,7 +165,7 @@ dependencies:
       url: https://github.com/bggRGjQaUbCoE/super_sliver_list.git
       ref: mod
   synchronized: ^3.3.0
-  tray_manager: ^0.8.0
+  tray_manager: ^0.9.0
   url_launcher: ^6.3.1
   uuid: ^4.5.1
   vector_math: ^2.2.0
@@ -180,8 +178,6 @@ dependencies:
   webview_all_linux: ^1.4.9
   webview_platform_interface: ^1.4.9
   win32: ^6.3.0
-  window_manager: ^0.6.0
-  desktop_multi_window: ^0.3.0
   flutter_foreground_task: ^8.13.2
 
 dependency_overrides:

@@ -53,7 +53,6 @@ import 'package:PiliPlus/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
@@ -78,6 +77,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -1624,7 +1624,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     child: plPlayerController.isDesktopPip
                         ? GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onPanStart: (_) => WindowController.instance.window
+                            onPanStart: (_) => plPlayerController.desktopWindow
                                 ?.startDragging(),
                             child: widget.headerControl,
                           )
@@ -2173,7 +2173,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             ),
             actions: [
               TextButton(
-                onPressed: Get.back,
+                onPressed: () => Navigator.of(context).pop(),
                 child: Text(
                   '取消',
                   style: TextStyle(
@@ -2184,7 +2184,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               TextButton(
                 onPressed: () {
                   if (segment.first < segment.second) {
-                    Get.back(result: true);
+                    Navigator.of(context).pop(true);
                   }
                 },
                 child: const Text('确定'),
@@ -2415,7 +2415,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   MdiIcons.accountOutline,
                   color: Colors.white,
                 ),
-                onTap: () => Get.toNamed('/member?mid=${extra.mid}'),
+                onTap: () => PlayerWindowNavigation.openInMain(
+                  context,
+                  '/member?mid=${extra.mid}',
+                ),
               ),
               _dmActionItem(
                 const Icon(

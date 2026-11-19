@@ -12,6 +12,7 @@ import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class BottomControl extends StatefulWidget {
@@ -73,7 +74,8 @@ class _BottomControlState extends State<BottomControl> with HeaderMixin {
               ),
               onTap: () {
                 if (kDebugMode || liveRoomCtr.isLogin) {
-                  Get.toNamed(
+                  PlayerWindowNavigation.openInMain(
+                    context,
                     '/liveDmBlockPage',
                     parameters: {
                       'roomId': liveRoomCtr.roomId.toString(),

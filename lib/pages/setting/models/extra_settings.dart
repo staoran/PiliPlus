@@ -19,7 +19,6 @@ import 'package:PiliPlus/pages/setting/widgets/slider_dialog.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/filtering_text.dart';
@@ -40,12 +39,11 @@ import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
 
 List<SettingsModel> get extraSettings => [
   if (PlatformUtils.isDesktop) ...[
-    SwitchModel(
+    const SwitchModel(
       title: '退出时最小化',
-      leading: const Icon(Icons.exit_to_app),
+      leading: Icon(Icons.exit_to_app),
       setKey: SettingBoxKey.minimizeOnExit,
       defaultVal: true,
-      onChanged: (value) => WindowController.instance.minimizeOnExit = value,
     ),
     NormalModel(
       title: '缓存路径',

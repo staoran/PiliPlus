@@ -74,6 +74,7 @@ class VideoReplyController extends ReplyController<MainListReply>
         isVideoDetail: true,
         isNested: videoCtr.scrollKey.currentContext != null,
         upMid: upMid,
+        videoHeroTag: heroTag,
       ),
     );
   }

@@ -28,10 +28,10 @@ import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/video/related/controller.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
-import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
@@ -50,6 +50,8 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class UgcIntroController extends CommonIntroController with ReloadMixin {
+  UgcIntroController({super.arguments});
+
   late final RxBool expand;
   int _changeEpisodeGeneration = 0;
 
@@ -89,12 +91,13 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     expand = RxBool(alwaysExpandIntroPanel);
     if (!alwaysExpandIntroPanel && Pref.expandIntroPanelH) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!expand.value && !DeviceUtils.size.isPortrait) {
+        if (!expand.value &&
+            !videoDetailCtr.plPlayerController.windowSize.isPortrait) {
           expand.toggle();
         }
       });
     }
-    videoDetail.value.title = Get.arguments['title'] ?? '';
+    videoDetail.value.title = routeArguments['title'] ?? '';
   }
 
   @override
@@ -477,7 +480,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
               style: TextStyle(fontSize: 14),
             ),
             onTap: () {
-              Get.back();
+              Navigator.of(context).pop();
               Utils.copyText(videoUrl);
             },
             trailing: playedTimePos.isNotEmpty
@@ -485,7 +488,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                     tooltip: '精确分享',
                     icon: const Icon(Icons.timer_outlined),
                     onPressed: () {
-                      Get.back();
+                      Navigator.of(context).pop();
                       Utils.copyText('$videoUrl$playedTimePos');
                     },
                   )
@@ -498,7 +501,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
               style: TextStyle(fontSize: 14),
             ),
             onTap: () {
-              Get.back();
+              Navigator.of(context).pop();
               PiliAndroidHelper.openUrl(videoUrl);
             },
           ),
@@ -510,7 +513,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(context).pop();
                 ShareUtils.shareText(
                   '${videoDetail.title} '
                   'UP主: ${videoDetail.owner!.name!}'
@@ -526,7 +529,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(context).pop();
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -554,7 +557,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(context).pop();
                 try {
                   PageUtils.pmShare(
                     context,
@@ -773,6 +776,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
             dimension = episode.page?.dimension;
           }
           PageUtils.toVideoPage(
+            context: videoDetailCtr.pageContext,
             bvid: bvid,
             cid: cid,
             cover: cover,
@@ -1093,7 +1097,10 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     if (Get.isRegistered<RelatedController>(tag: heroTag)) {
       relatedCtr = Get.find<RelatedController>(tag: heroTag);
     } else {
-      relatedCtr = Get.put(RelatedController(), tag: heroTag);
+      final controller = RelatedController();
+      relatedCtr = videoDetailCtr.plPlayerController.isDetached
+          ? PlayerWindowNavigation.putController(controller, tag: heroTag)
+          : Get.put(controller, tag: heroTag);
     }
 
     if (relatedCtr.bvid != currentBvid) {

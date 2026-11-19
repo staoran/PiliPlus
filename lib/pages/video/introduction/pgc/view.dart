@@ -27,6 +27,7 @@ import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PgcIntroPage extends StatefulWidget {
@@ -362,7 +363,8 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
     Widget upInfo(int mid, String avatar, String name, {String? role}) =>
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => Get.toNamed('/member?mid=$mid'),
+          onTap: () =>
+              PlayerWindowNavigation.openInMain(context, '/member?mid=$mid'),
           child: Row(
             spacing: 8,
             mainAxisSize: MainAxisSize.min,

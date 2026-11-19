@@ -4,7 +4,6 @@ import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/services/multi_window/player_window_service.dart';
-import 'package:PiliPlus/services/multi_window/window_controller_extension.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -105,7 +104,10 @@ class TrayController {
     }
   }
 
-  bool get _isOnTop => Pref.usePlayerWindow
+  bool get _usesPlaybackWindow =>
+      PlayerWindowService.supported && Pref.usePlayerWindow;
+
+  bool get _isOnTop => _usesPlaybackWindow
       ? Pref.playerWindowAlwaysOnTop
       : Pref.mainWindowAlwaysOnTop;
 
@@ -122,7 +124,7 @@ class TrayController {
     if (_disposed || _togglingOnTop) return;
     _togglingOnTop = true;
     try {
-      final usePlayer = Pref.usePlayerWindow;
+      final usePlayer = _usesPlaybackWindow;
       final next = !_isOnTop;
       await GStorage.setting.put(
         usePlayer
@@ -132,9 +134,7 @@ class TrayController {
       );
       if (_disposed) return;
       if (usePlayer) {
-        final controller = await PlayerWindowService.instance
-            .findPlayerWindow();
-        if (!_disposed) await controller?.setAlwaysOnTop(next);
+        PlayerWindowService.instance.setAlwaysOnTop(next);
       } else {
         WindowController.instance.window?.isAlwaysOnTop = next;
       }

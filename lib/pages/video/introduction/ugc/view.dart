@@ -48,6 +48,7 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -730,7 +731,10 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             text: '@${currentDesc.rawText}',
             style: TextStyle(color: colorSchemePrimary),
             recognizer: NoDeadlineTapGestureRecognizer()
-              ..onTap = () => Get.toNamed('/member?mid=${currentDesc.bizId}'),
+              ..onTap = () => PlayerWindowNavigation.openInMain(
+                context,
+                '/member?mid=${currentDesc.bizId}',
+              ),
           );
         default:
           return const TextSpan();
@@ -773,7 +777,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
                     if (!isPortrait && introController.horizontalMemberPage) {
                       widget.onShowMemberPage(mid);
                     } else {
-                      Get.toNamed(
+                      PlayerWindowNavigation.openInMain(
+                        context,
                         '/member?mid=$mid&from_view_aid=${videoDetailCtr.aid}',
                       );
                     }
@@ -804,7 +809,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     int? ownerMid,
     Staff item,
   ) {
-    void onTap() => Get.toNamed(
+    void onTap() => PlayerWindowNavigation.openInMain(
+      context,
       '/member?mid=${item.mid}&from_view_aid=${videoDetailCtr.aid}',
     );
     return GestureDetector(
@@ -928,7 +934,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     behavior: .opaque,
     onSecondaryTap:
         PlatformUtils.isDesktop && introController.horizontalMemberPage
-        ? () => Get.toNamed(
+        ? () => PlayerWindowNavigation.openInMain(
+            context,
             '/member?mid=${introController.userStat.value.card?.mid}&from_view_aid=${videoDetailCtr.aid}',
           )
         : null,
@@ -1059,15 +1066,18 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
                   _ => item.tagName!,
                 },
                 onTap: switch (item.tagType) {
-                  'bgm' => (_) => Get.toNamed(
+                  'bgm' => (_) => PlayerWindowNavigation.openInMain(
+                    context,
                     '/musicDetail',
                     parameters: {'musicId': item.musicId!},
                   ),
-                  'topic' => (_) => Get.toNamed(
+                  'topic' => (_) => PlayerWindowNavigation.openInMain(
+                    context,
                     '/dynTopic',
                     parameters: {'id': item.tagId!.toString()},
                   ),
-                  _ => (tagName) => Get.toNamed(
+                  _ => (tagName) => PlayerWindowNavigation.openInMain(
+                    context,
                     '/searchResult',
                     parameters: {'keyword': tagName},
                   ),

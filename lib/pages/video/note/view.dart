@@ -14,6 +14,7 @@ import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class NoteListPage extends CommonSlidePage {
@@ -42,10 +43,10 @@ class _NoteListPageState extends State<NoteListPage>
   @override
   void initState() {
     super.initState();
-    _controller = Get.put(
-      NoteListPageCtr(oid: widget.oid),
-      tag: widget.heroTag,
-    );
+    final controller = NoteListPageCtr(oid: widget.oid);
+    _controller = PlayerWindowNavigation.maybeOf(context) != null
+        ? PlayerWindowNavigation.putController(controller, tag: widget.heroTag)
+        : Get.put(controller, tag: widget.heroTag);
   }
 
   @override
@@ -84,7 +85,7 @@ class _NoteListPageState extends State<NoteListPage>
                   IconButton(
                     tooltip: '关闭',
                     icon: const Icon(Icons.close, size: 20),
-                    onPressed: Get.back,
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: 2),
                 ],
@@ -206,7 +207,8 @@ class _NoteListPageState extends State<NoteListPage>
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: () => Get.toNamed(
+        onTap: () => PlayerWindowNavigation.openInMain(
+          context,
           '/articlePage',
           parameters: {
             'id': item.cvid!.toString(),
@@ -219,7 +221,10 @@ class _NoteListPageState extends State<NoteListPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
-                onTap: () => Get.toNamed('/member?mid=${item.author!.mid}'),
+                onTap: () => PlayerWindowNavigation.openInMain(
+                  context,
+                  '/member?mid=${item.author!.mid}',
+                ),
                 child: NetworkImgLayer(
                   height: 34,
                   width: 34,
@@ -234,8 +239,10 @@ class _NoteListPageState extends State<NoteListPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
-                      onTap: () =>
-                          Get.toNamed('/member?mid=${item.author!.mid}'),
+                      onTap: () => PlayerWindowNavigation.openInMain(
+                        context,
+                        '/member?mid=${item.author!.mid}',
+                      ),
                       child: Row(
                         children: [
                           Text(
