@@ -17,7 +17,6 @@ import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/post_panel/popup_menu_text.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
@@ -128,7 +127,7 @@ class PostPanel extends CommonSlidePage {
                     FilteringTextInputFormatter.allow(RegExp(r'[\d:.]+')),
                   ],
                 );
-                if (PlatformUtils.isDesktop || context.isTablet) {
+                if (PlatformUtils.isDesktop || MediaQuery.isTabletOf(context)) {
                   res = await showDialog<String>(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -517,7 +516,7 @@ class _PostPanelState extends State<PostPanel>
                 if (start <= 0) {
                   unawaited(seekTo());
                   if (!player.state.playing) {
-                    await player.play();
+                    await plPlayerController.play();
                   }
                   return;
                 }
@@ -527,7 +526,7 @@ class _PostPanelState extends State<PostPanel>
                   isSeek: false,
                 );
                 if (!player.state.playing) {
-                  await player.play();
+                  await plPlayerController.play();
                 }
                 if (start > seek) {
                   final posSub = player.stream.position.listen(

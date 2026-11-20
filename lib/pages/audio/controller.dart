@@ -249,14 +249,17 @@ class AudioController extends GetxController
       _lastVolume = null;
     }
     desktopVolume.value = volume;
-    player?.setVolume(volume * 100);
+    setVolumeCapped(player, volume);
   }
 
   void syncVolume([_]) {
     final volume = desktopVolume.value;
     PlPlayerController.instance
       ?..volume.value = volume
-      ..videoPlayerController?.setVolume(volume * 100);
+      ..setVolumeCapped(
+        PlPlayerController.instance?.videoPlayerController,
+        volume,
+      );
     GStorage.setting.put(SettingBoxKey.desktopVolume, volume.toPrecision(3));
   }
 
@@ -316,7 +319,8 @@ class AudioController extends GetxController
     videoPlayerServiceHandler
       ?..onPlay = onPlay
       ..onPause = onPause
-      ..onSeek = onSeek;
+      ..onSeek = onSeek
+      ..isPlaying = isPlaying;
 
     animController = AnimationController(
       vsync: this,
@@ -336,7 +340,19 @@ class AudioController extends GetxController
 
   Future<void>? onPlay() {
     _cancelPendingCompleted(reason: 'play');
-    return player?.play();
+    final current = player;
+    return current == null ? null : _playAudio(current);
+  }
+
+  Future<void> _playAudio(Player current) async {
+    final generation = _switchGeneration;
+    await current.play();
+    if (!isClosed &&
+        identical(player, current) &&
+        generation == _switchGeneration &&
+        current.state.playing) {
+      await audioSessionHandler?.setActive(true);
+    }
   }
 
   Future<void>? onPause() {
@@ -347,7 +363,18 @@ class AudioController extends GetxController
       _manualPausePending = false;
       return null;
     }
-    return currentPlayer.pause();
+    return _pauseAudio(currentPlayer);
+  }
+
+  Future<void> _pauseAudio(Player current) async {
+    final generation = _switchGeneration;
+    await current.pause();
+    if (!isClosed &&
+        identical(player, current) &&
+        generation == _switchGeneration &&
+        !current.state.playing) {
+      await audioSessionHandler?.setActive(false);
+    }
   }
 
   Future<void>? onSeek(Duration duration) {
@@ -1775,7 +1802,7 @@ class AudioController extends GetxController
       },
     );
     duration.value = Duration(milliseconds: local.totalTimeMilli);
-    return _onOpenMedia(audioPath, ua: '', referer: null);
+    return _onOpenMedia(audioPath, ua: '', referer: null, volume: local.volume);
   }
 
   Future<bool> _onPlay(PlayURLResp data) {
@@ -1864,7 +1891,9 @@ class AudioController extends GetxController
         ),
         play: false,
       );
-      await player!.play();
+      if (openGeneration != _switchGeneration || isClosed) return false;
+      await _playAudio(player!);
+      if (openGeneration != _switchGeneration || isClosed) return false;
       player!.setRate(speed);
       if (openGeneration == _switchGeneration) {
         _blockMediaReadyGeneration = openGeneration;
@@ -1946,9 +1975,6 @@ class AudioController extends GetxController
       configuration: PlayerConfiguration(
         options: {
           if (Platform.isAndroid) 'ao': Pref.audioOutput,
-          'volume': PlatformUtils.isDesktop
-              ? (desktopVolume.value * 100).toString()
-              : Pref.playerVolume.toString(),
           ...Pref.initBuffer(),
         },
       ),
@@ -1958,6 +1984,11 @@ class AudioController extends GetxController
       player = null;
       return;
     }
+    // >100% 的音量走 af 增益+限幅，避免直接放大 mpv volume 导致削波
+    await setVolumeCapped(
+      player,
+      PlatformUtils.isDesktop ? desktopVolume.value : Pref.playerVolume / 100,
+    );
     final stream = player!.stream;
     _subscriptions = [
       stream.position.listen((position) {
@@ -2490,7 +2521,10 @@ class AudioController extends GetxController
   void playOrPause() {
     if (player case final player?) {
       if ((duration.value - position.value).inMilliseconds < 50) {
-        onSeek(Duration.zero)?.whenComplete(player.play);
+        final generation = _switchGeneration;
+        onSeek(Duration.zero)?.then((_) {
+          if (!isClosed && generation == _switchGeneration) return onPlay();
+        });
       } else if (player.state.playing) {
         onPause();
       } else {
@@ -3081,6 +3115,9 @@ class AudioController extends GetxController
       if (serviceHandler.onPlay == onPlay) serviceHandler.onPlay = null;
       if (serviceHandler.onPause == onPause) serviceHandler.onPause = null;
       if (serviceHandler.onSeek == onSeek) serviceHandler.onSeek = null;
+      if (serviceHandler.isPlaying == isPlaying) {
+        serviceHandler.isPlaying = null;
+      }
       if (serviceHandler.onSkipToNext == _skipToNext) {
         serviceHandler.onSkipToNext = null;
       }

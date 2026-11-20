@@ -10,6 +10,7 @@ import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/dynamic_panel.dart';
 import 'package:PiliPlus/pages/music/controller.dart';
+import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/pages/video/reply/widgets/reply_item_grpc.dart';
@@ -34,20 +35,41 @@ class SavePanel extends StatefulWidget {
     required this.item,
     // reply
     this.upMid,
+    this.sourceRoute,
+    this.videoHeroTag,
     super.key,
   });
 
   final dynamic upMid;
   final dynamic item;
+  final RouteSettings? sourceRoute;
+  final String? videoHeroTag;
 
   @override
   State<SavePanel> createState() => _SavePanelState();
 
-  static void toSavePanel({dynamic upMid, dynamic item}) {
-    Get.key.currentState!.push(
+  static void toSavePanel({
+    BuildContext? context,
+    RouteSettings? sourceRoute,
+    String? videoHeroTag,
+    dynamic upMid,
+    dynamic item,
+  }) {
+    final route =
+        sourceRoute ??
+        (context == null ? null : ModalRoute.of(context)?.settings);
+    final navigator = context == null
+        ? Get.key.currentState!
+        : Navigator.of(context);
+    navigator.push(
       PublishRoute(
         pageBuilder: (context, animation, secondaryAnimation) {
-          return SavePanel(upMid: upMid, item: item);
+          return SavePanel(
+            upMid: upMid,
+            item: item,
+            sourceRoute: route,
+            videoHeroTag: videoHeroTag,
+          );
         },
         transitionDuration: const Duration(milliseconds: 255),
         transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -56,7 +78,7 @@ class SavePanel extends StatefulWidget {
             child: child,
           );
         },
-        settings: RouteSettings(arguments: Get.arguments),
+        settings: RouteSettings(arguments: route?.arguments ?? Get.arguments),
       ),
     );
   }
@@ -90,6 +112,8 @@ class _SavePanelState extends State<SavePanel> {
     } else if (_item case final DynamicItemModel i) {
       uri = _parseDyn(i);
       if (kDebugMode) debugPrint(uri);
+    } else if (_item case final Iterable<ReplyInfo> i when i.isNotEmpty) {
+      _parseReply(i.first);
     }
   }
 
@@ -110,17 +134,23 @@ class _SavePanelState extends State<SavePanel> {
 
   void _parseReply(ReplyInfo reply) {
     itemType = '评论';
-    final currentRoute = Get.currentRoute;
+    final currentRoute = widget.sourceRoute?.name ?? Get.currentRoute;
+    final args = widget.sourceRoute?.arguments ?? Get.arguments;
     late final hasRoot = reply.hasRoot();
 
-    if (currentRoute == '/videoV') {
+    if (widget.videoHeroTag != null || currentRoute == '/videoV') {
       final rootId = hasRoot ? reply.root : reply.id;
 
       uri =
           'https://www.bilibili.com/video/av${reply.oid}?comment_on=1&comment_root_id=$rootId${hasRoot ? '&comment_secondary_id=${reply.id}' : ''}';
       try {
-        final heroTag = Get.arguments['heroTag'];
-        final videoType = Get.arguments['videoType'];
+        final heroTag =
+            widget.videoHeroTag ??
+            (args is Map ? args['heroTag'] as String? : null);
+        if (heroTag == null) return;
+        final videoType = Get.isRegistered<VideoDetailController>(tag: heroTag)
+            ? Get.find<VideoDetailController>(tag: heroTag).videoType
+            : (args is Map ? args['videoType'] : null);
         if (videoType == VideoType.pgc || videoType == VideoType.pugv) {
           final ctr = Get.find<PgcIntroController>(tag: heroTag);
           final pgcItem = ctr.pgcItem;
@@ -156,7 +186,7 @@ class _SavePanelState extends State<SavePanel> {
     } else if (currentRoute.startsWith('/dynamicDetail')) {
       DynamicItemModel? dynItem;
       try {
-        dynItem = Get.arguments['item'] as DynamicItemModel;
+        dynItem = args['item'] as DynamicItemModel;
         uname = dynItem.modules.moduleAuthor?.name;
       } catch (_) {}
       final type = reply.type;
@@ -173,13 +203,13 @@ class _SavePanelState extends State<SavePanel> {
     } else if (currentRoute.startsWith('/Scaffold')) {
       try {
         final type = reply.type.toInt();
-        final oid = Get.arguments['oid'] ?? reply.oid;
+        final oid = args['oid'] ?? reply.oid;
         final rootId = hasRoot ? reply.root : reply.id;
         if (type == 1) {
           uri =
               'https://www.bilibili.com/video/av$oid?comment_on=1&comment_root_id=$rootId${hasRoot ? '&comment_secondary_id=${reply.id}' : ''}';
         } else {
-          String enterUri = Get.arguments['enterUri'] ?? '';
+          String enterUri = args['enterUri'] ?? '';
           if (enterUri.isNotEmpty) {
             enterUri = 'enterUri=${Uri.encodeComponent(enterUri)}';
           } else if (const [11, 12, 17].contains(type)) {
@@ -192,7 +222,7 @@ class _SavePanelState extends State<SavePanel> {
     } else if (currentRoute.startsWith('/articlePage')) {
       try {
         final enterUri =
-            'bilibili://following/detail/${Get.parameters['id'] ?? Get.arguments?['id']}';
+            'bilibili://following/detail/${Get.parameters['id'] ?? (args is Map ? args['id'] : null)}';
         uri = _reply2Uri(reply, hasRoot, enterUri);
       } catch (_) {}
     } else if (currentRoute.startsWith('/musicDetail')) {
@@ -337,12 +367,53 @@ class _SavePanelState extends State<SavePanel> {
     }
   }
 
+  ReplyItemGrpc _handleReply(ReplyInfo i, [divider = true]) => ReplyItemGrpc(
+    replyItem: i,
+    replyLevel: 0,
+    upMid: widget.upMid,
+    needDivider: divider,
+  );
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.of(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final padding = MediaQuery.viewPaddingOf(context);
     final maxWidth = MediaQuery.sizeOf(context).shortestSide;
     late final coverSize = MediaQuery.textScalerOf(context).scale(65);
+
+    final Widget child;
+
+    switch (_item) {
+      case ReplyInfo reply:
+        child = _handleReply(reply, false);
+      case DynamicItemModel dyn:
+        child = DynamicPanel(
+          item: dyn,
+          isDetail: true,
+          isSave: true,
+        );
+      case Iterable<ReplyInfo> chain:
+        final first = chain.first;
+        final List<Widget> children;
+        if (first.parent == .ZERO) {
+          children = [
+            _handleReply(first, false),
+            Divider(
+              height: 20,
+              color: theme.dividerColor.withValues(alpha: 0.1),
+              thickness: 3.5,
+            ),
+            ...chain.skip(1).map(_handleReply),
+          ];
+        } else {
+          children = chain.map(_handleReply).toList();
+        }
+        child = Column(children: children);
+      default:
+        throw UnsupportedError(_item.toString());
+    }
+
     return Stack(
       clipBehavior: .none,
       alignment: .center,
@@ -371,22 +442,7 @@ class _SavePanelState extends State<SavePanel> {
                     mainAxisSize: .min,
                     crossAxisAlignment: .start,
                     children: [
-                      IgnorePointer(
-                        child: switch (_item) {
-                          ReplyInfo reply => ReplyItemGrpc(
-                            replyItem: reply,
-                            replyLevel: 0,
-                            needDivider: false,
-                            upMid: widget.upMid,
-                          ),
-                          DynamicItemModel dyn => DynamicPanel(
-                            item: dyn,
-                            isDetail: true,
-                            isSave: true,
-                          ),
-                          _ => throw UnsupportedError(_item.toString()),
-                        },
-                      ),
+                      IgnorePointer(child: child),
                       if (cover?.isNotEmpty == true &&
                           title?.isNotEmpty == true)
                         Container(

@@ -40,7 +40,7 @@ class MainController extends GetxController
   final RxDouble bottomBarRatio = 1.0.obs;
   late final bool hideBottomBar;
   late final barHideType = Pref.barHideType;
-  bool useBottomNav = false;
+  bool useBottomNav = true;
   late dynamic controller;
   final RxInt selectedIndex = 0.obs;
 
@@ -317,8 +317,8 @@ class MainController extends GetxController
           'topOrRefresh',
           const Duration(milliseconds: 500),
           () => switch (currentNav) {
-            .home => homeController.onRefresh(),
-            .dynamics => dynamicController.onRefresh(),
+            .home => homeController.showRefresh(),
+            .dynamics => dynamicController.showRefresh(),
             .mine => null,
           },
         );
@@ -404,7 +404,7 @@ class MainController extends GetxController
     if (navigationBars[selectedIndex.value] == NavigationBarType.home &&
         homeController.tabs[homeController.tabController.index] ==
             HomeTabType.rcmd) {
-      homeController.onRefresh();
+      homeController.showRefresh();
       return true;
     }
     return false;

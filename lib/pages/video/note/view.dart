@@ -7,14 +7,15 @@ import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models_new/video/video_note_list/list.dart';
+import 'package:PiliPlus/pages/article/view.dart';
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/video/note/controller.dart';
 import 'package:PiliPlus/pages/webview/view.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:get/get.dart';
-import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class NoteListPage extends CommonSlidePage {
@@ -207,13 +208,10 @@ class _NoteListPageState extends State<NoteListPage>
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: () => PlayerWindowNavigation.openInMain(
-          context,
-          '/articlePage',
-          parameters: {
-            'id': item.cvid!.toString(),
-            'type': 'read',
-          },
+        onTap: () => ArticlePage.toArticlePage(
+          context: context,
+          id: item.cvid!.toString(),
+          type: .read,
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),

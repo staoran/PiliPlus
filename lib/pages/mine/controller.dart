@@ -32,7 +32,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 
 class MineController extends GetxController
-    with AccountMixin, ScrollOrRefreshMixin {
+    with AccountMixin, ScrollOrRefreshMixin, RefreshImplMixin {
   @override
   final ScrollController scrollController = ScrollController();
 

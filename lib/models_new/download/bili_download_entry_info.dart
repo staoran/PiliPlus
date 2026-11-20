@@ -1,8 +1,11 @@
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
+import 'package:PiliPlus/models/video/play/url.dart' show Volume;
 import 'package:PiliPlus/models_new/download/download_info.dart';
 import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
+import 'package:PiliPlus/models_new/video/video_play_info/subtitle.dart';
+import 'package:PiliPlus/models_new/video/video_play_info/view_point.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart'
     show MultiSelectData;
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -49,6 +52,9 @@ class BiliDownloadEntryInfo with MultiSelectData {
   EpInfo? ep;
   List<SegmentItemModel>? segments;
   SeasonInfo? seasonInfo;
+  List<Subtitle>? subtitles;
+  List<ViewPoint>? viewPoints;
+  Volume? volume;
 
   late String pageDirPath;
   late String entryDirPath;
@@ -188,9 +194,15 @@ class BiliDownloadEntryInfo with MultiSelectData {
     this.ep,
     this.segments,
     this.seasonInfo,
+    this.subtitles,
+    this.viewPoints,
+    this.volume,
   });
 
-  factory BiliDownloadEntryInfo.fromJson(Map<String, dynamic> json) =>
+  factory BiliDownloadEntryInfo.fromJson(
+    Map<String, dynamic> json, [
+    String? entryDirPath,
+  ]) =>
       BiliDownloadEntryInfo(
           mediaType: json['media_type'] as int,
           hasDashAudio: json['has_dash_audio'] as bool,
@@ -220,7 +232,9 @@ class BiliDownloadEntryInfo with MultiSelectData {
           pageData: json['page_data'] != null
               ? PageInfo.fromJson(json['page_data'] as Map<String, dynamic>)
               : null,
-          seasonId: json['season_id'] as String?,
+          seasonId: json['season_id'] is int
+              ? json['season_id'].toString()
+              : json['season_id'] as String?,
           source: json['source'] != null
               ? SourceInfo.fromJson(json['source'] as Map<String, dynamic>)
               : null,
@@ -231,9 +245,16 @@ class BiliDownloadEntryInfo with MultiSelectData {
           seasonInfo: json['season_info'] != null
               ? SeasonInfo.fromJson(json['season_info'] as Map<String, dynamic>)
               : null,
+          subtitles: LocalSubtitle.fromCache(
+            json['subtitles'],
+            entryDirPath ?? json['entry_dir_path'] as String? ?? '',
+          ),
+          viewPoints: ViewPoint.fromCache(json['view_points']),
+          volume: .fromCache(json['volume']),
         )
-        ..pageDirPath = json["page_dir_path"] as String? ?? ''
-        ..entryDirPath = json["entry_dir_path"] as String? ?? '';
+        ..pageDirPath = json['page_dir_path'] as String? ?? ''
+        ..entryDirPath =
+            entryDirPath ?? json['entry_dir_path'] as String? ?? '';
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'media_type': mediaType,
@@ -268,6 +289,9 @@ class BiliDownloadEntryInfo with MultiSelectData {
     'entry_dir_path': entryDirPath,
     'segments': ?segments?.map((e) => e.toJson()).toList(),
     'season_info': ?seasonInfo?.toJson(),
+    'subtitles': ?subtitles?.map((e) => e.toJson()).toList(),
+    'view_points': ?viewPoints?.map((e) => e.toJson()).toList(),
+    'volume': ?volume?.toJson(),
   };
 
   @override

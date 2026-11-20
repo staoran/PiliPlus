@@ -27,13 +27,17 @@ class PlayerWindowNavigation extends InheritedWidget {
     }
   }
 
+  static void showMainFrom(BuildContext context) {
+    if (maybeOf(context) != null) WindowController.instance.show();
+  }
+
   static Future<T?>? openInMain<T>(
     BuildContext context,
     String name, {
     Object? arguments,
     Map<String, String>? parameters,
   }) {
-    if (maybeOf(context) != null) WindowController.instance.show();
+    showMainFrom(context);
     return Get.toNamed<T>(name, arguments: arguments, parameters: parameters);
   }
 

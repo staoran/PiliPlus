@@ -1,6 +1,4 @@
 import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart'
-    as custom_refresh;
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
@@ -32,9 +30,6 @@ abstract class CommonPageState<
 
   late final _scrollController = controller.scrollController;
 
-  /// 刷新指示器的 Key，用于编程式触发刷新动画
-  final refreshIndicatorKey = GlobalKey<custom_refresh.RefreshIndicatorState>();
-
   bool get needsCorrection => false;
 
   @override
@@ -49,11 +44,6 @@ abstract class CommonPageState<
     // 强制添加监听，不再依赖 enableScrollThreshold 配置，以实现跟随手指滑动
     // 注意：即使 enableScrollThreshold 为 false，我们也添加监听器
     controller.scrollController.addListener(listener);
-
-    // 设置刷新回调
-    controller.showRefreshIndicator = () {
-      return refreshIndicatorKey.currentState?.show() ?? controller.onRefresh();
-    };
   }
 
   Widget onBuild(Widget child) {

@@ -10,6 +10,7 @@ import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
+import 'package:PiliPlus/pages/live_room/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/local/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
@@ -89,6 +90,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   static final List<MediaItem> _item = [];
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
 
+  bool Function()? isPlaying;
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
   Future<void>? Function(Duration position)? onSeek;
@@ -199,6 +201,28 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
         Future.syncValue(null);
   }
 
+  @override
+  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) {
+    try {
+      final tag = PlPlayerController.playOwner?.tag;
+      if (PlPlayerController.controlledPlayer?.isLive != true ||
+          tag == null ||
+          !Get.isRegistered<LiveRoomController>(tag: tag)) {
+        return Future.syncValue(null);
+      }
+      final room = Get.find<LiveRoomController>(tag: tag);
+      if (!room.isPlaybackPageActive) return Future.syncValue(null);
+      switch (name) {
+        case 'ACTION_DM':
+          room.toggleDanmaku();
+        case 'ACTION_REFRESH':
+          room.queryLiveUrl();
+        default:
+      }
+    } catch (_) {}
+    return Future.syncValue(null);
+  }
+
   void setMediaItem(MediaItem newMediaItem) {
     if (!enableBackgroundPlay) return;
     // if (kDebugMode) {
@@ -304,6 +328,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   }
 
   List<MediaControl> _buildMediaControls(bool playing, bool isLive) {
+    if (isLive) return [_refresh, _buildPlayPauseControl(playing), _dm];
     if (_enableListControl) {
       // 列表播放模式：显示上一个/下一个
       return [
@@ -554,3 +579,17 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     onSkipToPrevious = null;
   }
 }
+
+const _refresh = MediaControl(
+  androidIcon: 'drawable/ic_player_refresh',
+  label: 'Refresh',
+  action: .custom,
+  customAction: CustomMediaAction(name: 'ACTION_REFRESH'),
+);
+
+const _dm = MediaControl(
+  androidIcon: 'drawable/ic_state_danmaku',
+  label: 'Danmaku',
+  action: .custom,
+  customAction: CustomMediaAction(name: 'ACTION_DM'),
+);

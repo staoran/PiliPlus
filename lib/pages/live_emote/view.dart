@@ -10,16 +10,19 @@ import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models_new/live/live_emote/datum.dart';
 import 'package:PiliPlus/models_new/live/live_emote/emoticon.dart';
 import 'package:PiliPlus/pages/live_emote/controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LiveEmotePanel extends StatefulWidget {
   final int roomId;
+  final String tag;
   final Function(Emoticon emote, double? width, double? height) onChoose;
   final ValueChanged<Emoticon> onSendEmoticonUnique;
   const LiveEmotePanel({
     super.key,
     required this.roomId,
+    required this.tag,
     required this.onChoose,
     required this.onSendEmoticonUnique,
   });
@@ -35,10 +38,16 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
   @override
   void initState() {
     super.initState();
-    _emotePanelController = Get.put(
+    _emotePanelController = PlayerWindowNavigation.putController(
       LiveEmotePanelController(widget.roomId),
-      tag: widget.roomId.toString(),
+      tag: widget.tag,
     );
+  }
+
+  @override
+  void dispose() {
+    Get.delete<LiveEmotePanelController>(tag: widget.tag);
+    super.dispose();
   }
 
   @override

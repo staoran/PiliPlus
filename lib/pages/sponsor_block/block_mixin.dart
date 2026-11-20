@@ -38,7 +38,6 @@ mixin BlockConfigMixin {
 }
 
 mixin BlockMixin on GetxController {
-  int? _lastBlockPos;
   BlockConfigMixin get blockConfig;
   StreamSubscription<Duration>? _blockListener;
   StreamSubscription<bool>? _playingListener;
@@ -109,11 +108,12 @@ mixin BlockMixin on GetxController {
           for (final item in _segmentList) {
             if (!item.segment.contains(currPosInMilliseconds)) continue;
             switch (item.skipType) {
-              case SkipType.alwaysSkip:
+              case SkipType.alwaysSkip when !item.hasSkipped:
               case SkipType.skipOnce when !item.hasSkipped:
                 item.hasSkipped = true;
                 onSkip(item, skipSource: BlockSkipSource.automatic);
-              case SkipType.skipManually:
+              case SkipType.skipManually when !item.hasSkipped:
+                item.hasSkipped = true;
                 onAddItem(item);
               default:
             }
@@ -140,45 +140,29 @@ mixin BlockMixin on GetxController {
         }
       }
       _blockListener?.cancel();
-      _blockListener = player?.stream.position.listen((position) {
+      _blockListener = targetPlayer?.stream.position.listen((position) {
         if (!isCurrent()) return;
-        int currentPos = position.inSeconds;
-        if (currentPos != _lastBlockPos) {
-          _lastBlockPos = currentPos;
-          final msPos = currentPos * 1000;
-          for (SegmentModel item in _segmentList) {
-            // if (kDebugMode) {
-            //   debugPrint(
-            //       '${position.inSeconds},,${item.segment.first},,${item.segment.second},,${item.skipType.name},,${item.hasSkipped}');
-            // }
-            if (msPos <= item.segment.$1 && item.segment.$1 <= msPos + 1000) {
-              switch (item.skipType) {
-                case SkipType.alwaysSkip:
-                  onSkip(
-                    item,
-                    isSeek: false,
-                    skipSource: BlockSkipSource.automatic,
-                  );
-                  break;
-                case SkipType.skipOnce:
-                  if (!item.hasSkipped) {
-                    item.hasSkipped = true;
-                    onSkip(
-                      item,
-                      isSeek: false,
-                      skipSource: BlockSkipSource.automatic,
-                    );
-                  }
-                  break;
-                case SkipType.skipManually:
-                  onAddItem(item);
-                  break;
-                default:
-                  break;
-              }
-              break;
-            }
+        final msPos = position.inMilliseconds;
+        for (final item in _segmentList) {
+          if (msPos < item.segment.$1 || msPos >= item.segment.$2) {
+            if (item.skipType != SkipType.skipOnce) item.hasSkipped = false;
+            continue;
           }
+          switch (item.skipType) {
+            case SkipType.alwaysSkip when !item.hasSkipped:
+            case SkipType.skipOnce when !item.hasSkipped:
+              item.hasSkipped = true;
+              onSkip(
+                item,
+                isSeek: false,
+                skipSource: BlockSkipSource.automatic,
+              );
+            case SkipType.skipManually when !item.hasSkipped:
+              item.hasSkipped = true;
+              onAddItem(item);
+            default:
+          }
+          break;
         }
       });
     }
@@ -483,7 +467,6 @@ mixin BlockMixin on GetxController {
                             onSkip(
                               item,
                               isSkip: item.skipType != SkipType.showOnly,
-                              isSeek: false,
                             );
                           },
                           style: IconButton.styleFrom(
@@ -528,7 +511,6 @@ mixin BlockMixin on GetxController {
     _stopSkipTimer();
     listData.clear();
     cancelBlockListener();
-    _lastBlockPos = null;
     videoLabel?.value = '';
     _segmentList.clear();
     segmentProgressList.clear();

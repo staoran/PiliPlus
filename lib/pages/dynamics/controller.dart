@@ -112,6 +112,16 @@ class DynamicsController
   }
 
   @override
+  Future<void> showRefresh() {
+    final controller = this.controller;
+    if (controller != null) {
+      singleRefresh();
+      return controller.showRefresh();
+    }
+    return singleRefresh();
+  }
+
+  @override
   void animateToTop() {
     controller?.animateToTop();
     scrollController.animToTop();
@@ -125,14 +135,8 @@ class DynamicsController
         'topOrRefresh',
         const Duration(milliseconds: 500),
         () {
-          // 无论在哪个位置，都回到顶部并刷新
           animateToTop();
-          // 显示刷新动画
-          if (ctr!.showRefreshIndicator != null) {
-            ctr.showRefreshIndicator!();
-          } else {
-            onRefresh();
-          }
+          unawaited(showRefresh());
         },
       );
     } else {

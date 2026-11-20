@@ -11,7 +11,6 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/wbi_sign.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -19,7 +18,6 @@ class HomeController extends GetxController
     with GetSingleTickerProviderStateMixin, ScrollOrRefreshMixin {
   late List<HomeTabType> tabs;
   late TabController tabController;
-
 
   RxBool? showTopBar;
   late final bool hideTopBar;
@@ -35,11 +33,6 @@ class HomeController extends GetxController
 
   @override
   ScrollController get scrollController => controller.scrollController;
-
-  /// 代理到当前 tab controller 的 showRefreshIndicator
-  @override
-  Future<void> Function()? get showRefreshIndicator =>
-      controller.showRefreshIndicator;
 
   AccountService accountService = Get.find<AccountService>();
 
@@ -67,11 +60,10 @@ class HomeController extends GetxController
   }
 
   @override
-  Future<void> onRefresh() {
-    return controller.onRefresh().catchError((e) {
-      if (kDebugMode) debugPrint(e.toString());
-    });
-  }
+  Future<void> onRefresh() => controller.onRefresh();
+
+  @override
+  Future<void> showRefresh() => controller.showRefresh();
 
   void setTabConfig() {
     final tabs = GStorage.setting.get(SettingBoxKey.tabBarSort) as List?;

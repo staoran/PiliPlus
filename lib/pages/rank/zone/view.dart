@@ -41,7 +41,7 @@ class _ZonePageState extends CommonPageState<ZonePage, ZoneController>
   Widget build(BuildContext context) {
     super.build(context);
     return refreshIndicator(
-        key: refreshIndicatorKey,
+      key: controller.refreshKey,
       onRefresh: controller.onRefresh,
       child: CustomScrollView(
         controller: controller.scrollController,

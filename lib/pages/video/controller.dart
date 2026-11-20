@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:convert' show jsonDecode;
+import 'dart:io' show Platform, File;
 import 'dart:math' show min;
 import 'dart:ui';
 
@@ -61,15 +62,15 @@ import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
-import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/nested_scroll_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
-import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/subtitle_utils.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
@@ -77,7 +78,7 @@ import 'package:collection/collection.dart';
 import 'package:dio/dio.dart' show Options;
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
     show ExtendedNestedScrollViewState;
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -85,6 +86,8 @@ import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart' hide Subtitle;
+
+typedef SubtitleData = ({bool isData, String id});
 
 class VideoDetailController extends GetxController
     with GetTickerProviderStateMixin, BlockMixin {
@@ -763,6 +766,34 @@ class VideoDetailController extends GetxController
     }
   }
 
+  BiliDownloadEntryInfo? _subtitleLocalEntry;
+
+  void _loadCachedPlayInfo(BiliDownloadEntryInfo cached) {
+    if (identical(_subtitleLocalEntry, cached)) return;
+    _subtitleLocalEntry = cached;
+    // viewPoint
+    if (plPlayerController.showViewPoints) {
+      final viewPoints = cached.viewPoints;
+      if (viewPoints != null && viewPoints.isNotEmpty) {
+        try {
+          final duration = (cached.totalTimeMilli / 1000);
+          viewPointList.value = viewPoints
+              .map((e) => e.toSegment(duration))
+              .toList();
+        } catch (_) {
+          if (kDebugMode) rethrow;
+        }
+      }
+    }
+    // subtitle
+    final subtitles = cached.subtitles;
+    if (subtitles != null && subtitles.isNotEmpty) {
+      vttSubtitles.clear();
+      this.subtitles.assignAll(subtitles);
+      vttSubtitlesIndex.value = 0;
+    }
+  }
+
   void initFileSource(BiliDownloadEntryInfo entry) {
     this.entry = entry;
     firstVideo = VideoItem(
@@ -1158,7 +1189,7 @@ class VideoDetailController extends GetxController
                   }
                   onRemoveItem(listData.indexOf(item), item);
                 } else if (item is SegmentModel) {
-                  onSkip(item, isSeek: false);
+                  onSkip(item);
                   onRemoveItem(listData.indexOf(item), item);
                 }
               },
@@ -1471,6 +1502,9 @@ class VideoDetailController extends GetxController
       );
     }
 
+    final fileEntry = source is FileSource ? effectiveLocalEntry : null;
+    if (fileEntry != null) _loadCachedPlayInfo(fileEntry);
+
     final canReusePlayedTime = !isQuerying && !_isSwitchingVideo;
     Duration? seek =
         seekToTime ?? defaultST ?? (canReusePlayedTime ? playedTime : null);
@@ -1519,7 +1553,7 @@ class VideoDetailController extends GetxController
                   effectiveLocalEntry?.pageData?.height ??
                   firstVideo.height)
             : firstVideo.height,
-        volume: volume ?? this.volume,
+        volume: volume ?? (fileEntry != null ? fileEntry.volume : this.volume),
         autoFullScreenFlag: autoFullScreenFlag,
         rotate: _rotate,
       );
@@ -1930,6 +1964,8 @@ class VideoDetailController extends GetxController
             videoList.isEmpty ||
             supportFormats == null ||
             supportFormats.isEmpty) {
+          if (kDebugMode)
+            debugPrint('Empty DASH media: $requestBvid/$requestCid');
           SmartDialog.showToast('视频资源不存在');
           return;
         }
@@ -2079,20 +2115,63 @@ class VideoDetailController extends GetxController
     }
   }
 
-  RxList<Subtitle> subtitles = RxList<Subtitle>();
-  final Map<int, ({bool isData, String id})> vttSubtitles = {};
-  late final vttSubtitlesIndex = (-1).obs;
   late final showVP = true.obs;
   late final viewPointList = <ViewPointSegment>[].obs;
+
+  final RxList<Subtitle> subtitles = RxList<Subtitle>();
+  final Map<int, SubtitleData> vttSubtitles = {};
+  late final vttSubtitlesIndex = (-1).obs;
 
   @protected
   Future<String?> requestSubtitle(String url) => VideoHttp.getSubtitles(url);
 
-  // 设定字幕轨道
+  int _subtitleSelectionVersion = 0;
+
+  Future<SubtitleData?> _readFileSubtitle(String path, String fileName) async {
+    if (!File(path).existsSync()) return null;
+    if (!SubtitleUtils.isJson(fileName)) return (isData: false, id: path);
+    try {
+      final contents = await File(path).readAsString();
+      final vtt = await compute<List, String>(
+        SubtitleUtils.json2Vtt,
+        jsonDecode(contents)['body'] as List,
+      );
+      return (isData: true, id: vtt);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> addFileSubtitle({
+    required String path,
+    required String fileName,
+  }) async {
+    final isCurrent = _captureSubtitleRequest();
+    final data = await _readFileSubtitle(path, fileName);
+    if (!isCurrent()) return;
+    if (data == null) {
+      SmartDialog.showToast('无法读取字幕');
+      return;
+    }
+    vttSubtitles[subtitles.length] = data;
+    subtitles.add(
+      Subtitle(
+        id: null,
+        lan: '',
+        lanDoc: fileName.split('.').first,
+      ),
+    );
+    await setSubtitle(subtitles.length);
+  }
+
   Future<void> setSubtitle(int index, {bool Function()? isCurrent}) async {
     final requestIsCurrent = _captureSubtitleRequest();
-    bool canApply() => requestIsCurrent() && (isCurrent?.call() ?? true);
-    if (!canApply()) return;
+    final version = ++_subtitleSelectionVersion;
+    bool canApply() =>
+        version == _subtitleSelectionVersion &&
+        requestIsCurrent() &&
+        (isCurrent?.call() ?? true);
+    if (!canApply() || index > subtitles.length) return;
     final player = plPlayerController.videoPlayerController;
     if (index <= 0) {
       await player?.setSubtitleTrack(.no());
@@ -2100,32 +2179,24 @@ class VideoDetailController extends GetxController
       return;
     }
 
-    if (index > subtitles.length) return;
     final sub = subtitles[index - 1];
-    Future<void> setSub(({bool isData, String id}) subtitle) async {
-      if (!canApply()) return;
-
-      String subUri = subtitle.id;
-      if (subtitle.isData) {
-        subUri = 'memory://$subUri';
-      }
-      await player?.setSubtitleTrack(
-        SubtitleTrack(subUri, sub.lanDoc, sub.lan, uri: true),
-      );
-      if (canApply()) vttSubtitlesIndex.value = index;
-    }
-
     var subtitle = vttSubtitles[index - 1];
     if (subtitle == null) {
-      final result = await requestSubtitle(sub.subtitleUrl!);
-      if (canApply() && result != null) {
-        subtitle = (isData: true, id: result);
-        vttSubtitles[index - 1] = subtitle;
-      } else {
-        return;
+      if (sub is LocalSubtitle) {
+        subtitle = await _readFileSubtitle(sub.path, PathUtils.subtitleExt);
+      } else if (sub.subtitleUrl case final url?) {
+        final result = await requestSubtitle(url);
+        if (result != null) subtitle = (isData: true, id: result);
       }
+      if (!canApply() || subtitle == null) return;
+      vttSubtitles[index - 1] = subtitle;
     }
-    await setSub(subtitle);
+
+    final uri = subtitle.isData ? 'memory://${subtitle.id}' : subtitle.id;
+    await player?.setSubtitleTrack(
+      SubtitleTrack(uri, sub.lanDoc, sub.lan, uri: true),
+    );
+    if (canApply()) vttSubtitlesIndex.value = index;
   }
 
   // interactive video
@@ -2223,16 +2294,10 @@ class VideoDetailController extends GetxController
       if (plPlayerController.showViewPoints &&
           response.viewPoints?.firstOrNull?.type == 2) {
         try {
-          viewPointList.value = response.viewPoints!.map((item) {
-            final end = (item.to! / (data.timeLength! / 1000)).clamp(0.0, 1.0);
-            return ViewPointSegment(
-              end: end,
-              title: item.content,
-              url: item.imgUrl,
-              from: item.from,
-              to: item.to,
-            );
-          }).toList();
+          final duration = (data.timeLength! / 1000);
+          viewPointList.value = response.viewPoints!
+              .map((e) => e.toSegment(duration))
+              .toList();
         } catch (_) {}
       }
 
@@ -2242,25 +2307,9 @@ class VideoDetailController extends GetxController
         final res = await requestDmView(requestAid, requestCid);
         if (!isCurrent()) return;
         if (res case Success(:final response)) {
-          if (response.hasSubtitle() &&
-              response.subtitle.subtitles.isNotEmpty) {
-            await _setSubtitle(
-              response.subtitle.subtitles
-                  .map(
-                    (i) => Subtitle(
-                      lan: i.lan,
-                      lanDoc: i.lanDoc,
-                      subtitleUrl: i.subtitleUrl.replaceFirst(
-                        RegExp('^https?:'),
-                        '',
-                      ),
-                      isAi: i.type == .AI,
-                    ),
-                  )
-                  .toList()
-                ..sort(),
-              isCurrent: isCurrent,
-            );
+          if (DmGrpc.dmViewToSubtitle(response) case final sub?
+              when (sub.isNotEmpty)) {
+            await _setSubtitle(sub, isCurrent: isCurrent);
           }
         } else {
           res.toast();
@@ -2759,6 +2808,7 @@ class VideoDetailController extends GetxController
     savedDanmaku = null;
 
     // subtitle
+    _subtitleLocalEntry = null;
     subtitles.clear();
     vttSubtitlesIndex.value = -1;
     vttSubtitles.clear();
@@ -2770,6 +2820,13 @@ class VideoDetailController extends GetxController
 
     // 清除视频尺寸监听
     _cancelVideoSizeSubscriptions();
+    // view point
+    if (plPlayerController.showViewPoints) {
+      viewPointList.clear();
+    }
+
+    // volume
+    volume = null;
 
     if (!isFileSource) {
       // language
@@ -2779,11 +2836,6 @@ class VideoDetailController extends GetxController
       // dm trend
       if (plPlayerController.showDmChart) {
         dmTrend.value = null;
-      }
-
-      // view point
-      if (plPlayerController.showViewPoints) {
-        viewPointList.clear();
       }
 
       // interactive video
@@ -2874,7 +2926,7 @@ class VideoDetailController extends GetxController
     try {
       if (plPlayerController.enableBlock) {
         if (listData.lastOrNull case final SegmentModel item) {
-          onSkip(item, isSeek: false);
+          onSkip(item);
           onRemoveItem(listData.indexOf(item), item);
           return true;
         }
@@ -3025,11 +3077,11 @@ class VideoDetailController extends GetxController
         useSafeArea: true,
         isScrollControlled: true,
         constraints: BoxConstraints(
-          maxWidth: min(640, context.mediaQueryShortestSide),
+          maxWidth: min(640, MediaQuery.shortestSideOf(context)),
         ),
         builder: (context) {
           final maxChildSize =
-              PlatformUtils.isMobile && !context.mediaQuerySize.isPortrait
+              PlatformUtils.isMobile && !MediaQuery.isPortraitOf(context)
               ? 1.0
               : 0.7;
           return DraggableScrollableSheet(

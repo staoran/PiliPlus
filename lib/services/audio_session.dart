@@ -1,75 +1,89 @@
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/services/service_locator.dart';
 import 'package:audio_session/audio_session.dart';
 
 class AudioSessionHandler {
-  late AudioSession session;
-  bool _playInterrupted = false;
-
-  Future<bool> setActive(bool active) {
-    return session.setActive(active);
-  }
+  late final Future<AudioSession> _session;
+  void Function()? _resume;
+  void Function()? _restoreVolume;
 
   AudioSessionHandler() {
-    initSession();
+    _session = _initSession();
   }
 
-  Future<void> initSession() async {
-    session = await AudioSession.instance;
-    session.configure(const AudioSessionConfiguration.music());
+  Future<bool> setActive(bool active) async =>
+      (await _session).setActive(active);
 
-    session.interruptionEventStream.listen((event) {
-      final playerStatus = PlPlayerController.getPlayerStatusIfExists();
-      // final player = PlPlayerController.getInstance();
-      if (event.begin) {
-        if (playerStatus != PlayerStatus.playing) return;
-        // if (!player.playerStatus.playing) return;
-        switch (event.type) {
-          case AudioInterruptionType.duck:
-            PlPlayerController.setVolumeIfExists(
-              (PlPlayerController.getVolumeIfExists() ?? 0) * 0.5,
-              showIndicator: false,
-            );
-            // player.setVolume(player.volume.value * 0.5);
-            break;
-          case AudioInterruptionType.pause:
-            PlPlayerController.pauseIfExists(isInterrupt: true);
-            // player.pause(isInterrupt: true);
-            _playInterrupted = true;
-            break;
-          case AudioInterruptionType.unknown:
-            PlPlayerController.pauseIfExists(isInterrupt: true);
-            // player.pause(isInterrupt: true);
-            _playInterrupted = true;
-            break;
-        }
-      } else {
-        switch (event.type) {
-          case AudioInterruptionType.duck:
-            PlPlayerController.setVolumeIfExists(
-              (PlPlayerController.getVolumeIfExists() ?? 0) * 2,
-              showIndicator: false,
-            );
-            // player.setVolume(player.volume.value * 2);
-            break;
-          case AudioInterruptionType.pause:
-            if (_playInterrupted) PlPlayerController.playIfExists();
-            //player.play();
-            break;
-          case AudioInterruptionType.unknown:
-            break;
-        }
-        _playInterrupted = false;
-      }
-    });
+  Future<AudioSession> _initSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    session.interruptionEventStream.listen(_onInterrupted);
 
     // 耳机拔出暂停
     session.becomingNoisyEventStream.listen((_) {
-      PlPlayerController.pauseIfExists();
-      // final player = PlPlayerController.getInstance();
-      // if (player.playerStatus.playing) {
-      //   player.pause();
-      // }
+      videoPlayerServiceHandler?.onPause?.call() ??
+          PlPlayerController.pauseIfExists();
     });
+    return session;
+  }
+
+  void _onInterrupted(AudioInterruptionEvent event) {
+    if (!event.begin) {
+      switch (event.type) {
+        case .duck:
+          final restore = _restoreVolume;
+          _restoreVolume = null;
+          restore?.call();
+        case .pause:
+        case .unknown:
+          final resume = _resume;
+          _resume = null;
+          if (event.type == .pause) resume?.call();
+      }
+      return;
+    }
+
+    final player = PlPlayerController.controlledPlayer;
+    final owner = PlPlayerController.playOwner;
+    final nativePlayer = player?.videoPlayerController;
+    final dataSource = player?.cid;
+    bool isCurrentVideo() =>
+        identical(PlPlayerController.controlledPlayer, player) &&
+        identical(player?.videoPlayerController, nativePlayer) &&
+        PlPlayerController.playOwner == owner &&
+        player?.cid == dataSource;
+    if (event.type == .duck) {
+      if (player != null && player.playerStatus.value.isPlaying) {
+        final volume = player.volume.value;
+        _restoreVolume = () {
+          if (isCurrentVideo()) player.setVolume(volume, showIndicator: false);
+        };
+        player.setVolume(volume * 0.5, showIndicator: false);
+      }
+      return;
+    }
+
+    final handler = videoPlayerServiceHandler;
+    final audioId = handler?.mediaItem.value?.id;
+    final isAudioPlaying = handler?.isPlaying;
+    final play = handler?.onPlay;
+    if (isAudioPlaying != null) {
+      if (isAudioPlaying()) {
+        _resume = () {
+          if (handler?.onPlay == play &&
+              handler?.isPlaying == isAudioPlaying &&
+              handler?.mediaItem.value?.id == audioId &&
+              PlPlayerController.playOwner == owner) {
+            play?.call();
+          }
+        };
+        handler?.onPause?.call();
+      }
+    } else if (player != null && player.playerStatus.value.isPlaying) {
+      _resume = () {
+        if (isCurrentVideo()) player.play();
+      };
+      player.pause(isInterrupt: true);
+    }
   }
 }

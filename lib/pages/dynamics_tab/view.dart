@@ -119,7 +119,7 @@ class _DynamicsTabPageState
     super.build(context);
     return onBuild(
       refreshIndicator(
-        key: refreshIndicatorKey,
+        key: controller.refreshKey,
         onRefresh: onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

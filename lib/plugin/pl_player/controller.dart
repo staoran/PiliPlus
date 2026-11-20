@@ -677,7 +677,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   static PlPlayerController? get instance => _instance;
-  static PlPlayerController? get _controlledPlayer =>
+  static PlPlayerController? get controlledPlayer =>
       _mediaControlsPlayer ?? _instance;
 
   static bool instanceExists() {
@@ -731,7 +731,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     bool notify = true,
     bool isInterrupt = false,
   }) {
-    final player = _controlledPlayer;
+    final player = controlledPlayer;
     if (player?.playerStatus.isPlaying ?? false) {
       return player?.pause(notify: notify, isInterrupt: isInterrupt);
     }
@@ -742,18 +742,18 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     Duration position, {
     bool isSeek = true,
   }) {
-    return _controlledPlayer?.seekTo(position, isSeek: isSeek);
+    return controlledPlayer?.seekTo(position, isSeek: isSeek);
   }
 
   static double? getVolumeIfExists() {
-    return _controlledPlayer?.volume.value;
+    return controlledPlayer?.volume.value;
   }
 
   static Future<void>? setVolumeIfExists(
     double volumeNew, {
     bool showIndicator = true,
   }) {
-    return _controlledPlayer?.setVolume(
+    return controlledPlayer?.setVolume(
       volumeNew,
       showIndicator: showIndicator,
     );
@@ -1093,9 +1093,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     final opt = {
       'video-sync': Pref.videoSync,
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
-      'volume':
-          (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
-              .toString(),
     };
     if (hwdec != null) {
       opt['hwdec'] = hwdec!;
@@ -1112,6 +1109,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
+    if (!isCurrent()) {
+      await player.dispose();
+      return null;
+    }
+    await setVolumeCapped(
+      player,
+      PlatformUtils.isMobile ? Pref.playerVolume / 100 : volume.value,
+    );
     if (!isCurrent()) {
       await player.dispose();
       return null;
@@ -1907,10 +1912,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _playbackControlRevision++;
     _cancelPendingCompleted(reason: 'play');
     // 播放时自动隐藏控制条
-    controls = !hideControls;
+    if (hideControls) controls = false;
     // repeat为true，将从头播放
     if (repeat) {
-      await seekTo(Duration.zero, isSeek: false);
+      await seekTo(Duration.zero);
     }
 
     await _videoPlayerController?.play();
@@ -1965,9 +1970,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void onSeekEnd() {
-    if (showSeekPreview) {
-      showPreview.value = false;
-    }
+    hidePreviewIfNeeded();
     hasToasted = false;
     isSeeking.value = false;
     hideTaskControls();
@@ -1983,7 +1986,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       this.volume.value = volume;
       try {
         if (PlatformUtils.isDesktop) {
-          await _videoPlayerController!.setVolume(volume * 100);
+          await setVolumeCapped(_videoPlayerController, volume);
         } else {
           FlutterVolumeController.updateShowSystemUI(false);
           await FlutterVolumeController.setVolume(volume);
@@ -2078,8 +2081,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   Future<void> onDoubleTapCenter() async {
     if (!isLive && isCompleted) {
       await play(repeat: true);
+    } else if (_videoPlayerController?.state.playing == true) {
+      await pause();
     } else {
-      videoPlayerController!.playOrPause();
+      await play(hideControls: false);
     }
   }
 
@@ -2126,7 +2131,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   void onForwardBackward(Duration duration) {
     seekTo(
       duration.clamp(Duration.zero, videoPlayerController!.state.duration),
-      isSeek: false,
     ).whenComplete(play);
   }
 
@@ -2383,7 +2387,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (_disposal case final disposal?) return disposal;
     resetScreenRotation();
     cancelLongPressTimer();
-    _cancelSubForSeek();
     if (!_isCloseAll && _playerCount > 1) {
       _playerCount -= 1;
       _heartDuration = 0;
@@ -2493,8 +2496,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  void _clearPreview() {
+  void hidePreviewIfNeeded() {
+    if (showSeekPreview) {
+      hidePreview();
+    }
+  }
+
+  void hidePreview() {
+    hoverDx = null;
     showPreview.value = false;
+  }
+
+  void _clearPreview() {
+    hidePreview();
     previewIndex.value = null;
     videoShot = null;
     for (final i in previewCache.values) {

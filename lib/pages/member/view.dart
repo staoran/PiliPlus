@@ -37,7 +37,6 @@ import 'package:PiliPlus/pages/member_video_web/season_series/view.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -47,6 +46,7 @@ import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 
 class MemberPage extends StatefulWidget {
@@ -191,7 +191,7 @@ class _MemberPageState extends State<MemberPage> {
       useSafeArea: true,
       isScrollControlled: true,
       constraints: BoxConstraints(
-        maxWidth: math.min(640, context.mediaQueryShortestSide),
+        maxWidth: math.min(640, MediaQuery.shortestSideOf(context)),
       ),
       builder: (context) {
         final scheme = ColorScheme.of(context);
@@ -517,6 +517,17 @@ class _MemberPageState extends State<MemberPage> {
                   Icon(Icons.linear_scale, size: 18),
                   SizedBox(width: 10),
                   Text('经验记录'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              onTap: () => Get.toNamed('/fansMedal'),
+              child: const Row(
+                spacing: 10,
+                mainAxisSize: .min,
+                children: [
+                  Icon(MdiIcons.medalOutline, size: 18),
+                  Text('粉丝勋章'),
                 ],
               ),
             ),

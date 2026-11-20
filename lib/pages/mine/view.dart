@@ -88,7 +88,7 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
           child: Material(
             type: .transparency,
             child: refreshIndicator(
-              key: refreshIndicatorKey,
+              key: controller.refreshKey,
               onRefresh: controller.onRefresh,
               child: onBuild(
                 ListView(
