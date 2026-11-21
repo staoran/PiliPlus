@@ -39,7 +39,7 @@ PODS:
   - GT3Captcha-iOS (0.15.9)
   - image_cropper (0.0.5):
     - Flutter
-    - TOCropViewController (~> 3.1.2)
+    - TOCropViewController (~> 3.2.0)
   - image_picker_ios (0.0.1):
     - Flutter
   - live_photo_maker (0.0.3):
@@ -69,7 +69,7 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
-  - TOCropViewController (3.1.2)
+  - TOCropViewController (3.2.0)
   - url_launcher_ios (0.0.1):
     - Flutter
   - wakelock_plus (0.0.1):
@@ -210,7 +210,7 @@ SPEC CHECKSUMS:
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  TOCropViewController: a916930c465b5d9445a74d95e0c0da931771b4df
+  TOCropViewController: 38189148d7014abafbb2914112fd767262d22659
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
 
