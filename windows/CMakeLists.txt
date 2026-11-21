@@ -87,6 +87,70 @@ endforeach()
 set_property(TARGET media_kit_video_plugin PROPERTY SOURCES "${MEDIA_KIT_VIDEO_PATCHED_FILES}")
 target_include_directories(media_kit_video_plugin PRIVATE "${MEDIA_KIT_VIDEO_SOURCE}")
 
+# Replace only the runtime libmpv DLL. The media_kit plugin remains compiled
+# against its existing headers/import library so the other platform assets and
+# the 80B texture-release patch stay unchanged.
+set(PILIPLUS_LIBMPV_ARCHIVE
+  "${CMAKE_BINARY_DIR}/libmpv-v0.42.0-x86_64-w64-mingw32-lgpl.zip")
+set(PILIPLUS_LIBMPV_URL
+  "https://github.com/mpv-player/mpv/releases/download/v0.42.0/libmpv-v0.42.0-x86_64-w64-mingw32-lgpl.zip")
+set(PILIPLUS_LIBMPV_DOWNLOAD
+  "${PILIPLUS_LIBMPV_ARCHIVE}.partial")
+set(PILIPLUS_LIBMPV_SHA256
+  "8e5f77430efc53ef175804ba6618527e3af0448a0dcabf04d3cc72659d1a6fce")
+set(PILIPLUS_LIBMPV_DLL_SHA256
+  "94fb87247732c59915cd59808bc582e843a71c22214b7b6c1e5563aa8149cef4")
+if(NOT EXISTS "${PILIPLUS_LIBMPV_ARCHIVE}")
+  find_program(PILIPLUS_CURL_EXECUTABLE curl.exe)
+  if(NOT PILIPLUS_CURL_EXECUTABLE)
+    message(FATAL_ERROR "curl.exe is required to download libmpv 0.42.0")
+  endif()
+  file(REMOVE "${PILIPLUS_LIBMPV_DOWNLOAD}")
+  execute_process(
+    COMMAND "${PILIPLUS_CURL_EXECUTABLE}" --fail --location --silent
+      --show-error --connect-timeout 15 --max-time 180
+      --output "${PILIPLUS_LIBMPV_DOWNLOAD}" "${PILIPLUS_LIBMPV_URL}"
+    RESULT_VARIABLE PILIPLUS_LIBMPV_DOWNLOAD_RESULT)
+  if(NOT PILIPLUS_LIBMPV_DOWNLOAD_RESULT EQUAL 0)
+    file(REMOVE "${PILIPLUS_LIBMPV_DOWNLOAD}")
+    message(FATAL_ERROR "Could not download the libmpv 0.42.0 archive")
+  endif()
+  file(SHA256 "${PILIPLUS_LIBMPV_DOWNLOAD}" PILIPLUS_LIBMPV_DOWNLOAD_SHA256)
+  if(NOT PILIPLUS_LIBMPV_DOWNLOAD_SHA256 STREQUAL PILIPLUS_LIBMPV_SHA256)
+    file(REMOVE "${PILIPLUS_LIBMPV_DOWNLOAD}")
+    message(FATAL_ERROR "The downloaded libmpv 0.42.0 archive failed SHA-256 verification")
+  endif()
+  file(RENAME "${PILIPLUS_LIBMPV_DOWNLOAD}" "${PILIPLUS_LIBMPV_ARCHIVE}")
+endif()
+file(SHA256 "${PILIPLUS_LIBMPV_ARCHIVE}" PILIPLUS_LIBMPV_ARCHIVE_SHA256)
+if(NOT PILIPLUS_LIBMPV_ARCHIVE_SHA256 STREQUAL PILIPLUS_LIBMPV_SHA256)
+  message(FATAL_ERROR "The downloaded libmpv 0.42.0 archive failed SHA-256 verification")
+endif()
+
+set(PILIPLUS_LIBMPV_STAGING "${CMAKE_BINARY_DIR}/libmpv-0.42.0")
+set(PILIPLUS_LIBMPV_DLL "${PILIPLUS_LIBMPV_STAGING}/libmpv-2.dll")
+set(PILIPLUS_LIBMPV_LICENSE "${PILIPLUS_LIBMPV_STAGING}/LICENSE.LGPL")
+if(NOT EXISTS "${PILIPLUS_LIBMPV_DLL}")
+  file(MAKE_DIRECTORY "${PILIPLUS_LIBMPV_STAGING}")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E tar xf "${PILIPLUS_LIBMPV_ARCHIVE}"
+    WORKING_DIRECTORY "${PILIPLUS_LIBMPV_STAGING}"
+    RESULT_VARIABLE PILIPLUS_LIBMPV_EXTRACT_RESULT)
+  if(NOT PILIPLUS_LIBMPV_EXTRACT_RESULT EQUAL 0)
+    message(FATAL_ERROR "Could not extract the libmpv 0.42.0 archive")
+  endif()
+endif()
+if(NOT EXISTS "${PILIPLUS_LIBMPV_DLL}")
+  message(FATAL_ERROR "The libmpv 0.42.0 archive does not contain libmpv-2.dll")
+endif()
+if(NOT EXISTS "${PILIPLUS_LIBMPV_LICENSE}")
+  message(FATAL_ERROR "The libmpv 0.42.0 archive does not contain LICENSE.LGPL")
+endif()
+file(SHA256 "${PILIPLUS_LIBMPV_DLL}" PILIPLUS_LIBMPV_EXTRACTED_DLL_SHA256)
+if(NOT PILIPLUS_LIBMPV_EXTRACTED_DLL_SHA256 STREQUAL PILIPLUS_LIBMPV_DLL_SHA256)
+  message(FATAL_ERROR "The extracted libmpv 0.42.0 DLL failed SHA-256 verification")
+endif()
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
@@ -116,6 +180,14 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+install(FILES "${PILIPLUS_LIBMPV_DLL}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  RENAME "libmpv-2.dll"
+  COMPONENT Runtime)
+install(FILES "${PILIPLUS_LIBMPV_LICENSE}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  RENAME "libmpv-LICENSE.LGPL"
+  COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
