@@ -1,10 +1,13 @@
+import 'package:PiliPlus/common/widgets/loading_widget/button_loading.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -46,7 +49,37 @@ class _FavPanelState extends State<FavPanel> {
     }
   }
 
-  Widget get _buildBody {
+  void _closePanel() => Navigator.pop(context);
+
+  Future<void> _submit() async {
+    if (widget.ctr.isActionLoading(IntroAction.favorite)) return;
+    feedBack();
+    final inPlayerWindow = PlayerWindowNavigation.maybeOf(context) != null;
+    if (!inPlayerWindow) SmartDialog.showLoading(msg: '请求中');
+    final LoadingState<bool>? result;
+    try {
+      result = await widget.ctr.actionFavVideo();
+    } finally {
+      if (!inPlayerWindow) SmartDialog.dismiss(status: SmartStatus.loading);
+    }
+    if (!mounted ||
+        result == null ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    final message = switch (result) {
+      Success(:final response) => '${response ? '' : '取消'}收藏成功',
+      _ => result.toString(),
+    };
+    if (inPlayerWindow) {
+      PlayerWindowNavigation.showToast(context, message);
+    } else {
+      SmartDialog.showToast(message);
+    }
+    if (result.isSuccess) _closePanel();
+  }
+
+  Widget _buildBody(bool isSaving) {
     switch (loadingState) {
       case Loading():
         return m3eLoading;
@@ -79,7 +112,7 @@ class _FavPanelState extends State<FavPanel> {
                   }
 
                   return ListTile(
-                    onTap: isFull ? null : onTap,
+                    onTap: isFull || isSaving ? null : onTap,
                     dense: true,
                     leading: BiliUtils.isPublicFav(item.attr)
                         ? isFull
@@ -115,7 +148,7 @@ class _FavPanelState extends State<FavPanel> {
                             child: Checkbox(
                               value: isChecked,
                               materialTapTargetSize: .shrinkWrap,
-                              onChanged: (bool? checkValue) => onTap(),
+                              onChanged: isSaving ? null : (_) => onTap(),
                             ),
                           ),
                   );
@@ -134,30 +167,35 @@ class _FavPanelState extends State<FavPanel> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Obx(_buildPanel);
+
+  Widget _buildPanel() {
+    final isSaving = widget.ctr.isActionLoading(IntroAction.favorite);
     return Column(
       children: [
         AppBar(
           backgroundColor: Colors.transparent,
           leading: IconButton(
             tooltip: '关闭',
-            onPressed: Get.back,
+            onPressed: _closePanel,
             icon: const Icon(Icons.close_outlined),
           ),
           title: const Text('添加到收藏夹'),
           actions: [
             TextButton.icon(
-              onPressed: () => Get.toNamed('/createFav')?.then((data) {
-                if (data is FavFolderInfo && mounted) {
-                  widget.ctr.favFolderData.value.list?.insert(
-                    1,
-                    data
-                      ..favState = 1
-                      ..mediaCount = 1,
-                  );
-                  setState(() {});
-                }
-              }),
+              onPressed: isSaving
+                  ? null
+                  : () => Get.toNamed('/createFav')?.then((data) {
+                      if (data is FavFolderInfo && mounted) {
+                        widget.ctr.favFolderData.value.list?.insert(
+                          1,
+                          data
+                            ..favState = 1
+                            ..mediaCount = 1,
+                        );
+                        setState(() {});
+                      }
+                    }),
               icon: Icon(Icons.add, color: colorScheme.primary),
               label: const Text('新建收藏夹'),
               style: const ButtonStyle(
@@ -170,7 +208,7 @@ class _FavPanelState extends State<FavPanel> {
             const SizedBox(width: 16),
           ],
         ),
-        Expanded(child: _buildBody),
+        Expanded(child: _buildBody(isSaving)),
         Divider(
           height: 1,
           color: colorScheme.outline.withValues(alpha: 0.1),
@@ -187,7 +225,7 @@ class _FavPanelState extends State<FavPanel> {
             mainAxisAlignment: .end,
             children: [
               FilledButton.tonal(
-                onPressed: Get.back,
+                onPressed: _closePanel,
                 style: FilledButton.styleFrom(
                   visualDensity: .compact,
                   foregroundColor: colorScheme.outline,
@@ -196,12 +234,14 @@ class _FavPanelState extends State<FavPanel> {
                 child: const Text('取消'),
               ),
               FilledButton.tonal(
-                onPressed: () {
-                  feedBack();
-                  widget.ctr.actionFavVideo();
-                },
+                onPressed: isSaving || loadingState is! Success
+                    ? null
+                    : _submit,
                 style: const ButtonStyle(visualDensity: .compact),
-                child: const Text('完成'),
+                child: LoadingButtonChild(
+                  isLoading: isSaving,
+                  child: const Text('完成'),
+                ),
               ),
             ],
           ),

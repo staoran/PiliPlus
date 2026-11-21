@@ -1,3 +1,4 @@
+import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/download/download_info.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart';
@@ -46,8 +47,13 @@ class LocalIntroController extends CommonIntroController {
   }
 
   @override
-  Future<void> actionFavVideo({bool isQuick = false}) async {
-    SmartDialog.showToast('离线播放不支持该操作');
+  Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) async {
+    const error = Error('离线播放不支持该操作');
+    if (isQuick) {
+      error.toast();
+      return null;
+    }
+    return error;
   }
 
   @override

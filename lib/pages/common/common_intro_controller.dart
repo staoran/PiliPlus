@@ -21,7 +21,6 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -283,8 +282,8 @@ mixin FavMixin on TripleMixin {
 
   void updateFavCount(int count);
 
-  Future<void> actionFavVideo({bool isQuick = false}) async {
-    await runWithActionLoading(IntroAction.favorite, () async {
+  Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) {
+    return runWithActionLoading<LoadingState<bool>?>(.favorite, () async {
       final (rid, type) = getFavRidType;
       // 收藏至默认文件夹
       if (isQuick) {
@@ -310,47 +309,38 @@ mixin FavMixin on TripleMixin {
           SmartDialog.dismiss();
           res.toast();
         }
-        return;
+        return null;
       }
 
-      List<int?> addMediaIdsNew = [];
-      List<int?> delMediaIdsNew = [];
-      try {
-        for (final i in favFolderData.value.list!) {
-          bool isFaved = favIds?.contains(i.id) == true;
-          if (i.favState == 1) {
-            if (!isFaved) {
-              addMediaIdsNew.add(i.id);
-            }
-          } else {
-            if (isFaved) {
-              delMediaIdsNew.add(i.id);
-            }
-          }
+      final folders = favFolderData.value.list;
+      if (folders == null) return null;
+      final favIds = this.favIds;
+      final addMediaIds = <int>[];
+      final delMediaIds = <int>[];
+      for (final folder in folders) {
+        final wasFavorite = favIds?.contains(folder.id) == true;
+        if (folder.favState == 1 && !wasFavorite) {
+          addMediaIds.add(folder.id);
+        } else if (folder.favState != 1 && wasFavorite) {
+          delMediaIds.add(folder.id);
         }
-      } catch (e) {
-        if (kDebugMode) debugPrint(e.toString());
       }
-      SmartDialog.showLoading(msg: '请求中');
       final result = await FavHttp.favVideo(
         resources: '$rid:$type',
-        addIds: addMediaIdsNew.join(','),
-        delIds: delMediaIdsNew.join(','),
+        addIds: addMediaIds.join(','),
+        delIds: delMediaIds.join(','),
       );
-      SmartDialog.dismiss();
-      if (result.isSuccess) {
-        Get.back();
-        final newVal =
-            addMediaIdsNew.isNotEmpty ||
-            favIds?.length != delMediaIdsNew.length;
-        if (hasFav.value != newVal) {
-          updateFavCount(newVal ? 1 : -1);
-          hasFav.value = newVal;
-        }
-        SmartDialog.showToast('${newVal ? '' : '取消'}收藏成功');
-      } else {
-        result.toast();
+      if (!result.isSuccess) return Error(result.toString());
+
+      final isFavorite =
+          addMediaIds.isNotEmpty || (favIds?.length ?? 0) > delMediaIds.length;
+      if (!isClosed &&
+          getFavRidType == (rid, type) &&
+          hasFav.value != isFavorite) {
+        updateFavCount(isFavorite ? 1 : -1);
+        hasFav.value = isFavorite;
       }
+      return Success(isFavorite);
     });
   }
 }
