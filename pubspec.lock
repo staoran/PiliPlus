@@ -1186,11 +1186,11 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit
-      ref: native
-      resolved-ref: "73771ec38176be2d984a3049c28177bce23b54a0"
+      ref: "5934fee0992f52ccffd567502cf507a71b30b655"
+      resolved-ref: "5934fee0992f52ccffd567502cf507a71b30b655"
       url: "https://github.com/My-Responsitories/media-kit.git"
     source: git
-    version: "1.1.11"
+    version: "1.2.6"
   media_kit_libs_android_video:
     dependency: "direct overridden"
     description:
@@ -1256,11 +1256,11 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit_video
-      ref: native
-      resolved-ref: "85f0a69ea66b100882b27a3375c72e5155375343"
-      url: "https://github.com/bggRGjQaUbCoE/media-kit.git"
+      ref: "5934fee0992f52ccffd567502cf507a71b30b655"
+      resolved-ref: "5934fee0992f52ccffd567502cf507a71b30b655"
+      url: "https://github.com/My-Responsitories/media-kit.git"
     source: git
-    version: "1.2.5"
+    version: "2.0.1"
   meta:
     dependency: transitive
     description:
@@ -1576,7 +1576,7 @@ packages:
     source: hosted
     version: "5.1.0"
   screen_brightness_android:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: screen_brightness_android
       sha256: "2008ad8e9527cc968f7a4de1ec58b476d495b3c612a149dbd6550c4f046da147"
@@ -1584,7 +1584,7 @@ packages:
     source: hosted
     version: "2.1.6"
   screen_brightness_ios:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: screen_brightness_ios
       sha256: "352d355e8523a186ba1e494b74218e5ca96e51975a0630b8ed89fbb7ff609762"

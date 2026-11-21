@@ -62,6 +62,22 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+project(":media_kit_video") {
+    plugins.withId("com.android.library") {
+        val videoSources = layout.buildDirectory.dir("media_kit_video_java")
+        val prepareVideoSources = tasks.register<Sync>("prepareVideoSources") {
+            from(file("src/main/java")) {
+                exclude("com/alexmercerind/media_kit_video/VideoOutput.java")
+            }
+            from(rootProject.file("media_kit_video/android"))
+            into(videoSources)
+        }
+        extensions.getByType<com.android.build.api.dsl.LibraryExtension>()
+            .sourceSets.getByName("main").java.setSrcDirs(listOf(videoSources))
+        tasks.named("preBuild").configure { dependsOn(prepareVideoSources) }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

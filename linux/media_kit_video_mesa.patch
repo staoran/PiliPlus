@@ -1,0 +1,106 @@
+# Preserve PiliPlus #3261 (bggRGjQaUbCoE/media-kit 85f0a69e, MIT license) on 5934fee.
+diff --git a/texture_gl.cc b/texture_gl.cc
+index ba470ea59..2ae55b81c 100644
+--- a/texture_gl.cc
++++ b/texture_gl.cc
+@@ -40,7 +40,9 @@ static void init_egl_image_extensions() {
+ struct _TextureGL {
+   FlTextureGL parent_instance;
+   guint32 name;              // Flutter's texture name
+-  guint32 fbo;               // mpv's FBO
++  guint32 fbo;               // mpv's render target
++  guint32 export_texture;    // Separate texture shared with Flutter via EGLImage
++  guint32 export_fbo;
+   guint32 mpv_texture;       // mpv's texture
+   EGLImageKHR egl_image;     // EGLImage for sharing between contexts
+   guint32 current_width;
+@@ -53,6 +55,8 @@ G_DEFINE_TYPE(TextureGL, texture_gl, fl_texture_gl_get_type())
+ static void texture_gl_init(TextureGL* self) {
+   self->name = 0;
+   self->fbo = 0;
++  self->export_texture = 0;
++  self->export_fbo = 0;
+   self->mpv_texture = 0;
+   self->egl_image = EGL_NO_IMAGE_KHR;
+   self->current_width = 1;
+@@ -99,6 +103,12 @@ static void texture_gl_dispose(GObject* object) {
+         glDeleteFramebuffers(1, &self->fbo);
+         self->fbo = 0;
+       }
++      if (self->export_fbo != 0) {
++        glDeleteFramebuffers(1, &self->export_fbo);
++        glDeleteTextures(1, &self->export_texture);
++        self->export_fbo = 0;
++        self->export_texture = 0;
++      }
+
+       // Restore previous context
+       eglMakeCurrent(current_display, current_draw, current_read, current_context);
+@@ -160,6 +170,8 @@ gboolean texture_gl_populate_texture(FlTextureGL* texture,
+         if (self->egl_image != EGL_NO_IMAGE_KHR) {
+           eglDestroyImageKHR(egl_display, self->egl_image);
+         }
++        glDeleteFramebuffers(1, &self->export_fbo);
++        glDeleteTextures(1, &self->export_texture);
+       }
+
+       // Create mpv's FBO and texture
+@@ -179,20 +191,34 @@ gboolean texture_gl_populate_texture(FlTextureGL* texture,
+       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_TEXTURE_2D, self->mpv_texture, 0);
+
+-      // Create EGLImage from mpv's texture
++      // Importing mpv's render target as an EGLImage yields black frames on
++      // affected Mesa drivers. Keep that target separate from the export.
++      glGenFramebuffers(1, &self->export_fbo);
++      glBindFramebuffer(GL_FRAMEBUFFER, self->export_fbo);
++      glGenTextures(1, &self->export_texture);
++      glBindTexture(GL_TEXTURE_2D, self->export_texture);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, required_width, required_height,
++                   0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                             GL_TEXTURE_2D, self->export_texture, 0);
++
+       EGLint egl_image_attribs[] = { EGL_NONE };
+       self->egl_image = eglCreateImageKHR(
+           egl_display,
+           egl_context,
+           EGL_GL_TEXTURE_2D_KHR,
+-          (EGLClientBuffer)(guintptr)self->mpv_texture,
++          (EGLClientBuffer)(guintptr)self->export_texture,
+           egl_image_attribs);
+
+       glBindFramebuffer(GL_FRAMEBUFFER, 0);
+       glBindTexture(GL_TEXTURE_2D, 0);
+
+-      // Flush to ensure mpv's texture is ready
+-      glFlush();
++      // Complete shared texture initialization before importing it.
++      glFinish();
+
+       // Switch back to Flutter's context to create/update Flutter's texture
+       eglMakeCurrent(flutter_display, flutter_draw, flutter_read, flutter_context);
+@@ -249,11 +275,17 @@ gboolean texture_gl_populate_texture(FlTextureGL* texture,
+     };
+     mpv_render_context_render(render_context, params);
+
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, self->fbo);
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self->export_fbo);
++    glBlitFramebuffer(0, 0, required_width, required_height,
++                      0, 0, required_width, required_height,
++                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
++
+     // Unbind FBO
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+-    // Flush to ensure rendering is complete
+-    glFlush();
++    // Complete the copy before Flutter samples the export texture.
++    glFinish();
+
+     // Restore Flutter's context
+     eglMakeCurrent(flutter_display, flutter_draw, flutter_read, flutter_context);

@@ -134,9 +134,9 @@ dependencies:
       ref: const
   material_new_shapes: ^1.0.0
   material_ui: ^1.0.0
-  media_kit: 1.1.11
+  media_kit: 1.2.6
   media_kit_libs_video: 1.0.5
-  media_kit_video: 1.2.5
+  media_kit_video: 2.0.1
   mime: ^2.0.0
   native_device_orientation:
     git:
@@ -154,6 +154,8 @@ dependencies:
   protobuf: ^6.0.0
   re_highlight: ^0.0.3
   saver_gallery: ^5.0.2
+  screen_brightness_android: ^2.1.6
+  screen_brightness_ios: ^2.1.4
   screen_brightness_platform_interface: ^2.1.0
   share_plus: ^13.1.0
   stream_transform: ^2.1.1
@@ -192,7 +194,7 @@ dependency_overrides:
     git:
       url: https://github.com/My-Responsitories/media-kit.git
       path: media_kit
-      ref: native
+      ref: 5934fee0992f52ccffd567502cf507a71b30b655
   media_kit_libs_android_video:
     git:
       url: https://github.com/My-Responsitories/media-kit.git
@@ -220,9 +222,9 @@ dependency_overrides:
       ref: native
   media_kit_video:
     git:
-      url: https://github.com/bggRGjQaUbCoE/media-kit.git
+      url: https://github.com/My-Responsitories/media-kit.git
       path: media_kit_video
-      ref: native
+      ref: 5934fee0992f52ccffd567502cf507a71b30b655
 
 dev_dependencies:
   flutter_test:
@@ -257,6 +259,8 @@ flutter_native_splash:
   image_dark: assets/images/logo/logo_2.png
 
 flutter:
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true
 
   assets:

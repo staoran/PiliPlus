@@ -41,7 +41,6 @@ class MpvConvertWebp {
   Future<void> _init() async {
     final enableHA = Pref.enableHA;
     _ctx = await Initializer.create(
-      _mpv,
       _onEvent,
       options: {
         'idle': 'once',
@@ -61,8 +60,7 @@ class MpvConvertWebp {
       generated.mpv_event_id.MPV_EVENT_VIDEO_RECONFIG,
       0,
     );
-    NativePlayer.setHeader(
-      _mpv,
+    _mpv.setHeader(
       _ctx,
       userAgent: BrowserUa.pc,
       referer: HttpString.baseUrl,

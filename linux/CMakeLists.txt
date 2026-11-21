@@ -75,6 +75,30 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Keep the existing Wayland/Mesa fix on the locked video plugin's build copy.
+find_package(Git REQUIRED)
+get_target_property(MEDIA_KIT_VIDEO_SOURCE media_kit_video_plugin SOURCE_DIR)
+set(MEDIA_KIT_VIDEO_TEXTURE "${MEDIA_KIT_VIDEO_SOURCE}/texture_gl.cc")
+set(MEDIA_KIT_VIDEO_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/media_kit_video_mesa.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${MEDIA_KIT_VIDEO_TEXTURE}" "${MEDIA_KIT_VIDEO_PATCH}")
+set(MEDIA_KIT_VIDEO_COPY "${CMAKE_CURRENT_BINARY_DIR}/media_kit_video")
+file(MAKE_DIRECTORY "${MEDIA_KIT_VIDEO_COPY}")
+configure_file("${MEDIA_KIT_VIDEO_TEXTURE}"
+  "${MEDIA_KIT_VIDEO_COPY}/texture_gl.cc" COPYONLY)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env "GIT_CEILING_DIRECTORIES=${CMAKE_CURRENT_BINARY_DIR}"
+    "${GIT_EXECUTABLE}" -c core.autocrlf=false apply --no-index "${MEDIA_KIT_VIDEO_PATCH}"
+  WORKING_DIRECTORY "${MEDIA_KIT_VIDEO_COPY}"
+  RESULT_VARIABLE MEDIA_KIT_VIDEO_PATCH_RESULT)
+if(NOT MEDIA_KIT_VIDEO_PATCH_RESULT EQUAL 0)
+  message(FATAL_ERROR "Could not apply the media_kit_video Mesa texture patch")
+endif()
+get_target_property(MEDIA_KIT_VIDEO_FILES media_kit_video_plugin SOURCES)
+list(TRANSFORM MEDIA_KIT_VIDEO_FILES REPLACE "^texture_gl[.]cc$"
+  "${MEDIA_KIT_VIDEO_COPY}/texture_gl.cc")
+set_property(TARGET media_kit_video_plugin PROPERTY SOURCES "${MEDIA_KIT_VIDEO_FILES}")
+target_include_directories(media_kit_video_plugin PRIVATE "${MEDIA_KIT_VIDEO_SOURCE}")
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
