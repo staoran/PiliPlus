@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class PlayerWindowNavigation extends InheritedWidget {
@@ -11,6 +12,7 @@ class PlayerWindowNavigation extends InheritedWidget {
   });
 
   final RouteObserver<PageRoute<dynamic>> observer;
+  static final _toasts = Expando<OverlayEntry>();
 
   static PlayerWindowNavigation? maybeOf(BuildContext? context) =>
       context?.getInheritedWidgetOfExactType<PlayerWindowNavigation>();
@@ -41,9 +43,21 @@ class PlayerWindowNavigation extends InheritedWidget {
     return Get.toNamed<T>(name, arguments: arguments, parameters: parameters);
   }
 
-  static Future<void> showToast(BuildContext context, String message) async {
-    final overlay = Overlay.maybeOf(context);
-    if (overlay == null) return;
+  static Future<void> showToast(
+    BuildContext? context,
+    String message, {
+    Duration? displayTime,
+  }) async {
+    if (context != null && !context.mounted) return;
+    if (context == null || maybeOf(context) == null) {
+      await SmartDialog.showToast(message, displayTime: displayTime);
+      return;
+    }
+    final overlay = Navigator.maybeOf(context)?.overlay;
+    if (overlay == null || !overlay.mounted) return;
+    _toasts[overlay]
+      ?..remove()
+      ..dispose();
     final entry = OverlayEntry(
       builder: (_) => IgnorePointer(
         child: Align(
@@ -53,7 +67,10 @@ class PlayerWindowNavigation extends InheritedWidget {
       ),
     );
     overlay.insert(entry);
-    await Future<void>.delayed(const Duration(seconds: 2));
+    _toasts[overlay] = entry;
+    await Future<void>.delayed(displayTime ?? const Duration(seconds: 2));
+    if (_toasts[overlay] != entry) return;
+    _toasts[overlay] = null;
     entry
       ..remove()
       ..dispose();

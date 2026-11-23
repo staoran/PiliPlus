@@ -3,7 +3,6 @@ import 'dart:math' show max;
 import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/gestures.dart' show HorizontalDragGestureRecognizer;
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract class CommonSlidePage extends StatefulWidget {
@@ -107,12 +106,14 @@ mixin CommonSlideMixin<T extends CommonSlidePage> on State<T>, TickerProvider {
 
   Widget buildList() => throw UnimplementedError();
 
+  void closeSlidePage() => Navigator.pop(context);
+
   void _onDragEnd([_]) {
     if (_downDx == null) return;
     final dx = _downDx!;
     if (_animController.value * _maxWidth + (_isRTL ? (_maxWidth - dx) : dx) >=
         100) {
-      Get.back();
+      closeSlidePage();
     } else {
       _animController.reverse();
     }

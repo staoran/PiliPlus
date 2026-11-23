@@ -58,7 +58,7 @@ class _FavPanelState extends State<FavPanel> {
     if (!inPlayerWindow) SmartDialog.showLoading(msg: '请求中');
     final LoadingState<bool>? result;
     try {
-      result = await widget.ctr.actionFavVideo();
+      result = await widget.ctr.actionFavVideo(context: context);
     } finally {
       if (!inPlayerWindow) SmartDialog.dismiss(status: SmartStatus.loading);
     }
@@ -71,11 +71,7 @@ class _FavPanelState extends State<FavPanel> {
       Success(:final response) => '${response ? '' : '取消'}收藏成功',
       _ => result.toString(),
     };
-    if (inPlayerWindow) {
-      PlayerWindowNavigation.showToast(context, message);
-    } else {
-      SmartDialog.showToast(message);
-    }
+    PlayerWindowNavigation.showToast(context, message);
     if (result.isSuccess) _closePanel();
   }
 

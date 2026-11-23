@@ -29,6 +29,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/playback/completed_gate.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -59,7 +60,6 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter/services.dart'
     show DeviceOrientation, HapticFeedback, KeyDownEvent;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
@@ -87,6 +87,26 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   bool get isDetached => _playbackWindow != null;
   NavigatorState? get navigator =>
       _navigatorKey == null ? Get.key.currentState : _navigatorKey.currentState;
+
+  void showToast(String message, {Duration? displayTime}) {
+    final context = navigator?.context;
+    if (context != null) {
+      PlayerWindowNavigation.showToast(
+        context,
+        message,
+        displayTime: displayTime,
+      );
+    }
+  }
+
+  Future<void> copyText(String text) async {
+    final context = navigator?.context;
+    await Utils.copyText(text, needToast: false);
+    if (context != null && context.mounted) {
+      PlayerWindowNavigation.showToast(context, '已复制');
+    }
+  }
+
   Size get windowSize => _playbackWindow?.bounds.size ?? DeviceUtils.size;
   PlayCallback? _localPlayCallback;
   PlayOwner? _localPlayOwner;
@@ -1298,14 +1318,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       return ctr.open(media, play: true);
     }
     if (dataSource.videoSource.isEmpty) {
-      SmartDialog.showToast('视频源为空，请重新进入本页面');
+      showToast('视频源为空，请重新进入本页面');
       return null;
     }
     String? audioUri;
     if (!isLive) {
       final audioSource = dataSource.audioSource;
       if (audioSource == null || audioSource.isEmpty) {
-        SmartDialog.showToast('音频源为空');
+        showToast('音频源为空');
       } else {
         audioUri = Platform.isWindows
             ? audioSource.replaceAll(';', '\\;')
@@ -1707,7 +1727,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
               //   debugPrint("_buffered.value: ${_buffered.value}");
               // }
               if (isBuffering.value && buffered.value == Duration.zero) {
-                SmartDialog.showToast(
+                showToast(
                   '视频链接打开失败，重试中',
                   displayTime: const Duration(milliseconds: 500),
                 );
@@ -1728,7 +1748,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
               }
             }
           }
-          SmartDialog.showToast('无法加载解码器, $event，可能会切换至软解');
+          showToast('无法加载解码器, $event，可能会切换至软解');
         } else if (!onlyPlayAudio.value) {
           if (event.startsWith("error running") ||
               event.startsWith("Failed to open .") ||
@@ -1747,7 +1767,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           if (!kDebugMode) {
             Utils.reportError('$event\n${player.state.playlist}');
           }
-          // SmartDialog.showToast('视频加载错误, $event');
+          // showToast('视频加载错误, $event');
         }
       }),
     ];
@@ -2524,21 +2544,25 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   int _screenshotState = 0;
   Future<void> takeScreenshot() async {
     if (_screenshotState > 0) return;
+    final navigator = this.navigator;
+    if (navigator == null || !navigator.mounted) return;
+    final context = navigator.context;
     _screenshotState = 1;
-    SmartDialog.showToast('截图中');
+    PlayerWindowNavigation.showToast(context, '截图中');
     final image = await videoPlayerController?.screenshot();
     if (image != null) {
-      final navigator = this.navigator;
-      if (navigator == null || !navigator.mounted) {
+      if (!context.mounted) {
         image.dispose();
         _screenshotState = 0;
         return;
       }
-      SmartDialog.showToast('点击弹窗或按 Enter 保存截图');
+      PlayerWindowNavigation.showToast(context, '点击弹窗或按 Enter 保存截图');
       await showDialog(
-        context: navigator.context,
+        context: context,
         requestFocus: true,
-        builder: (context) {
+        useRootNavigator: false,
+        builder: (dialogContext) {
+          final route = ModalRoute.of(dialogContext);
           Future<void> save() async {
             if (_screenshotState > 1) return;
             _screenshotState = 2;
@@ -2550,11 +2574,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
               ImageUtils.saveByteImg(
                 bytes: bytes.buffer.asUint8List(),
                 fileName: 'screenshot_${cid}_$time',
+                onToast: (message) =>
+                    PlayerWindowNavigation.showToast(context, message),
               );
-            } else {
-              SmartDialog.showToast('保存失败');
+            } else if (context.mounted) {
+              PlayerWindowNavigation.showToast(context, '保存失败');
             }
-            if (context.mounted) Navigator.of(context).pop();
+            if (route?.isCurrent == true) navigator.pop();
           }
 
           return Focus(
@@ -2577,13 +2603,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
                   padding: const EdgeInsets.only(right: 12),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: min(MediaQuery.widthOf(context) / 3, 350),
+                      maxWidth: min(MediaQuery.widthOf(dialogContext) / 3, 350),
                     ),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         border: Border.all(
                           width: 5,
-                          color: ColorScheme.of(context).surface,
+                          color: ColorScheme.of(dialogContext).surface,
                         ),
                       ),
                       child: Padding(
@@ -2599,8 +2625,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         },
       );
       image.dispose();
-    } else {
-      SmartDialog.showToast('截图失败');
+    } else if (context.mounted) {
+      PlayerWindowNavigation.showToast(context, '截图失败');
     }
     _screenshotState = 0;
   }

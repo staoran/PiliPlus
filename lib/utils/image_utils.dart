@@ -1,5 +1,5 @@
 import 'dart:async' show FutureOr;
-import 'dart:io' show File, Platform;
+import 'dart:io' show File, FileSystemException, Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
@@ -141,11 +141,16 @@ abstract final class ImageUtils {
     }
   }
 
-  static Future<bool> downloadImg(List<String> imgList) async {
+  static Future<bool> downloadImg(
+    List<String> imgList, {
+    void Function(String)? onToast,
+  }) async {
     if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
       return false;
     }
-    if (!silentDownImg) {
+    final toast = onToast ?? SmartDialog.showToast;
+    final showLoading = !silentDownImg && onToast == null;
+    if (showLoading) {
       SmartDialog.showLoading(msg: '正在下载原图');
     }
     final futures = imgList.map((url) async {
@@ -162,7 +167,7 @@ abstract final class ImageUtils {
           cleanUp: (successValue) => successValue.$1.tryDel(),
         );
       } catch (e) {
-        SmartDialog.showToast('保存失败');
+        toast('保存失败');
         return false;
       }
       if (PlatformUtils.isMobile) {
@@ -180,7 +185,7 @@ abstract final class ImageUtils {
       } else {
         final dst = await FilePicker.getDirectoryPath();
         if (dst == null) {
-          SmartDialog.showToast('取消保存');
+          toast('取消保存');
           return false;
         }
         await Future.wait([
@@ -188,10 +193,10 @@ abstract final class ImageUtils {
             src.moveOrCopy(path.join(dst, name)),
         ]);
       }
-      SmartDialog.showToast(' 已保存 ');
+      toast(' 已保存 ');
       return true;
     } finally {
-      if (!silentDownImg) SmartDialog.dismiss(status: .loading);
+      if (showLoading) SmartDialog.dismiss(status: .loading);
     }
   }
 
@@ -237,7 +242,9 @@ abstract final class ImageUtils {
     required String fileName,
     String ext = 'png',
     bool showLoading = true,
+    void Function(String)? onToast,
   }) async {
+    final toast = onToast ?? SmartDialog.showToast;
     SaveResult? res;
     fileName += '.$ext';
     if (PlatformUtils.isMobile) {
@@ -250,22 +257,27 @@ abstract final class ImageUtils {
       );
       SmartDialog.dismiss();
       if (res.isSuccess) {
-        SmartDialog.showToast(' 已保存 ');
+        toast(' 已保存 ');
       } else {
-        SmartDialog.showToast('保存失败，${res.errorMessage}');
+        toast('保存失败，${res.errorMessage}');
       }
     } else {
-      SmartDialog.dismiss();
+      if (onToast == null) SmartDialog.dismiss();
       final savePath = await FilePicker.saveFile(
         fileName: fileName,
         bytes: Uint8List(0),
       );
       if (savePath == null) {
-        SmartDialog.showToast("取消保存");
+        toast("取消保存");
         return null;
       }
-      await File(savePath.toFilePath()).writeAsBytes(bytes);
-      SmartDialog.showToast(' 已保存 ');
+      try {
+        await File(savePath.toFilePath()).writeAsBytes(bytes);
+      } on FileSystemException catch (e) {
+        toast('保存失败，${e.message}');
+        return SaveResult(false, e.message);
+      }
+      toast(' 已保存 ');
       res = SaveResult(true, null);
     }
     return res;
@@ -275,10 +287,12 @@ abstract final class ImageUtils {
     required String filePath,
     required String fileName,
     bool needToast = false,
+    void Function(String)? onToast,
   }) async {
+    final toast = onToast ?? SmartDialog.showToast;
     final file = File(filePath);
     if (!file.existsSync()) {
-      SmartDialog.showToast("文件不存在");
+      toast("文件不存在");
       return;
     }
     SaveResult? res;
@@ -295,7 +309,7 @@ abstract final class ImageUtils {
         bytes: Uint8List(0),
       );
       if (savePath == null) {
-        SmartDialog.showToast("取消保存");
+        toast("取消保存");
         return;
       }
       await file.moveOrCopy(savePath.toFilePath());
@@ -303,9 +317,9 @@ abstract final class ImageUtils {
     }
     if (needToast) {
       if (res.isSuccess) {
-        SmartDialog.showToast(' 已保存 ');
+        toast(' 已保存 ');
       } else {
-        SmartDialog.showToast('保存失败，${res.errorMessage}');
+        toast('保存失败，${res.errorMessage}');
       }
     }
   }

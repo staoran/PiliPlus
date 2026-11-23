@@ -41,13 +41,14 @@ Future<bool> showConfirmDialog({
 Future<bool> showAsyncConfirmDialog({
   required BuildContext context,
   required Widget title,
-  required FutureOr<void> Function() onConfirm,
+  required FutureOr<bool> Function() onConfirm,
   Widget? content,
   String cancelText = '取消',
   String confirmText = '确认',
 }) async {
   return await showDialog<bool>(
         barrierDismissible: false,
+        useRootNavigator: false,
         context: context,
         builder: (context) {
           bool isLoading = false;
@@ -60,7 +61,9 @@ Future<bool> showAsyncConfirmDialog({
                 content: content,
                 actions: [
                   TextButton(
-                    onPressed: isLoading ? null : () => Get.back(result: false),
+                    onPressed: isLoading
+                        ? null
+                        : () => Navigator.pop(context, false),
                     child: Text(
                       cancelText,
                       style: TextStyle(
@@ -75,10 +78,11 @@ Future<bool> showAsyncConfirmDialog({
                             setState(() => isLoading = true);
                             bool completed = false;
                             try {
-                              await onConfirm();
-                              completed = true;
-                              if (context.mounted) {
-                                Get.back(result: true);
+                              final result = await onConfirm();
+                              if (context.mounted &&
+                                  ModalRoute.of(context)?.isCurrent == true) {
+                                completed = true;
+                                Navigator.pop(context, result);
                               }
                             } finally {
                               if (!completed && context.mounted) {

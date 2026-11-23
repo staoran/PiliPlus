@@ -48,6 +48,7 @@ abstract final class LiveHttp {
     String csrf = Accounts.main.csrf;
     final res = await Request().post(
       Api.sendLiveMsg,
+      showErrorToast: false,
       queryParameters: await WbiSign.makSign({'web_location': 444.8}),
       data: FormData.fromMap({
         'bubble': 0,
@@ -603,6 +604,7 @@ abstract final class LiveHttp {
   }) async {
     final res = await Request().post(
       Api.liveLikeReport,
+      showErrorToast: false,
       data: await WbiSign.makSign({
         'click_time': clickTime,
         'room_id': roomId,

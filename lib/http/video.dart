@@ -521,11 +521,13 @@ abstract final class VideoHttp {
   static Future<LoadingState<String>> likeVideo({
     required String bvid,
     required bool type,
+    bool showErrorToast = true,
   }) async {
     final res = await Request().post(
       Api.likeVideo,
       data: {'aid': IdUtils.bv2av(bvid).toString(), 'like': type ? '0' : '1'},
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: showErrorToast,
     );
     if (res.data['code'] == 0) {
       return Success(res.data['data']['toast']);
@@ -538,6 +540,7 @@ abstract final class VideoHttp {
   static Future<LoadingState<void>> dislikeVideo({
     required String bvid,
     required bool type,
+    bool showErrorToast = true,
   }) async {
     if (Accounts.main.accessKey.isNullOrEmpty) {
       return const Error('请退出账号后重新登录');
@@ -549,6 +552,7 @@ abstract final class VideoHttp {
         'dislike': type ? '0' : '1',
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: showErrorToast,
     );
     if (res.data is! String && res.data['code'] == 0) {
       return const Success(null);

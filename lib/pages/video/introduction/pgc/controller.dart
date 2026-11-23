@@ -21,6 +21,7 @@ import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
@@ -219,17 +220,26 @@ class PgcIntroController extends CommonIntroController {
   Future<void> actionLikeVideo() async {
     await runWithActionLoading(IntroAction.like, () async {
       if (!isLogin) {
-        SmartDialog.showToast('账号未登录');
+        videoDetailCtr.showToast('账号未登录');
         return;
       }
       final newVal = !hasLike.value;
-      final result = await VideoHttp.likeVideo(bvid: bvid, type: newVal);
+      final target = bvid;
+      final account = Accounts.main;
+      final result = await VideoHttp.likeVideo(
+        bvid: target,
+        type: newVal,
+        showErrorToast: false,
+      );
+      if (isClosed || bvid != target || !identical(account, Accounts.main)) {
+        return;
+      }
       if (result case Success(:final response)) {
-        SmartDialog.showToast(newVal ? response : '取消赞');
+        videoDetailCtr.showToast(newVal ? response : '取消赞');
         pgcItem.stat?.like += newVal ? 1 : -1;
         hasLike.value = newVal;
       } else {
-        result.toast();
+        videoDetailCtr.showToast(result.toString());
       }
     });
   }
@@ -773,16 +783,23 @@ class PgcIntroController extends CommonIntroController {
   }
 
   Future<void> onFavPugv(bool isFav) async {
-    if (seasonId == null || !pgcItemLoaded.value) return;
+    final target = seasonId;
+    if (target == null || !pgcItemLoaded.value) return;
     await runWithActionLoading(IntroAction.pugvFavorite, () async {
+      final account = Accounts.main;
       final res = isFav
-          ? await FavHttp.delFavPugv(seasonId!)
-          : await FavHttp.addFavPugv(seasonId!);
+          ? await FavHttp.delFavPugv(target, showErrorToast: false)
+          : await FavHttp.addFavPugv(target, showErrorToast: false);
+      if (isClosed ||
+          seasonId != target ||
+          !identical(account, Accounts.main)) {
+        return;
+      }
       if (res.isSuccess) {
         this.isFav.toggle();
-        SmartDialog.showToast('${isFav ? '取消' : ''}收藏成功');
+        videoDetailCtr.showToast('${isFav ? '取消' : ''}收藏成功');
       } else {
-        res.toast();
+        videoDetailCtr.showToast(res.toString());
       }
     });
   }

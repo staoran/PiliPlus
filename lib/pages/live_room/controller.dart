@@ -30,6 +30,7 @@ import 'package:PiliPlus/pages/video/widgets/header_control.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/tcp/live.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -54,7 +55,6 @@ import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -308,8 +308,8 @@ class LiveRoomController extends GetxController
           heroTag,
         );
       }
-    } else {
-      res.toast();
+    } else if (isPlaybackPageActive) {
+      plPlayerController.showToast(res.toString());
     }
   }
 
@@ -364,7 +364,7 @@ class LiveRoomController extends GetxController
   }
 
   void toastNotLogin() {
-    SmartDialog.showToast('账号未登录');
+    PlayerWindowNavigation.showToast(pageContext, '账号未登录');
   }
 
   void onSendDanmaku([bool fromEmote = false]) {

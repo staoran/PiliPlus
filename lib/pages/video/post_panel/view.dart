@@ -16,12 +16,11 @@ import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/post_panel/popup_menu_text.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PostPanel extends CommonSlidePage {
@@ -30,10 +29,16 @@ class PostPanel extends CommonSlidePage {
     super.enableSlide,
     required this.videoDetailController,
     required this.plPlayerController,
+    required this.draft,
+    required this.isCurrentVideo,
+    this.onClose,
   });
 
   final VideoDetailController videoDetailController;
   final PlPlayerController plPlayerController;
+  final List<PostSegmentModel> draft;
+  final bool Function() isCurrentVideo;
+  final VoidCallback? onClose;
 
   @override
   State<PostPanel> createState() => _PostPanelState();
@@ -110,7 +115,7 @@ class PostPanel extends CommonSlidePage {
               onPressed: () async {
                 String initV = value;
                 final String? res;
-                final textField = TextFormField(
+                Widget textField(BuildContext dialogContext) => TextFormField(
                   initialValue: value,
                   autofocus: true,
                   textInputAction: .done,
@@ -122,7 +127,8 @@ class PostPanel extends CommonSlidePage {
                           contentPadding: .zero,
                         )
                       : null,
-                  onFieldSubmitted: (value) => Get.back(result: initV),
+                  onFieldSubmitted: (value) =>
+                      Navigator.pop(dialogContext, value),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[\d:.]+')),
                   ],
@@ -130,8 +136,9 @@ class PostPanel extends CommonSlidePage {
                 if (PlatformUtils.isDesktop || MediaQuery.isTabletOf(context)) {
                   res = await showDialog<String>(
                     context: context,
+                    useRootNavigator: false,
                     builder: (context) => AlertDialog(
-                      content: textField,
+                      content: textField(context),
                       title: Text(
                         '${isFirst ? '开始' : '结束'}: ',
                         style: const TextStyle(fontSize: 16),
@@ -139,14 +146,14 @@ class PostPanel extends CommonSlidePage {
                       contentPadding: const .fromLTRB(24, 6, 24, 16),
                       actions: [
                         TextButton(
-                          onPressed: Get.back,
+                          onPressed: () => Navigator.pop(context),
                           child: Text(
                             '取消',
                             style: TextStyle(color: theme.colorScheme.outline),
                           ),
                         ),
                         TextButton(
-                          onPressed: () => Get.back(result: initV),
+                          onPressed: () => Navigator.pop(context, initV),
                           child: const Text('确定'),
                         ),
                       ],
@@ -170,12 +177,12 @@ class PostPanel extends CommonSlidePage {
                               mainAxisSize: .min,
                               children: [
                                 Text('${isFirst ? '开始' : '结束'}: '),
-                                Expanded(child: textField),
+                                Expanded(child: textField(context)),
                                 iconButton(
                                   size: 34,
                                   iconSize: 19,
                                   tooltip: '取消',
-                                  onPressed: Get.back,
+                                  onPressed: () => Navigator.pop(context),
                                   iconColor: colorScheme.outline,
                                   bgColor: colorScheme.onInverseSurface,
                                   icon: const Icon(Icons.clear),
@@ -184,7 +191,8 @@ class PostPanel extends CommonSlidePage {
                                   size: 34,
                                   iconSize: 19,
                                   tooltip: '确定',
-                                  onPressed: () => Get.back(result: initV),
+                                  onPressed: () =>
+                                      Navigator.pop(context, initV),
                                   iconColor: colorScheme.onSecondaryContainer,
                                   bgColor: colorScheme.secondaryContainer,
                                   icon: const Icon(Icons.check),
@@ -197,7 +205,7 @@ class PostPanel extends CommonSlidePage {
                     },
                   );
                 }
-                if (res != null) {
+                if (res != null && context.mounted) {
                   try {
                     List<num> split = res
                         .split(':')
@@ -243,13 +251,22 @@ class _PostPanelState extends State<PostPanel>
   late final VideoDetailController videoDetailController =
       widget.videoDetailController;
   late final PlPlayerController plPlayerController = widget.plPlayerController;
-  late final List<PostSegmentModel> list = videoDetailController.postList;
+  List<PostSegmentModel> get list => widget.draft;
 
   double get videoDuration => plPlayerController.durationInMilliseconds / 1000;
 
   double currentPos() => plPlayerController.positionInMilliseconds / 1000;
 
   late double bottom;
+
+  @override
+  void closeSlidePage() {
+    if (widget.onClose case final close?) {
+      close();
+    } else {
+      super.closeSlidePage();
+    }
+  }
 
   @override
   Widget buildPage() {
@@ -286,7 +303,7 @@ class _PostPanelState extends State<PostPanel>
               size: 32,
               context: context,
               tooltip: '关闭',
-              onPressed: Get.back,
+              onPressed: closeSlidePage,
               icon: const Icon(Icons.close),
             ),
             const SizedBox(width: 16),
@@ -304,14 +321,15 @@ class _PostPanelState extends State<PostPanel>
               child: FloatingActionButton(
                 tooltip: '提交',
                 onPressed: () async {
+                  final route = ModalRoute.of(context);
                   final submitted = await showAsyncConfirmDialog(
                     context: context,
                     title: const Text('确定无误再提交'),
                     confirmText: '确定提交',
                     onConfirm: _onPost,
                   );
-                  if (submitted && list.isEmpty && context.mounted) {
-                    Get.back();
+                  if (submitted && mounted && route?.isCurrent == true) {
+                    closeSlidePage();
                   }
                 },
                 child: const Icon(Icons.check),
@@ -346,7 +364,12 @@ class _PostPanelState extends State<PostPanel>
     );
   }
 
-  Future<void> _onPost() async {
+  Future<bool> _onPost() async {
+    if (!mounted) return false;
+    if (!widget.isCurrentVideo()) {
+      PlayerWindowNavigation.showToast(context, '视频已切换，请重新打开片段面板');
+      return false;
+    }
     final res = await SponsorBlock.postSkipSegments(
       bvid: videoDetailController.bvid,
       cid: videoDetailController.cid.value,
@@ -354,16 +377,19 @@ class _PostPanelState extends State<PostPanel>
       segments: list,
     );
 
+    if (!mounted || !widget.isCurrentVideo()) return false;
+
     if (res case Success(:final response)) {
-      SmartDialog.showToast('提交成功');
+      PlayerWindowNavigation.showToast(context, '提交成功');
       list.clear();
       videoDetailController.handleSBData(response);
       if (videoDetailController.blockListener == null) {
         videoDetailController.initSkip();
       }
-    } else {
-      SmartDialog.showToast('提交失败: $res');
+      return true;
     }
+    PlayerWindowNavigation.showToast(context, '提交失败: $res');
+    return false;
   }
 
   Widget _buildItem(int index, PostSegmentModel item) {

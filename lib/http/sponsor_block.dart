@@ -141,6 +141,7 @@ abstract final class SponsorBlock {
   }) async {
     final res = await Request().post(
       _api(SponsorBlockApi.skipSegments),
+      showErrorToast: false,
       data: {
         'videoID': bvid,
         'cid': cid.toString(),

@@ -13,6 +13,7 @@ import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/loading_action_mixin.dart';
@@ -202,10 +203,22 @@ abstract class CommonIntroController extends GetxController
 
   Future<void> viewLater() async {
     await runWithActionLoading(IntroAction.watchLater, () async {
-      final res = await (hasLater.value
-          ? UserHttp.toViewDel(aids: aid)
-          : UserHttp.toViewLater(bvid: bvid));
-      if (res.isSuccess) hasLater.toggle();
+      final target = bvid;
+      final account = Accounts.main;
+      final isPageActive = videoDetailCtr.capturePageActivity();
+      bool isCurrent() =>
+          !isClosed &&
+          bvid == target &&
+          isPageActive() &&
+          identical(account, Accounts.main);
+      void onToast(String message) {
+        if (isCurrent()) videoDetailCtr.showToast(message);
+      }
+
+      final res = hasLater.value
+          ? await UserHttp.toViewDel(aids: aid, onToast: onToast)
+          : await UserHttp.toViewLater(bvid: target, onToast: onToast);
+      if (res.isSuccess && isCurrent()) hasLater.toggle();
     });
   }
 }
@@ -263,7 +276,7 @@ mixin FavMixin on TripleMixin {
   // 收藏
   void showFavBottomSheet(BuildContext context, {bool isLongPress = false}) {
     if (!Accounts.main.isLogin) {
-      SmartDialog.showToast('账号未登录');
+      PlayerWindowNavigation.showToast(context, '账号未登录');
       return;
     }
     // 快速收藏 &
@@ -271,7 +284,7 @@ mixin FavMixin on TripleMixin {
     // 长按选择文件夹
     if (enableQuickFav) {
       if (!isLongPress) {
-        actionFavVideo(isQuick: true);
+        actionFavVideo(isQuick: true, context: context);
       } else {
         PageUtils.showFavBottomSheet(context: context, ctr: this);
       }
@@ -282,32 +295,65 @@ mixin FavMixin on TripleMixin {
 
   void updateFavCount(int count);
 
-  Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) {
+  Future<LoadingState<bool>?> actionFavVideo({
+    bool isQuick = false,
+    BuildContext? context,
+  }) {
+    if (isQuick && context != null && !Accounts.main.isLogin) {
+      PlayerWindowNavigation.showToast(context, '账号未登录');
+      return Future.value();
+    }
+    void showFeedback(String message) =>
+        PlayerWindowNavigation.showToast(context, message);
     return runWithActionLoading<LoadingState<bool>?>(.favorite, () async {
       final (rid, type) = getFavRidType;
+      final account = Accounts.main;
+      final showGlobalFeedback =
+          PlayerWindowNavigation.maybeOf(context) == null;
+      bool isCurrent() =>
+          !isClosed &&
+          getFavRidType == (rid, type) &&
+          identical(account, Accounts.main);
       // 收藏至默认文件夹
       if (isQuick) {
-        SmartDialog.showLoading(msg: '请求中');
-        final res = await queryVideoInFolder();
-        if (res.isSuccess) {
+        if (showGlobalFeedback) SmartDialog.showLoading(msg: '请求中');
+        String? message;
+        try {
+          final folders = await queryVideoInFolder();
+          if (!isCurrent()) return null;
+          if (!folders.isSuccess) {
+            message = folders.toString();
+            return null;
+          }
           final hasFav = this.hasFav.value;
+          if (!hasFav && folders.data.list?.isNotEmpty != true) {
+            message = '没有可用的收藏夹';
+            return null;
+          }
           final result = hasFav
-              ? await FavHttp.unfavAll(rid: rid, type: type)
+              ? await FavHttp.unfavAll(
+                  rid: rid,
+                  type: type,
+                  showErrorToast: showGlobalFeedback,
+                )
               : await FavHttp.favVideo(
                   resources: '$rid:$type',
                   addIds: favFolderId.toString(),
+                  showErrorToast: showGlobalFeedback,
                 );
-          SmartDialog.dismiss();
+          if (!isCurrent()) return null;
           if (result.isSuccess) {
             updateFavCount(hasFav ? -1 : 1);
             this.hasFav.toggle();
-            SmartDialog.showToast('${hasFav ? '取消' : ''}收藏成功');
+            message = '${hasFav ? '取消' : ''}收藏成功';
           } else {
-            result.toast();
+            message = result.toString();
           }
-        } else {
-          SmartDialog.dismiss();
-          res.toast();
+        } finally {
+          if (showGlobalFeedback) {
+            SmartDialog.dismiss(status: SmartStatus.loading);
+          }
+          if (message != null) showFeedback(message);
         }
         return null;
       }
@@ -329,14 +375,14 @@ mixin FavMixin on TripleMixin {
         resources: '$rid:$type',
         addIds: addMediaIds.join(','),
         delIds: delMediaIds.join(','),
+        showErrorToast: showGlobalFeedback,
       );
+      if (!isCurrent()) return null;
       if (!result.isSuccess) return Error(result.toString());
 
       final isFavorite =
           addMediaIds.isNotEmpty || (favIds?.length ?? 0) > delMediaIds.length;
-      if (!isClosed &&
-          getFavRidType == (rid, type) &&
-          hasFav.value != isFavorite) {
+      if (hasFav.value != isFavorite) {
         updateFavCount(isFavorite ? 1 : -1);
         hasFav.value = isFavorite;
       }

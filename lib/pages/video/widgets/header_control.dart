@@ -60,7 +60,6 @@ import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
@@ -191,9 +190,13 @@ class HeaderControl extends StatefulWidget {
   @override
   State<HeaderControl> createState() => HeaderControlState();
 
-  static Future<bool> likeDanmaku(VideoDanmaku extra, int cid) async {
+  static Future<bool> likeDanmaku(
+    BuildContext context,
+    VideoDanmaku extra,
+    int cid,
+  ) async {
     if (!Accounts.main.isLogin) {
-      SmartDialog.showToast('请先登录');
+      PlayerWindowNavigation.showToast(context, '请先登录');
       return false;
     }
     final isLike = !extra.isLike;
@@ -209,10 +212,14 @@ class HeaderControl extends StatefulWidget {
       } else {
         extra.like--;
       }
-      SmartDialog.showToast('${isLike ? '' : '取消'}点赞成功');
+      if (context.mounted) {
+        PlayerWindowNavigation.showToast(context, '${isLike ? '' : '取消'}点赞成功');
+      }
       return true;
     } else {
-      res.toast();
+      if (context.mounted) {
+        PlayerWindowNavigation.showToast(context, res.toString());
+      }
       if (res case Error(:final code)) {
         if (code == 65006) {
           extra.isLike = true;
@@ -227,18 +234,22 @@ class HeaderControl extends StatefulWidget {
     }
   }
 
-  static Future<bool> deleteDanmaku(int id, int cid) async {
+  static Future<bool> deleteDanmaku(
+    BuildContext context,
+    int id,
+    int cid,
+  ) async {
     final res = await DanmakuHttp.danmakuRecall(
       cid: cid,
       id: id,
     );
-    if (res.isSuccess) {
-      SmartDialog.showToast('删除成功');
-      return true;
-    } else {
-      res.toast();
-      return false;
+    if (context.mounted) {
+      PlayerWindowNavigation.showToast(
+        context,
+        res.isSuccess ? '删除成功' : res.toString(),
+      );
     }
+    return res.isSuccess;
   }
 
   static Future<void> reportDanmaku(
@@ -271,7 +282,7 @@ class HeaderControl extends StatefulWidget {
         },
       );
     } else {
-      return SmartDialog.showToast('请先登录');
+      return PlayerWindowNavigation.showToast(context, '请先登录');
     }
   }
 
@@ -316,7 +327,7 @@ class HeaderControl extends StatefulWidget {
         },
       );
     } else {
-      return SmartDialog.showToast('请先登录');
+      return PlayerWindowNavigation.showToast(context, '请先登录');
     }
   }
 }
@@ -432,9 +443,12 @@ class HeaderControlState extends State<HeaderControl>
                     dense: true,
                     onTap: () {
                       Navigator.of(context).pop();
-                      ImageUtils.downloadImg([
-                        widget.videoDetailCtr.cover.value,
-                      ]);
+                      ImageUtils.downloadImg(
+                        [videoDetailCtr.cover.value],
+                        onToast: plPlayerController.isDetached
+                            ? videoDetailCtr.showToast
+                            : null,
+                      );
                     },
                     leading: const Icon(Icons.image_outlined, size: 20),
                     title: const Text('保存封面', style: titleStyle),
@@ -546,7 +560,11 @@ class HeaderControlState extends State<HeaderControl>
                       if (result != null) {
                         VideoUtils.cdnService = result;
                         setting.put(SettingBoxKey.CDNService, result.name);
-                        SmartDialog.showToast('已设置为 ${result.desc}，正在重载视频');
+                        if (!mounted) return;
+                        PlayerWindowNavigation.showToast(
+                          this.context,
+                          '已设置为 ${result.desc}，正在重载视频',
+                        );
                         videoDetailCtr.queryVideoUrl(fromReset: true);
                       }
                     },
@@ -739,7 +757,12 @@ class HeaderControlState extends State<HeaderControl>
                         );
                       }
                     } catch (e) {
-                      SmartDialog.showToast('加载失败: $e');
+                      if (mounted) {
+                        PlayerWindowNavigation.showToast(
+                          this.context,
+                          '加载失败: $e',
+                        );
+                      }
                     }
                   },
                   leading: const Icon(Icons.file_open_outlined, size: 20),
@@ -767,7 +790,7 @@ class HeaderControlState extends State<HeaderControl>
                   dense: true,
                   onTap: () {
                     if (!Accounts.main.isLogin) {
-                      SmartDialog.showToast('账号未登录');
+                      PlayerWindowNavigation.showToast(context, '账号未登录');
                       return;
                     }
                     Navigator.of(context).pop();
@@ -790,6 +813,11 @@ class HeaderControlState extends State<HeaderControl>
   }) {
     final hwdec = player.getProperty('hwdec-current');
     final volume = player.getProperty('volume');
+    Future<void> copyText(String text) async {
+      await Utils.copyText(text, needToast: false);
+      if (context.mounted) PlayerWindowNavigation.showToast(context, '已复制');
+    }
+
     showDialog(
       context: context,
       builder: (context) {
@@ -809,7 +837,7 @@ class HeaderControlState extends State<HeaderControl>
                       dense: true,
                       title: const Text("Resolution"),
                       subtitle: Text('${state.width}x${state.height}'),
-                      onTap: () => Utils.copyText(
+                      onTap: () => copyText(
                         'Resolution\n${state.width}x${state.height}',
                       ),
                     ),
@@ -817,53 +845,59 @@ class HeaderControlState extends State<HeaderControl>
                       dense: true,
                       title: const Text("VideoParams"),
                       subtitle: Text(state.videoParams.toString()),
-                      onTap: () =>
-                          Utils.copyText('VideoParams\n${state.videoParams}'),
+                      onTap: () => copyText(
+                        'VideoParams\n${state.videoParams}',
+                      ),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("AudioParams"),
                       subtitle: Text(state.audioParams.toString()),
-                      onTap: () =>
-                          Utils.copyText('AudioParams\n${state.audioParams}'),
+                      onTap: () => copyText(
+                        'AudioParams\n${state.audioParams}',
+                      ),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("Media"),
                       subtitle: Text(state.playlist.toString()),
-                      onTap: () => Utils.copyText('Media\n${state.playlist}'),
+                      onTap: () => copyText(
+                        'Media\n${state.playlist}',
+                      ),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("AudioTrack"),
                       subtitle: Text(state.track.audio.toString()),
-                      onTap: () =>
-                          Utils.copyText('AudioTrack\n${state.track.audio}'),
+                      onTap: () => copyText(
+                        'AudioTrack\n${state.track.audio}',
+                      ),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("VideoTrack"),
                       subtitle: Text(state.track.video.toString()),
-                      onTap: () =>
-                          Utils.copyText('VideoTrack\n${state.track.video}'),
+                      onTap: () => copyText(
+                        'VideoTrack\n${state.track.video}',
+                      ),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("rate"),
                       subtitle: Text(state.rate.toString()),
-                      onTap: () => Utils.copyText('rate\n${state.rate}'),
+                      onTap: () => copyText('rate\n${state.rate}'),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text("Volume"),
                       subtitle: Text(volume),
-                      onTap: () => Utils.copyText('Volume\n$volume'),
+                      onTap: () => copyText('Volume\n$volume'),
                     ),
                     ListTile(
                       dense: true,
                       title: const Text('hwdec'),
                       subtitle: Text(hwdec),
-                      onTap: () => Utils.copyText('hwdec\n$hwdec'),
+                      onTap: () => copyText('hwdec\n$hwdec'),
                     ),
                   ],
                 ),
@@ -887,7 +921,7 @@ class HeaderControlState extends State<HeaderControl>
   /// 选择画质
   void showSetVideoQa() {
     if (videoInfo.dash == null) {
-      SmartDialog.showToast('当前视频不支持选择画质');
+      PlayerWindowNavigation.showToast(context, '当前视频不支持选择画质');
       return;
     }
     final VideoQuality? currentVideoQa = videoDetailCtr.currentVideoQa.value;
@@ -911,7 +945,8 @@ class HeaderControlState extends State<HeaderControl>
                   child: SizedBox(
                     height: 45,
                     child: GestureDetector(
-                      onTap: () => SmartDialog.showToast(
+                      onTap: () => PlayerWindowNavigation.showToast(
+                        context,
                         '标灰画质需要bilibili会员（已是会员？请关闭无痕模式）；4k和杜比视界播放效果可能不佳',
                       ),
                       child: Row(
@@ -948,7 +983,10 @@ class HeaderControlState extends State<HeaderControl>
                           ..currentVideoQa.value = newQa
                           ..updatePlayer();
 
-                        SmartDialog.showToast("画质已变为：${newQa.desc}");
+                        PlayerWindowNavigation.showToast(
+                          this.context,
+                          "画质已变为：${newQa.desc}",
+                        );
 
                         // update
                         if (!plPlayerController.tempPlayerConf) {
@@ -1028,7 +1066,10 @@ class HeaderControlState extends State<HeaderControl>
                           ..currentAudioQa = newQa
                           ..updatePlayer();
 
-                        SmartDialog.showToast("音质已变为：${newQa.desc}");
+                        PlayerWindowNavigation.showToast(
+                          this.context,
+                          "音质已变为：${newQa.desc}",
+                        );
 
                         // update
                         if (!plPlayerController.tempPlayerConf) {
@@ -1073,7 +1114,7 @@ class HeaderControlState extends State<HeaderControl>
 
     final list = videoFormat.firstWhere((e) => e.quality == firstCode).codecs;
     if (list == null) {
-      SmartDialog.showToast('当前视频不支持选择解码格式');
+      PlayerWindowNavigation.showToast(context, '当前视频不支持选择解码格式');
       return;
     }
 
@@ -1113,7 +1154,10 @@ class HeaderControlState extends State<HeaderControl>
                               videoDetailCtr
                                 ..currentDecodeFormats = format
                                 ..updatePlayer();
-                              SmartDialog.showToast("解码已变为：${format.name}");
+                              PlayerWindowNavigation.showToast(
+                                this.context,
+                                "解码已变为：${format.name}",
+                              );
                             },
                             contentPadding: const .symmetric(horizontal: 20),
                             title: Text(format.description),
@@ -1232,10 +1276,20 @@ class HeaderControlState extends State<HeaderControl>
                             '_',
                           );
                   // Reserved characters may not be used in file names. See: https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-                  StorageUtils.saveBytes2File(name: name, bytes: bytes);
+                  if (!mounted) return;
+                  StorageUtils.saveBytes2File(
+                    name: name,
+                    bytes: bytes,
+                    onToast: videoDetailCtr.showToast,
+                  );
                 } catch (e, s) {
                   Utils.reportError(e, s);
-                  SmartDialog.showToast(e.toString());
+                  if (mounted) {
+                    PlayerWindowNavigation.showToast(
+                      this.context,
+                      e.toString(),
+                    );
+                  }
                 }
               },
               child: Text(item.lanDoc ?? item.lan),
@@ -1553,7 +1607,7 @@ class HeaderControlState extends State<HeaderControl>
         return ListTile(
           dense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-          onLongPress: () => Utils.copyText(item.content.text),
+          onLongPress: () => plPlayerController.copyText(item.content.text),
           title: Text(
             item.content.text,
             style: const TextStyle(fontSize: 14),
@@ -1568,6 +1622,7 @@ class HeaderControlState extends State<HeaderControl>
                     iconButton(
                       onPressed: () async {
                         if (await HeaderControl.likeDanmaku(
+                              this.context,
                               extra,
                               plPlayerController.cid!,
                             ) &&
@@ -1598,6 +1653,7 @@ class HeaderControlState extends State<HeaderControl>
               if (item.content.selfSend)
                 iconButton(
                   onPressed: () => HeaderControl.deleteDanmaku(
+                    this.context,
                     extra.id,
                     plPlayerController.cid!,
                   ).then((_) => item.expired = true),

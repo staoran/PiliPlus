@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show ascii;
 
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
@@ -10,19 +11,20 @@ import 'package:PiliPlus/models/common/publish_panel_type.dart';
 import 'package:PiliPlus/pages/common/publish/common_text_pub_page.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/pages/setting/slide_color_picker.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:archive/archive.dart' show getCrc32;
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SendDanmakuPanel extends CommonTextPubPage {
   // video
-  final dynamic cid;
-  final dynamic bvid;
-  final dynamic progress;
+  final int cid;
+  final String bvid;
+  final int progress;
+  final bool Function() isCurrentVideo;
 
   final ValueChanged<DanmakuContentItem<DanmakuExtra>> onSuccess;
 
@@ -34,9 +36,10 @@ class SendDanmakuPanel extends CommonTextPubPage {
     super.key,
     super.initialValue,
     super.onSave,
-    this.cid,
-    this.bvid,
-    this.progress,
+    required this.cid,
+    required this.bvid,
+    required this.progress,
+    required this.isCurrentVideo,
     required this.onSuccess,
     this.dmConfig,
     this.onSaveDmConfig,
@@ -107,7 +110,9 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
           itemBuilder: (context, index) {
             if (index == length - 1) {
               return GestureDetector(
-                onTap: _showColorPicker,
+                onTap: () {
+                  if (!isPublishing.value) _showColorPicker();
+                },
                 child: Container(
                   decoration: BoxDecoration(
                     color: theme.colorScheme.secondaryContainer,
@@ -410,6 +415,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
   void _showColorPicker() {
     showDialog(
       context: context,
+      useRootNavigator: false,
       builder: (context) => AlertDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
@@ -428,44 +434,58 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
-    bool isColorful = _color.value == Colors.transparent;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent || !widget.isCurrentVideo()) return;
+    final account = Accounts.main;
+    final text = editController.text;
+    final mode = _mode.value;
+    final color = _color.value;
+    final isColorful = color == Colors.transparent;
     final res = await DanmakuHttp.shootDanmaku(
       oid: widget.cid,
       bvid: widget.bvid,
       progress: widget.progress,
-      msg: editController.text,
-      mode: _mode.value,
+      msg: text,
+      mode: mode,
       fontSize: _fontSize.value,
-      color: isColorful ? null : _color.value.toARGB32() & 0xFFFFFF,
+      color: isColorful ? null : color.toARGB32() & 0xFFFFFF,
       colorful: isColorful,
     );
+    if (!mounted ||
+        !route.isActive ||
+        !widget.isCurrentVideo() ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
     if (res case Success(:final response)) {
       hasPub = true;
-      Get.back();
-      SmartDialog.showToast('发送成功');
-      VideoDanmaku? extra;
-      if (response.dmid case final dmid?) {
-        extra = VideoDanmaku(
-          id: dmid,
-          mid: PlPlayerController.instance!.midHash,
-        );
-      }
+      final dmid = response.dmid;
       widget.onSuccess(
         DanmakuContentItem(
-          editController.text,
-          color: isColorful ? Colors.white : _color.value,
-          type: switch (_mode.value) {
+          text,
+          color: isColorful ? Colors.white : color,
+          type: switch (mode) {
             5 => DanmakuItemType.top,
             4 => DanmakuItemType.bottom,
             _ => DanmakuItemType.scroll,
           },
           selfSend: true,
           isColorful: isColorful,
-          extra: extra,
+          extra: dmid == null
+              ? null
+              : VideoDanmaku(
+                  id: dmid,
+                  mid: getCrc32(
+                    ascii.encode(account.mid.toString()),
+                    0,
+                  ).toRadixString(16),
+                ),
         ),
       );
+      PlayerWindowNavigation.showToast(context, '发送成功');
+      if (route.isCurrent) Navigator.pop(context);
     } else {
-      res.toast();
+      PlayerWindowNavigation.showToast(context, res.toString());
     }
   }
 }
