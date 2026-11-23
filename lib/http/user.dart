@@ -171,6 +171,7 @@ abstract final class UserHttp {
   static Future<LoadingState<void>> toViewLater({
     String? bvid,
     Object? aid,
+    void Function(String)? onToast,
   }) async {
     assert(aid != null || bvid != null);
     final res = await Request().post(
@@ -181,18 +182,23 @@ abstract final class UserHttp {
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: onToast == null,
     );
+    final toast = onToast ?? SmartDialog.showToast;
     if (res.data['code'] == 0) {
-      SmartDialog.showToast('yeah！稍后再看');
+      toast('yeah！稍后再看');
       return const Success(null);
     } else {
-      SmartDialog.showToast(res.data['message'].toString());
+      toast(res.data['message'].toString());
       return const Error(null);
     }
   }
 
   // 移除已观看
-  static Future<LoadingState<void>> toViewDel({required Object aids}) async {
+  static Future<LoadingState<void>> toViewDel({
+    required Object aids,
+    void Function(String)? onToast,
+  }) async {
     final Map<String, dynamic> params = {
       'csrf': Accounts.main.csrf,
       'resources': aids,
@@ -201,12 +207,14 @@ abstract final class UserHttp {
       Api.toViewDel,
       data: params,
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: onToast == null,
     );
+    final toast = onToast ?? SmartDialog.showToast;
     if (res.data['code'] == 0) {
-      SmartDialog.showToast('yeah！成功移除');
+      toast('yeah！成功移除');
       return const Success(null);
     } else {
-      SmartDialog.showToast(res.data['message'].toString());
+      toast(res.data['message'].toString());
       return const Error(null);
     }
   }

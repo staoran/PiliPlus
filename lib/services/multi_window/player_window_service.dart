@@ -350,12 +350,15 @@ class _PlayerWindowContent extends StatelessWidget {
             controller: window.heroController,
             child: BackDetector(
               onBack: window.back,
-              child: Navigator(
-                key: window.navigatorKey,
-                observers: [window.observer],
-                onGenerateRoute: (settings) => MaterialPageRoute<void>(
-                  settings: settings,
-                  builder: (_) => const ColoredBox(color: Colors.black),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Navigator(
+                  key: window.navigatorKey,
+                  observers: [window.observer],
+                  onGenerateRoute: (settings) => MaterialPageRoute<void>(
+                    settings: settings,
+                    builder: (_) => const ColoredBox(color: Colors.black),
+                  ),
                 ),
               ),
             ),

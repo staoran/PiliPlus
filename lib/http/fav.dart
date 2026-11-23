@@ -154,9 +154,13 @@ abstract final class FavHttp {
     }
   }
 
-  static Future<LoadingState<void>> addFavPugv(Object seasonId) async {
+  static Future<LoadingState<void>> addFavPugv(
+    Object seasonId, {
+    bool showErrorToast = true,
+  }) async {
     final res = await Request().post(
       Api.addFavPugv,
+      showErrorToast: showErrorToast,
       data: {
         'season_id': seasonId,
         'csrf': Accounts.main.csrf,
@@ -170,9 +174,13 @@ abstract final class FavHttp {
     }
   }
 
-  static Future<LoadingState<void>> delFavPugv(Object seasonId) async {
+  static Future<LoadingState<void>> delFavPugv(
+    Object seasonId, {
+    bool showErrorToast = true,
+  }) async {
     final res = await Request().post(
       Api.delFavPugv,
+      showErrorToast: showErrorToast,
       data: {
         'season_id': seasonId,
         'csrf': Accounts.main.csrf,
@@ -640,6 +648,7 @@ abstract final class FavHttp {
     required String resources,
     String? addIds,
     String? delIds,
+    bool showErrorToast = true,
   }) async {
     final res = await Request().post(
       Api.favVideo,
@@ -650,6 +659,7 @@ abstract final class FavHttp {
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: showErrorToast,
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -662,6 +672,7 @@ abstract final class FavHttp {
   static Future<LoadingState<void>> unfavAll({
     required Object rid,
     required Object type,
+    bool showErrorToast = true,
   }) async {
     final res = await Request().post(
       Api.unfavAll,
@@ -671,6 +682,7 @@ abstract final class FavHttp {
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
+      showErrorToast: showErrorToast,
     );
     if (res.data['code'] == 0) {
       return const Success(null);

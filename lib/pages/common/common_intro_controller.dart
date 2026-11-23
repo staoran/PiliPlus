@@ -171,7 +171,6 @@ abstract class CommonIntroController extends GetxController
       final target = bvid;
       final account = Accounts.main;
       final isPageActive = videoDetailCtr.capturePageActivity();
-      final context = videoDetailCtr.pageContext;
       final res = await VideoHttp.coinVideo(
         bvid: target,
         multiply: coin,
@@ -181,9 +180,7 @@ abstract class CommonIntroController extends GetxController
         return;
       }
       final message = res.isSuccess ? '投币成功' : res.toString();
-      if (isPageActive() && context != null && context.mounted) {
-        PlayerWindowNavigation.showToast(context, message);
-      }
+      if (isPageActive()) videoDetailCtr.showToast(message);
       if (res.isSuccess) {
         coinNum.value += coin;
         GlobalData().afterCoin(coin);
@@ -210,10 +207,22 @@ abstract class CommonIntroController extends GetxController
 
   Future<void> viewLater() async {
     await runWithActionLoading(IntroAction.watchLater, () async {
-      final res = await (hasLater.value
-          ? UserHttp.toViewDel(aids: aid)
-          : UserHttp.toViewLater(bvid: bvid));
-      if (res.isSuccess) hasLater.toggle();
+      final target = bvid;
+      final account = Accounts.main;
+      final isPageActive = videoDetailCtr.capturePageActivity();
+      bool isCurrent() =>
+          !isClosed &&
+          bvid == target &&
+          isPageActive() &&
+          identical(account, Accounts.main);
+      void onToast(String message) {
+        if (isCurrent()) videoDetailCtr.showToast(message);
+      }
+
+      final res = hasLater.value
+          ? await UserHttp.toViewDel(aids: aid, onToast: onToast)
+          : await UserHttp.toViewLater(bvid: target, onToast: onToast);
+      if (res.isSuccess && isCurrent()) hasLater.toggle();
     });
   }
 }
@@ -291,7 +300,7 @@ mixin FavMixin on TripleMixin {
   void updateFavCount(int count);
 
   Future<void> quickFavorite(BuildContext context) async {
-    final result = await actionFavVideo(isQuick: true);
+    final result = await actionFavVideo(isQuick: true, context: context);
     if (!context.mounted || result == null) return;
     final message = switch (result) {
       Success(:final response) => '${response ? '' : '取消'}收藏成功',
@@ -300,16 +309,24 @@ mixin FavMixin on TripleMixin {
     PlayerWindowNavigation.showToast(context, message);
   }
 
-  Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) {
+  Future<LoadingState<bool>?> actionFavVideo({
+    bool isQuick = false,
+    BuildContext? context,
+  }) {
+    if (isQuick && context != null && !Accounts.main.isLogin) {
+      return Future.value(const Error('账号未登录'));
+    }
     return runWithActionLoading<LoadingState<bool>?>(.favorite, () async {
       final (rid, type) = getFavRidType;
+      final account = Accounts.main;
+      final showGlobalFeedback =
+          PlayerWindowNavigation.maybeOf(context) == null;
+      bool isCurrent() =>
+          !isClosed &&
+          getFavRidType == (rid, type) &&
+          identical(account, Accounts.main);
       // 收藏至默认文件夹
       if (isQuick) {
-        final account = Accounts.main;
-        bool isCurrent() =>
-            !isClosed &&
-            getFavRidType == (rid, type) &&
-            identical(account, Accounts.main);
         final res = await queryVideoInFolder();
         if (!isCurrent()) return null;
         if (!res.isSuccess) return Error(res.toString());
@@ -318,13 +335,18 @@ mixin FavMixin on TripleMixin {
           return const Error('没有可用的收藏夹');
         }
         final result = wasFavorite
-            ? await FavHttp.unfavAll(rid: rid, type: type)
+            ? await FavHttp.unfavAll(
+                rid: rid,
+                type: type,
+                showErrorToast: false,
+              )
             : await FavHttp.favVideo(
                 resources: '$rid:$type',
                 addIds: favFolderId.toString(),
+                showErrorToast: false,
               );
         if (!isCurrent()) return null;
-        if (result is Error) return result;
+        if (!result.isSuccess) return Error(result.toString());
         updateFavCount(wasFavorite ? -1 : 1);
         hasFav.value = !wasFavorite;
         return Success(!wasFavorite);
@@ -347,14 +369,14 @@ mixin FavMixin on TripleMixin {
         resources: '$rid:$type',
         addIds: addMediaIds.join(','),
         delIds: delMediaIds.join(','),
+        showErrorToast: showGlobalFeedback,
       );
+      if (!isCurrent()) return null;
       if (!result.isSuccess) return Error(result.toString());
 
       final isFavorite =
           addMediaIds.isNotEmpty || (favIds?.length ?? 0) > delMediaIds.length;
-      if (!isClosed &&
-          getFavRidType == (rid, type) &&
-          hasFav.value != isFavorite) {
+      if (hasFav.value != isFavorite) {
         updateFavCount(isFavorite ? 1 : -1);
         hasFav.value = isFavorite;
       }

@@ -58,6 +58,7 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/services/playback/playback_foreground_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
@@ -171,6 +172,17 @@ class VideoDetailController extends GetxController
   bool _playbackPageActive = true;
   int _pageActivityGeneration = 0;
   bool get canStartPlayback => _playbackPageActive && !isClosed;
+
+  void showToast(String message, {Duration? displayTime}) {
+    if (!canStartPlayback) return;
+    final context = pageContext ?? plPlayerController.navigator?.context;
+    if (context == null && plPlayerController.isDetached) return;
+    PlayerWindowNavigation.showToast(
+      context,
+      message,
+      displayTime: displayTime,
+    );
+  }
 
   bool Function() capturePageActivity() {
     final generation = _pageActivityGeneration;
@@ -944,7 +956,7 @@ class VideoDetailController extends GetxController
         }
       }
     } else {
-      res.toast();
+      showToast(res.toString());
     }
   }
 
@@ -982,7 +994,10 @@ class VideoDetailController extends GetxController
                 (sourceType == SourceType.fav && args['isOwner'] == true)
             ? (item, index) async {
                 if (sourceType == SourceType.watchLater) {
-                  final res = await UserHttp.toViewDel(aids: item.aid!);
+                  final res = await UserHttp.toViewDel(
+                    aids: item.aid!,
+                    onToast: showToast,
+                  );
                   if (res.isSuccess) {
                     mediaList.removeAt(index);
                   }
@@ -990,12 +1005,13 @@ class VideoDetailController extends GetxController
                   final res = await FavHttp.favVideo(
                     resources: '${item.aid}:${item.type}',
                     delIds: '${args['mediaId']}',
+                    showErrorToast: false,
                   );
                   if (res.isSuccess) {
                     mediaList.removeAt(index);
-                    SmartDialog.showToast('取消收藏');
+                    showToast('取消收藏');
                   } else {
-                    res.toast();
+                    showToast(res.toString());
                   }
                 }
               }
@@ -1182,10 +1198,10 @@ class VideoDetailController extends GetxController
                   try {
                     final part = ugcIntroCtr.videoDetail.value.pages![item];
                     ugcIntroCtr.onChangeEpisode(part);
-                    SmartDialog.showToast('已跳至第${item + 1}P');
+                    showToast('已跳至第${item + 1}P');
                   } catch (e) {
                     if (kDebugMode) debugPrint('$e');
-                    SmartDialog.showToast('跳转失败');
+                    showToast('跳转失败');
                   }
                   onRemoveItem(listData.indexOf(item), item);
                 } else if (item is SegmentModel) {
@@ -1205,40 +1221,48 @@ class VideoDetailController extends GetxController
 
   /// 发送弹幕
   Future<void> showShootDanmakuSheet() async {
-    if (plPlayerController.dmState.contains(cid.value)) {
-      SmartDialog.showToast('UP主已关闭弹幕');
+    final player = plPlayerController;
+    final navigator = player.navigator;
+    if (navigator == null || !canStartPlayback) return;
+    final video = (bvid, cid.value);
+    final isCurrentVideo = _captureVideoInteraction();
+    if (player.dmState.contains(video.$2)) {
+      showToast('UP主已关闭弹幕');
       return;
     }
-    final isPlaying =
-        _autoPlay.value && plPlayerController.playerStatus.isPlaying;
+    final isPlaying = _autoPlay.value && player.playerStatus.isPlaying;
     if (isPlaying) {
-      await plPlayerController.pause();
+      await player.pause();
     }
-    await plPlayerController.navigator!.push(
+    if (!navigator.mounted || !isCurrentVideo()) return;
+    await navigator.push(
       PublishRoute(
         pageBuilder: (buildContext, animation, secondaryAnimation) {
           final child = SendDanmakuPanel(
-            cid: cid.value,
-            bvid: bvid,
-            progress: plPlayerController.positionInMilliseconds,
+            cid: video.$2,
+            bvid: video.$1,
+            progress: player.positionInMilliseconds,
+            isCurrentVideo: isCurrentVideo,
             initialValue: savedDanmaku,
-            onSave: (danmaku) => savedDanmaku = danmaku,
+            onSave: (danmaku) {
+              if (isCurrentVideo()) savedDanmaku = danmaku;
+            },
             onSuccess: (danmakuModel) {
               savedDanmaku = null;
-              plPlayerController.danmakuController?.addDanmaku(danmakuModel);
+              player.danmakuController?.addDanmaku(danmakuModel);
             },
             dmConfig: dmConfig,
             onSaveDmConfig: (dmConfig) => this.dmConfig = dmConfig,
           );
-          if (plPlayerController.darkVideoPage) {
+          if (player.darkVideoPage) {
             return Theme(data: ThemeUtils.darkTheme, child: child);
           }
           return child;
         },
       ),
     );
-    if (isPlaying) {
-      plPlayerController.play();
+    if (isPlaying && isCurrentVideo()) {
+      player.play();
     }
   }
 
@@ -1366,7 +1390,7 @@ class VideoDetailController extends GetxController
       playedTime = seekToTime;
     }
 
-    SmartDialog.showToast(
+    showToast(
       '${failedFormat.name} 解码失败，尝试 ${fallbackFormat.name}',
       displayTime: const Duration(milliseconds: 800),
     );
@@ -1589,7 +1613,7 @@ class VideoDetailController extends GetxController
   void setLanguage(String language) {
     if (currLang.value == language) return;
     if (!isLoginVideo) {
-      SmartDialog.showToast('账号未登录');
+      showToast('账号未登录');
       return;
     }
     currLang.value = language;
@@ -1893,7 +1917,7 @@ class VideoDetailController extends GetxController
         }
 
         if (data.acceptDesc?.contains('试看') == true) {
-          SmartDialog.showToast(
+          showToast(
             '该视频为专属视频，仅提供试看',
             displayTime: const Duration(seconds: 3),
           );
@@ -1944,7 +1968,7 @@ class VideoDetailController extends GetxController
             );
             return;
           } else {
-            SmartDialog.showToast('视频资源不存在');
+            showToast('视频资源不存在');
             _autoPlay.value = false;
             videoState.value = false;
             if (plPlayerController.isFullScreen.value) {
@@ -1966,7 +1990,7 @@ class VideoDetailController extends GetxController
             supportFormats.isEmpty) {
           if (kDebugMode)
             debugPrint('Empty DASH media: $requestBvid/$requestCid');
-          SmartDialog.showToast('视频资源不存在');
+          showToast('视频资源不存在');
           return;
         }
         _resetCodecOpenFailures();
@@ -2040,7 +2064,7 @@ class VideoDetailController extends GetxController
             switchProtectionReason: 'video_url_failed',
           );
         }
-        result.toast();
+        showToast(result.toString());
       }
     } finally {
       // 异常退出也只能收口本轮请求，不能清掉后续切换的查询状态。
@@ -2078,10 +2102,29 @@ class VideoDetailController extends GetxController
     return null;
   }
 
-  late final List<PostSegmentModel> postList = <PostSegmentModel>[];
+  bool Function() _captureVideoInteraction() {
+    final video = (bvid, cid.value);
+    final switchGeneration = _videoSwitchGeneration;
+    final pageIsActive = capturePageActivity();
+    return () =>
+        pageIsActive() &&
+        switchGeneration == _videoSwitchGeneration &&
+        video == (bvid, cid.value);
+  }
+
+  (String, int)? _postDraftVideo;
+  List<PostSegmentModel> postList = [];
+
   void onBlock(BuildContext context) {
-    if (postList.isEmpty) {
-      postList.add(
+    final target = (bvid, cid.value);
+    if (_postDraftVideo != target) {
+      _postDraftVideo = target;
+      postList = [];
+    }
+    final draft = postList;
+    final isCurrentVideo = _captureVideoInteraction();
+    if (draft.isEmpty) {
+      draft.add(
         PostSegmentModel(
           segment: Pair(
             first: 0,
@@ -2095,6 +2138,8 @@ class VideoDetailController extends GetxController
     if (plPlayerController.isFullScreen.value || showVideoSheet) {
       final child = PostPanel(
         enableSlide: false,
+        draft: draft,
+        isCurrentVideo: isCurrentVideo,
         videoDetailController: this,
         plPlayerController: plPlayerController,
       );
@@ -2105,11 +2150,17 @@ class VideoDetailController extends GetxController
             : child,
       );
     } else {
-      childKey.currentState?.showBottomSheet(
+      final scaffold = childKey.currentState;
+      if (scaffold == null) return;
+      late final PersistentBottomSheetController panel;
+      panel = scaffold.showBottomSheet(
         constraints: const BoxConstraints(),
         (context) => PostPanel(
+          draft: draft,
+          isCurrentVideo: isCurrentVideo,
           videoDetailController: this,
           plPlayerController: plPlayerController,
+          onClose: () => panel.close(),
         ),
       );
     }
@@ -2150,7 +2201,7 @@ class VideoDetailController extends GetxController
     final data = await _readFileSubtitle(path, fileName);
     if (!isCurrent()) return;
     if (data == null) {
-      SmartDialog.showToast('无法读取字幕');
+      showToast('无法读取字幕');
       return;
     }
     vttSubtitles[subtitles.length] = data;
@@ -2312,7 +2363,7 @@ class VideoDetailController extends GetxController
             await _setSubtitle(sub, isCurrent: isCurrent);
           }
         } else {
-          res.toast();
+          showToast(res.toString());
         }
       }
     }

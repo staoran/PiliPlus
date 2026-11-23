@@ -19,22 +19,29 @@ mixin _LiveLikeMixin on GetxController, _LiveDataMixin {
   }
 
   Future<void> onLike() async {
-    if (!isMainLogin) {
+    if (!isPlaybackPageActive || !isMainLogin) {
       likeClickTime.value = 0;
       return;
     }
+    final target = roomId;
+    final account = heartbeat;
     final res = await LiveHttp.liveLikeReport(
       clickTime: likeClickTime.value,
-      roomId: roomId,
+      roomId: target,
       uid: mid,
       anchorId: roomInfoH5.value?.roomInfo?.uid,
     );
-    if (res.isSuccess) {
-      SmartDialog.showToast('点赞成功');
-    } else {
-      res.toast();
-    }
     likeClickTime.value = 0;
+    if (!isPlaybackPageActive ||
+        !pageContext.mounted ||
+        roomId != target ||
+        !identical(account, heartbeat)) {
+      return;
+    }
+    PlayerWindowNavigation.showToast(
+      pageContext,
+      res.isSuccess ? '点赞成功' : res.toString(),
+    );
   }
 
   @override

@@ -7,16 +7,15 @@ import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/download/download/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
-import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
-import 'package:flutter/widgets.dart' show BuildContext;
+import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/scroll_offset_helper.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
     show ExtendedNestedScrollController;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:get/get.dart';
 
 class LocalIntroController extends CommonIntroController {
@@ -35,21 +34,24 @@ class LocalIntroController extends CommonIntroController {
 
   @override
   Future<void> actionLikeVideo() async {
-    SmartDialog.showToast('离线播放不支持该操作');
+    videoDetailCtr.showToast('离线播放不支持该操作');
   }
 
   @override
   void actionShareVideo(context) {
-    SmartDialog.showToast('离线播放不支持该操作');
+    PlayerWindowNavigation.showToast(context, '离线播放不支持该操作');
   }
 
   @override
   Future<void> actionTriple() async {
-    SmartDialog.showToast('离线播放不支持该操作');
+    videoDetailCtr.showToast('离线播放不支持该操作');
   }
 
   @override
-  Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) async {
+  Future<LoadingState<bool>?> actionFavVideo({
+    bool isQuick = false,
+    BuildContext? context,
+  }) async {
     return const Error('离线播放不支持该操作');
   }
 

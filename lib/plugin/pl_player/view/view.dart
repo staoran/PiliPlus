@@ -442,7 +442,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ),
         onTap: () {
           if (!introController.prevPlay()) {
-            SmartDialog.showToast('已经是第一集了');
+            PlayerWindowNavigation.showToast(context, '已经是第一集了');
           }
         },
       ),
@@ -459,7 +459,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ),
         onTap: () {
           if (!introController.nextPlay()) {
-            SmartDialog.showToast('已经是最后一集了');
+            PlayerWindowNavigation.showToast(context, '已经是最后一集了');
           }
         },
       ),
@@ -819,7 +819,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                         ..currentVideoQa.value = newQa
                         ..updatePlayer();
 
-                      SmartDialog.showToast("画质已变为：${newQa.desc}");
+                      PlayerWindowNavigation.showToast(
+                        this.context,
+                        "画质已变为：${newQa.desc}",
+                      );
 
                       // update
                       if (!plPlayerController.tempPlayerConf) {
@@ -2219,9 +2222,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             filePath: file,
             fileName: name,
             needToast: true,
+            onToast: ctr.showToast,
           );
         } else {
-          SmartDialog.showToast('转码出现错误或已取消');
+          if (mounted) PlayerWindowNavigation.showToast(context, '转码出现错误或已取消');
         }
         if (isPlay) ctr.play();
       },
@@ -2338,6 +2342,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                             color: Colors.white,
                           ),
                     onTap: () => HeaderControl.likeDanmaku(
+                      context,
                       extra,
                       plPlayerController.cid!,
                     ),
@@ -2363,7 +2368,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   CustomIcons.player_dm_tip_copy,
                   color: Colors.white,
                 ),
-                onTap: () => Utils.copyText(item.content.text),
+                onTap: () => plPlayerController.copyText(item.content.text),
               ),
               if (item.content.selfSend)
                 _dmActionItem(
@@ -2373,6 +2378,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     color: Colors.white,
                   ),
                   onTap: () => HeaderControl.deleteDanmaku(
+                    context,
                     extra.id,
                     plPlayerController.cid!,
                   ),
@@ -2419,7 +2425,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   CustomIcons.player_dm_tip_copy,
                   color: Colors.white,
                 ),
-                onTap: () => Utils.copyText(item.content.text),
+                onTap: () => plPlayerController.copyText(item.content.text),
               ),
               _dmActionItem(
                 const Icon(

@@ -5,13 +5,13 @@ import 'dart:math' as math;
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/services.dart'
     show KeyDownEvent, KeyUpEvent, LogicalKeyboardKey, HardwareKeyboard;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PlayerFocus extends StatelessWidget {
@@ -70,7 +70,7 @@ class PlayerFocus extends StatelessWidget {
     plPlayerController.setVolume(volume);
   }
 
-  void _stepPlaybackSpeed({required bool isIncrease}) {
+  void _stepPlaybackSpeed(BuildContext context, {required bool isIncrease}) {
     final speed = plPlayerController.playbackSpeed;
     final speedList = plPlayerController.speedList;
     final newSpeed = isIncrease
@@ -79,7 +79,7 @@ class PlayerFocus extends StatelessWidget {
     if (newSpeed != null) {
       plPlayerController.setPlaybackSpeed(newSpeed);
     }
-    SmartDialog.showToast('${newSpeed ?? speed}x播放');
+    PlayerWindowNavigation.showToast(context, '${newSpeed ?? speed}x播放');
   }
 
   void _updateVolume(KeyEvent event, {required bool isIncrease}) {
@@ -236,7 +236,10 @@ class PlayerFocus extends StatelessWidget {
               isMuted ? 0 : plPlayerController.volume.value,
             );
             plPlayerController.isMuted = isMuted;
-            SmartDialog.showToast('${isMuted ? '' : '取消'}静音');
+            PlayerWindowNavigation.showToast(
+              context,
+              '${isMuted ? '' : '取消'}静音',
+            );
           }
           return true;
 
@@ -270,7 +273,7 @@ class PlayerFocus extends StatelessWidget {
             if (speed != plPlayerController.playbackSpeed) {
               plPlayerController.setPlaybackSpeed(speed);
             }
-            SmartDialog.showToast('${speed}x播放');
+            PlayerWindowNavigation.showToast(context, '${speed}x播放');
           }
           return true;
         }
@@ -300,7 +303,7 @@ class PlayerFocus extends StatelessWidget {
           case LogicalKeyboardKey.bracketLeft:
             if (introController case final introController?) {
               if (!introController.prevPlay()) {
-                SmartDialog.showToast('已经是第一集了');
+                PlayerWindowNavigation.showToast(context, '已经是第一集了');
               }
             }
             return true;
@@ -308,14 +311,17 @@ class PlayerFocus extends StatelessWidget {
           case LogicalKeyboardKey.bracketRight:
             if (introController case final introController?) {
               if (!introController.nextPlay()) {
-                SmartDialog.showToast('已经是最后一集了');
+                PlayerWindowNavigation.showToast(context, '已经是最后一集了');
               }
             }
             return true;
 
           case LogicalKeyboardKey.comma || LogicalKeyboardKey.period:
             if (hasPlayer && !plPlayerController.longPressStatus.value) {
-              _stepPlaybackSpeed(isIncrease: key == LogicalKeyboardKey.period);
+              _stepPlaybackSpeed(
+                context,
+                isIncrease: key == LogicalKeyboardKey.period,
+              );
             }
             return true;
         }

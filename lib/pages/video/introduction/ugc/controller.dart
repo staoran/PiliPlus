@@ -399,23 +399,32 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   Future<void> actionLikeVideo() async {
     await runWithActionLoading(IntroAction.like, () async {
       if (!isLogin) {
-        SmartDialog.showToast('账号未登录');
+        videoDetailCtr.showToast('账号未登录');
         return;
       }
       if (videoDetail.value.stat == null) {
         return;
       }
       final newVal = !hasLike.value;
-      final result = await VideoHttp.likeVideo(bvid: bvid, type: newVal);
+      final target = bvid;
+      final account = Accounts.main;
+      final result = await VideoHttp.likeVideo(
+        bvid: target,
+        type: newVal,
+        showErrorToast: false,
+      );
+      if (isClosed || bvid != target || !identical(account, Accounts.main)) {
+        return;
+      }
       if (result case Success(:final response)) {
-        SmartDialog.showToast(newVal ? response : '取消赞');
+        videoDetailCtr.showToast(newVal ? response : '取消赞');
         videoDetail.value.stat?.like += newVal ? 1 : -1;
         hasLike.value = newVal;
         if (newVal) {
           hasDislike.value = false;
         }
       } else {
-        result.toast();
+        videoDetailCtr.showToast(result.toString());
       }
     });
   }
@@ -423,27 +432,33 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   Future<void> actionDislikeVideo() async {
     await runWithActionLoading(IntroAction.dislike, () async {
       if (!isLogin) {
-        SmartDialog.showToast('账号未登录');
+        videoDetailCtr.showToast('账号未登录');
         return;
       }
+      final target = bvid;
+      final account = Accounts.main;
       final res = await VideoHttp.dislikeVideo(
-        bvid: bvid,
+        bvid: target,
         type: !hasDislike.value,
+        showErrorToast: false,
       );
+      if (isClosed || bvid != target || !identical(account, Accounts.main)) {
+        return;
+      }
       if (res.isSuccess) {
         if (!hasDislike.value) {
-          SmartDialog.showToast('点踩成功');
+          videoDetailCtr.showToast('点踩成功');
           hasDislike.value = true;
           if (hasLike.value) {
             videoDetail.value.stat?.like--;
             hasLike.value = false;
           }
         } else {
-          SmartDialog.showToast('取消踩');
+          videoDetailCtr.showToast('取消踩');
           hasDislike.value = false;
         }
       } else {
-        res.toast();
+        videoDetailCtr.showToast(res.toString());
       }
     });
   }
@@ -598,7 +613,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   Future<void> actionRelationMod(BuildContext context) async {
     await runWithActionLoading(IntroAction.relation, () async {
       if (!isLogin) {
-        SmartDialog.showToast('账号未登录');
+        videoDetailCtr.showToast('账号未登录');
         return;
       }
       final videoDetail = this.videoDetail.value;
@@ -1111,7 +1126,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     if (relatedCtr.loadingState.value case Success(:final response)) {
       final firstItem = response?.firstOrNull;
       if (firstItem == null) {
-        SmartDialog.showToast('暂无相关视频，停止连播');
+        videoDetailCtr.showToast('暂无相关视频，停止连播');
         return false;
       }
       onChangeEpisode(

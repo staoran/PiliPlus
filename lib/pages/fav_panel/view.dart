@@ -58,7 +58,7 @@ class _FavPanelState extends State<FavPanel> {
     if (!inPlayerWindow) SmartDialog.showLoading(msg: '请求中');
     final LoadingState<bool>? result;
     try {
-      result = await widget.ctr.actionFavVideo();
+      result = await widget.ctr.actionFavVideo(context: context);
     } finally {
       if (!inPlayerWindow) SmartDialog.dismiss(status: SmartStatus.loading);
     }

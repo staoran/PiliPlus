@@ -82,7 +82,6 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, clampDouble;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -1806,8 +1805,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ),
       if (videoDetailController.cover.value.isNotEmpty)
         PopupMenuItem(
-          onTap: () =>
-              ImageUtils.downloadImg([videoDetailController.cover.value]),
+          onTap: () => ImageUtils.downloadImg(
+            [videoDetailController.cover.value],
+            onToast: videoDetailController.plPlayerController.isDetached
+                ? videoDetailController.showToast
+                : null,
+          ),
           child: const Text('保存封面'),
         ),
       if (!videoDetailController.isFileSource && videoDetailController.isUgc)
@@ -1818,7 +1821,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       PopupMenuItem(
         onTap: () {
           if (!Accounts.main.isLogin) {
-            SmartDialog.showToast('账号未登录');
+            PlayerWindowNavigation.showToast(context, '账号未登录');
           } else {
             PageUtils.reportVideo(videoDetailController.aid);
           }
@@ -2543,7 +2546,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   void onReversePlay({required bool isSeason}) {
     if (isSeason && videoDetailController.isPlayAll) {
-      SmartDialog.showToast('当前为播放全部，合集不支持倒序');
+      PlayerWindowNavigation.showToast(context, '当前为播放全部，合集不支持倒序');
       return;
     }
 

@@ -8,7 +8,8 @@ import 'package:PiliPlus/pages/fans_medal/medal_setting_mixin.dart';
 import 'package:PiliPlus/pages/live_emote/view.dart';
 import 'package:PiliPlus/pages/live_room/controller.dart';
 import 'package:PiliPlus/pages/live_room/medal/medal_mixin.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide TextField;
 
@@ -160,6 +161,12 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel>
     int? dmType,
     emoticonOptions,
   }) async {
+    final route = ModalRoute.of(context);
+    if (route?.isCurrent != true || !liveController.isPlaybackPageActive) {
+      return;
+    }
+    final roomId = liveController.roomId;
+    final account = Accounts.main;
     int replyMid = 0;
     String replyDmid = '';
     if (message == null) {
@@ -175,22 +182,29 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel>
       message = buffer.toString();
     }
     final res = await LiveHttp.sendLiveMsg(
-      roomId: liveController.roomId,
+      roomId: roomId,
       msg: message,
       dmType: dmType,
       emoticonOptions: emoticonOptions,
       replyMid: replyMid,
       replayDmid: replyDmid,
     );
+    if (!mounted ||
+        route?.isActive != true ||
+        !liveController.isPlaybackPageActive ||
+        liveController.roomId != roomId ||
+        !identical(Accounts.main, account)) {
+      return;
+    }
     if (res.isSuccess) {
       hasPub = true;
-      if (mounted) Navigator.of(context).pop();
       liveController
         ..savedDanmaku?.clear()
         ..savedDanmaku = null;
-      SmartDialog.showToast('发送成功');
+      PlayerWindowNavigation.showToast(context, '发送成功');
+      if (route!.isCurrent) Navigator.of(context).pop();
     } else {
-      res.toast();
+      PlayerWindowNavigation.showToast(context, res.toString());
     }
   }
 

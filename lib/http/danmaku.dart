@@ -49,6 +49,7 @@ abstract final class DanmakuHttp {
 
     final res = await Request().post(
       Api.shootDanmaku,
+      showErrorToast: false,
       data: data,
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
@@ -79,6 +80,7 @@ abstract final class DanmakuHttp {
     };
     final res = await Request().post(
       Api.danmakuLike,
+      showErrorToast: false,
       data: data,
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
@@ -146,6 +148,7 @@ abstract final class DanmakuHttp {
     };
     final res = await Request().post(
       Api.danmakuRecall,
+      showErrorToast: false,
       data: data,
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
