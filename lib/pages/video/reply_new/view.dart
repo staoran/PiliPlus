@@ -18,11 +18,10 @@ import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/dynamics/result.dart' show FilePicModel;
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
-import 'package:PiliPlus/pages/dynamics_mention/controller.dart';
-import 'package:PiliPlus/pages/emote/controller.dart';
 import 'package:PiliPlus/pages/emote/view.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/reply_search_item/view.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/latex_to_unicode.dart';
@@ -30,7 +29,7 @@ import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide TextField;
 
@@ -70,17 +69,12 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   final RxBool _syncToDynamic = false.obs;
   late final String? heroTag =
       widget.videoHeroTag ??
-      (Get.arguments is Map ? Get.arguments['heroTag'] : null);
+      switch (ModalRoute.of(context)?.settings.arguments) {
+        final Map args => args['heroTag'] as String?,
+        _ => null,
+      };
 
   final RxBool _latexOn = false.obs;
-
-  @override
-  void dispose() {
-    Get
-      ..delete<EmotePanelController>()
-      ..delete<DynMentionController>();
-    super.dispose();
-  }
 
   @override
   void initTheme() {
@@ -180,7 +174,10 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     : const Icon(Icons.image_not_supported, size: 22),
                 onPressed: widget.canUploadPic
                     ? onPickImageThrottle
-                    : () => SmartDialog.showToast('当前评论区不支持发送图片'),
+                    : () => PlayerWindowNavigation.showToast(
+                        context,
+                        '当前评论区不支持发送图片',
+                      ),
               ),
             ],
             const SizedBox(width: 8),
@@ -292,10 +289,11 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
         children: [
           item(
             onTap: () async {
+              PlayerWindowNavigation.showMainFrom(context);
               final ({String title, String url})? res = await Get.to(
                 ReplySearchPage(type: widget.replyType, oid: widget.oid),
               );
-              if (res != null) {
+              if (res != null && mounted) {
                 onInsertText(
                   '${res.title} ',
                   RichTextType.common,
@@ -342,7 +340,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
               item(
                 onTap: () async {
                   if (imageList.length >= limit) {
-                    SmartDialog.showToast('最多选择$limit张图片');
+                    PlayerWindowNavigation.showToast(context, '最多选择$limit张图片');
                     return;
                   }
                   try {
@@ -384,6 +382,9 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
+    final route = ModalRoute.of(context);
+    if (route?.isCurrent != true) return;
+    final account = Accounts.main;
     Map<String, int> atNameToMid = {};
     for (final e in editController.items) {
       if (e.type == RichTextType.at) {
@@ -402,13 +403,19 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
       atNameToMid: atNameToMid,
       pictures: pictures,
       syncToDynamic: _syncToDynamic.value,
+      showErrorToast: false,
     );
+    if (!mounted ||
+        route?.isActive != true ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
     if (res case Success(:final response)) {
       hasPub = true;
-      SmartDialog.showToast('发送成功');
-      if (mounted) Navigator.of(context).pop(response);
+      PlayerWindowNavigation.showToast(context, '发送成功');
+      if (route!.isCurrent) Navigator.of(context).pop(response);
     } else {
-      res.toast();
+      PlayerWindowNavigation.showToast(context, res.toString());
     }
   }
 
@@ -431,7 +438,8 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
 
     final (spans, warnings) = LatexToUnicode.convertSpans(rawText);
     if (spans.isEmpty) {
-      SmartDialog.showToast(
+      PlayerWindowNavigation.showToast(
+        context,
         warnings.isEmpty
             ? '未发现用 \$ 括起的公式'
             : '公式未能识别：${warnings.join('、')}（已保留原文）',
@@ -442,7 +450,8 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
     _replaceBlocks(spans, rawText);
     _latexOn.value = true;
     if (warnings.isNotEmpty) {
-      SmartDialog.showToast(
+      PlayerWindowNavigation.showToast(
+        context,
         '无法识别：${warnings.join('、')}（已保留原文）',
       );
     }

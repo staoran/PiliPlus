@@ -31,6 +31,7 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:get/get.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -336,6 +337,7 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
       onCachePos: (offset) => _mentionOffset = offset,
       top: topMentionItem,
     );
+    if (!mounted) return;
     if (res != null) {
       if (res is MentionItem) {
         _onInsertUser(res, fromClick);
@@ -505,7 +507,6 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     feedBack();
     List<Map<String, dynamic>>? pictures;
     if (imageList.isNotEmpty) {
-      SmartDialog.showLoading(msg: '正在上传图片...');
       final cancelToken = CancelToken();
       try {
         pictures = await Future.wait<Map<String, dynamic>>(
@@ -517,7 +518,9 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
                   category: 'daily',
                   biz: 'new_dyn',
                   cancelToken: cancelToken,
+                  showErrorToast: false,
                 );
+                if (!result.isSuccess) throw HttpException(result.toString());
                 final data = result.data;
                 return {
                   'img_width': data.imageWidth,
@@ -531,14 +534,12 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
           }),
           eagerError: true,
         );
-        SmartDialog.dismiss();
       } on HttpException catch (e) {
         cancelToken.cancel();
-        SmartDialog.dismiss();
-        SmartDialog.showToast(e.message);
+        if (mounted) PlayerWindowNavigation.showToast(context, e.message);
         return;
       }
     }
-    return onCustomPublish(pictures: pictures);
+    if (mounted) await onCustomPublish(pictures: pictures);
   }
 }

@@ -459,7 +459,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               animation: introController.tripleAnimation,
               icon: const Icon(FontAwesomeIcons.b),
               selectIcon: const Icon(FontAwesomeIcons.b),
-              onTap: introController.actionCoinVideo,
+              onTap: () => introController.actionCoinVideo(context),
               selectStatus: introController.hasCoin,
               semanticsLabel: '投币',
               isLoading:
@@ -480,7 +480,9 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               ),
               selectStatus: introController.hasFav.value,
               semanticsLabel: '收藏',
-              isLoading: introController.isActionLoading(IntroAction.triple),
+              isLoading:
+                  introController.isActionLoading(IntroAction.favorite) ||
+                  introController.isActionLoading(IntroAction.triple),
               text: NumUtils.numFormat(stat.favorite),
             ),
           ),

@@ -57,6 +57,7 @@ import 'package:collection/collection.dart' show IterableExtension;
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:protobuf/protobuf.dart';
@@ -549,7 +550,10 @@ class ReplyItemGrpc extends StatelessWidget {
           ? null
           : () {
               feedBack();
-              Get.toNamed('/member?mid=${replyItem.mid}');
+              PlayerWindowNavigation.openInMain(
+                context,
+                '/member?mid=${replyItem.mid}',
+              );
             },
       avatar: PendantAvatar(
         member.face,
@@ -922,7 +926,8 @@ class ReplyItemGrpc extends StatelessWidget {
                 recognizer: NoDeadlineTapGestureRecognizer()
                   ..onTap = () {
                     feedBack();
-                    Get.toNamed(
+                    PlayerWindowNavigation.openInMain(
+                      context,
                       '/member?mid=${childReply.member.mid}',
                     );
                   },
@@ -1073,7 +1078,8 @@ class ReplyItemGrpc extends StatelessWidget {
                 }
               } else {
                 if (url.extra.isWordSearch) {
-                  Get.toNamed(
+                  PlayerWindowNavigation.openInMain(
+                    context,
                     '/searchResult',
                     parameters: {'keyword': url.title},
                   );
@@ -1132,8 +1138,10 @@ class ReplyItemGrpc extends StatelessWidget {
               text: matchStr,
               style: TextStyle(color: colorScheme.primary),
               recognizer: NoDeadlineTapGestureRecognizer()
-                ..onTap = () =>
-                    Get.toNamed('/member?mid=${content.atNameToMid[name]}'),
+                ..onTap = () => PlayerWindowNavigation.openInMain(
+                  context,
+                  '/member?mid=${content.atNameToMid[name]}',
+                ),
             ),
           );
         } else if (_voteRegExp.hasMatch(matchStr)) {
@@ -1198,7 +1206,8 @@ class ReplyItemGrpc extends StatelessWidget {
                 style: TextStyle(color: colorScheme.primary),
                 recognizer: NoDeadlineTapGestureRecognizer()
                   ..onTap = () {
-                    Get.toNamed(
+                    PlayerWindowNavigation.openInMain(
+                      context,
                       '/searchResult',
                       parameters: {'keyword': topic},
                     );

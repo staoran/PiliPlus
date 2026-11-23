@@ -177,6 +177,7 @@ abstract final class MsgHttp {
     String? category,
     String? biz,
     CancelToken? cancelToken,
+    bool showErrorToast = true,
   }) async {
     final res = await Request().post(
       Api.uploadBfs,
@@ -187,6 +188,7 @@ abstract final class MsgHttp {
         'csrf': Accounts.main.csrf,
       }),
       cancelToken: cancelToken,
+      showErrorToast: showErrorToast,
     );
     if (res.data['code'] == 0) {
       return Success(UploadBfsResData.fromJson(res.data['data']));

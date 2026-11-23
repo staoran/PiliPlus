@@ -2404,7 +2404,7 @@ class AudioController extends GetxController
     }
     if (enableQuickFav) {
       if (!isLongPress) {
-        actionFavVideo(isQuick: true);
+        quickFavorite(context);
       } else {
         PageUtils.showFavBottomSheet(context: context, ctr: this);
       }

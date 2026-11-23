@@ -2492,8 +2492,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void showAiBottomSheet() {
     videoDetailController.childKey.currentState?.showBottomSheet(
       constraints: const BoxConstraints(),
-      (context) =>
-          AiConclusionPanel(item: ugcIntroController.aiConclusionResult!),
+      (context) => AiConclusionPanel(
+        item: ugcIntroController.aiConclusionResult!,
+        onSeek: videoDetailController.plPlayerController.seekTo,
+      ),
     );
   }
 

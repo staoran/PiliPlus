@@ -444,6 +444,7 @@ abstract final class VideoHttp {
   }) async {
     final res = await Request().post(
       Api.coinVideo,
+      showErrorToast: false,
       data: {
         'aid': IdUtils.bv2av(bvid).toString(),
         // 'bvid': bvid,
@@ -631,6 +632,7 @@ abstract final class VideoHttp {
     List? pictures,
     bool syncToDynamic = false,
     Map<String, int>? atNameToMid,
+    bool showErrorToast = true,
   }) async {
     final data = {
       'type': type,
@@ -646,6 +648,7 @@ abstract final class VideoHttp {
     };
     final res = await Request().post(
       Api.replyAdd,
+      showErrorToast: showErrorToast,
       data: data,
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );

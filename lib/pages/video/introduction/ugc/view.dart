@@ -76,6 +76,7 @@ class UgcIntroPanel extends StatefulWidget {
 class _UgcIntroPanelState extends State<UgcIntroPanel> {
   late ColorScheme colorScheme;
   late final UgcIntroController introController;
+  bool _isLoadingAi = false;
   late final VideoDetailController videoDetailCtr =
       Get.find<VideoDetailController>(tag: widget.heroTag);
 
@@ -519,7 +520,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               animation: introController.tripleAnimation,
               icon: const Icon(FontAwesomeIcons.b),
               selectIcon: const Icon(FontAwesomeIcons.b),
-              onTap: introController.actionCoinVideo,
+              onTap: () => introController.actionCoinVideo(context),
               selectStatus: introController.hasCoin,
               semanticsLabel: '投币',
               isLoading:
@@ -540,7 +541,9 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               ),
               selectStatus: introController.hasFav.value,
               semanticsLabel: '收藏',
-              isLoading: introController.isActionLoading(IntroAction.triple),
+              isLoading:
+                  introController.isActionLoading(IntroAction.favorite) ||
+                  introController.isActionLoading(IntroAction.triple),
               text: !isLoading ? NumUtils.numFormat(stat!.favorite) : null,
             ),
           ),
@@ -1022,31 +1025,51 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
   Widget get _aiBtn => Positioned(
     right: 8,
     child: Center(
-      child: GestureDetector(
-        behavior: .opaque,
-        onTap: () async {
-          if (introController.aiConclusionResult == null) {
-            await introController.aiConclusion();
-          }
-          if (introController.aiConclusionResult case AiConclusionResult(
-            :final summary,
-            :final outline,
-          )) {
-            if (summary?.isNotEmpty == true || outline?.isNotEmpty == true) {
-              widget.showAiBottomSheet();
-            } else {
-              SmartDialog.showToast("当前视频不支持AI视频总结");
-            }
-          }
-        },
-        child: Image.asset(
-          semanticLabel: 'AI总结',
-          Assets.ai,
-          height: 18,
-          width: 18,
-          cacheHeight: 18.cacheSize(context),
-        ),
-      ),
+      child: _isLoadingAi
+          ? buttonLoadingIndicator()
+          : GestureDetector(
+              behavior: .opaque,
+              onTap: () async {
+                if (_isLoadingAi) return;
+                final route = ModalRoute.of(context);
+                final target = (
+                  introController.bvid,
+                  introController.cid.value,
+                );
+                if (introController.aiConclusionResult == null) {
+                  setState(() => _isLoadingAi = true);
+                  try {
+                    await introController.aiConclusion(context);
+                  } finally {
+                    if (mounted) setState(() => _isLoadingAi = false);
+                  }
+                }
+                if (!mounted ||
+                    route?.isCurrent != true ||
+                    target !=
+                        (introController.bvid, introController.cid.value)) {
+                  return;
+                }
+                if (introController.aiConclusionResult case AiConclusionResult(
+                  :final summary,
+                  :final outline,
+                )) {
+                  if (summary?.isNotEmpty == true ||
+                      outline?.isNotEmpty == true) {
+                    widget.showAiBottomSheet();
+                  } else {
+                    PlayerWindowNavigation.showToast(context, '当前视频不支持AI视频总结');
+                  }
+                }
+              },
+              child: Image.asset(
+                semanticLabel: 'AI总结',
+                Assets.ai,
+                height: 18,
+                width: 18,
+                cacheHeight: 18.cacheSize(context),
+              ),
+            ),
     ),
   );
 

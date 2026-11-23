@@ -230,12 +230,11 @@ class VideoReplyReplyController extends ReplyController
     return replyInfo;
   }
 
-  @override
   Future<void> onReply(
-    covariant ReplyInfo replyItem, {
+    ReplyInfo replyItem, {
     int? oid,
     int? replyType,
-    covariant int index = -1,
+    int index = -1,
     MentionItem? mentionItem,
   }) async {
     assert(index != -1 || replyItem.root == replyItem.id);

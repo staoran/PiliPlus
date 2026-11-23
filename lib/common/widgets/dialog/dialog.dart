@@ -2,7 +2,6 @@ import 'dart:async' show FutureOr;
 
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/button_loading.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide PopScope;
 
 Future<bool> showConfirmDialog({
@@ -19,7 +18,7 @@ Future<bool> showConfirmDialog({
           content: content,
           actions: [
             TextButton(
-              onPressed: Get.back,
+              onPressed: () => Navigator.pop(context),
               child: Text(
                 '取消',
                 style: TextStyle(color: ColorScheme.of(context).outline),
@@ -27,7 +26,7 @@ Future<bool> showConfirmDialog({
             ),
             TextButton(
               onPressed: () {
-                Get.back(result: true);
+                Navigator.pop(context, true);
                 onConfirm?.call();
               },
               child: const Text('确认'),
@@ -60,7 +59,9 @@ Future<bool> showAsyncConfirmDialog({
                 content: content,
                 actions: [
                   TextButton(
-                    onPressed: isLoading ? null : () => Get.back(result: false),
+                    onPressed: isLoading
+                        ? null
+                        : () => Navigator.pop(context, false),
                     child: Text(
                       cancelText,
                       style: TextStyle(
@@ -78,7 +79,7 @@ Future<bool> showAsyncConfirmDialog({
                               await onConfirm();
                               completed = true;
                               if (context.mounted) {
-                                Get.back(result: true);
+                                Navigator.pop(context, true);
                               }
                             } finally {
                               if (!completed && context.mounted) {
@@ -140,7 +141,7 @@ void showPgcFollowDialog({
             enabled: followStatus != item.followStatus,
             text: item.title,
             onTap: () {
-              Get.back();
+              Navigator.pop(context);
               onUpdateStatus(item.followStatus);
             },
           ),
@@ -155,7 +156,7 @@ void showPgcFollowDialog({
             ),
           ),
           onTap: () {
-            Get.back();
+            Navigator.pop(context);
             onUpdateStatus(-1);
           },
         ),

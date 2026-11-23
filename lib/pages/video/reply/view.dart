@@ -127,8 +127,10 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 heroTag: null,
                 onPressed: () {
                   feedBack();
-                  controller.onReply(
+                  controller.composeReply(
                     null,
+                    context: context,
+                    videoHeroTag: heroTag,
                     oid: controller.videoCtr.aid,
                     replyType: controller.replyType,
                     mentionItem: controller.mentionItem,
@@ -179,7 +181,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   replyItem: item,
                   replyLevel: widget.replyLevel,
                   replyReply: controller.replyReply,
-                  onReply: controller.onReply,
+                  onReply: (item) => controller.composeReply(
+                    item,
+                    context: context,
+                    videoHeroTag: heroTag,
+                  ),
                   onDelete: (item, subIndex) =>
                       controller.onRemove(index, item, subIndex),
                   upMid: controller.upMid,

@@ -245,7 +245,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
       replyItem: item,
       replyLevel: 1,
       replyReply: (item, id) => throttleReplyReply(context, item, id),
-      onReply: controller.onReply,
+      onReply: (item) => controller.composeReply(item, context: context),
       onDelete: (item, subIndex) => controller.onRemove(index, item, subIndex),
       upMid: controller.upMid,
       onViewImage: hideFab,
@@ -381,8 +381,9 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     onPressed: () {
       try {
         feedBack();
-        controller.onReply(
+        controller.composeReply(
           null,
+          context: context,
           oid: controller.oid,
           replyType: controller.replyType,
           mentionItem: controller.mentionItem,

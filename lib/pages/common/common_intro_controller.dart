@@ -13,6 +13,7 @@ import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/triple_mixin.dart';
 import 'package:PiliPlus/services/battery_debug_service.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/loading_action_mixin.dart';
@@ -21,7 +22,6 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -84,7 +84,7 @@ abstract class CommonIntroController extends GetxController
   void restoreListControlMode() {}
 
   @override
-  void actionCoinVideo();
+  void actionCoinVideo(BuildContext context);
   void actionShareVideo(BuildContext context);
 
   void onChangeEpisode(BaseEpisodeItem episode);
@@ -168,13 +168,23 @@ abstract class CommonIntroController extends GetxController
       if (stat == null) {
         return;
       }
+      final target = bvid;
+      final account = Accounts.main;
+      final isPageActive = videoDetailCtr.capturePageActivity();
+      final context = videoDetailCtr.pageContext;
       final res = await VideoHttp.coinVideo(
-        bvid: bvid,
+        bvid: target,
         multiply: coin,
         selectLike: coinWithLike ? 1 : 0,
       );
+      if (isClosed || bvid != target || !identical(account, Accounts.main)) {
+        return;
+      }
+      final message = res.isSuccess ? '投币成功' : res.toString();
+      if (isPageActive() && context != null && context.mounted) {
+        PlayerWindowNavigation.showToast(context, message);
+      }
       if (res.isSuccess) {
-        SmartDialog.showToast('投币成功');
         coinNum.value += coin;
         GlobalData().afterCoin(coin);
         stat.coin += coin;
@@ -182,8 +192,6 @@ abstract class CommonIntroController extends GetxController
           stat.like++;
           hasLike.value = true;
         }
-      } else {
-        res.toast();
       }
     });
   }
@@ -263,7 +271,7 @@ mixin FavMixin on TripleMixin {
   // 收藏
   void showFavBottomSheet(BuildContext context, {bool isLongPress = false}) {
     if (!Accounts.main.isLogin) {
-      SmartDialog.showToast('账号未登录');
+      PlayerWindowNavigation.showToast(context, '账号未登录');
       return;
     }
     // 快速收藏 &
@@ -271,7 +279,7 @@ mixin FavMixin on TripleMixin {
     // 长按选择文件夹
     if (enableQuickFav) {
       if (!isLongPress) {
-        actionFavVideo(isQuick: true);
+        quickFavorite(context);
       } else {
         PageUtils.showFavBottomSheet(context: context, ctr: this);
       }
@@ -282,34 +290,44 @@ mixin FavMixin on TripleMixin {
 
   void updateFavCount(int count);
 
+  Future<void> quickFavorite(BuildContext context) async {
+    final result = await actionFavVideo(isQuick: true);
+    if (!context.mounted || result == null) return;
+    final message = switch (result) {
+      Success(:final response) => '${response ? '' : '取消'}收藏成功',
+      _ => result.toString(),
+    };
+    PlayerWindowNavigation.showToast(context, message);
+  }
+
   Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) {
     return runWithActionLoading<LoadingState<bool>?>(.favorite, () async {
       final (rid, type) = getFavRidType;
       // 收藏至默认文件夹
       if (isQuick) {
-        SmartDialog.showLoading(msg: '请求中');
+        final account = Accounts.main;
+        bool isCurrent() =>
+            !isClosed &&
+            getFavRidType == (rid, type) &&
+            identical(account, Accounts.main);
         final res = await queryVideoInFolder();
-        if (res.isSuccess) {
-          final hasFav = this.hasFav.value;
-          final result = hasFav
-              ? await FavHttp.unfavAll(rid: rid, type: type)
-              : await FavHttp.favVideo(
-                  resources: '$rid:$type',
-                  addIds: favFolderId.toString(),
-                );
-          SmartDialog.dismiss();
-          if (result.isSuccess) {
-            updateFavCount(hasFav ? -1 : 1);
-            this.hasFav.toggle();
-            SmartDialog.showToast('${hasFav ? '取消' : ''}收藏成功');
-          } else {
-            result.toast();
-          }
-        } else {
-          SmartDialog.dismiss();
-          res.toast();
+        if (!isCurrent()) return null;
+        if (!res.isSuccess) return Error(res.toString());
+        final wasFavorite = hasFav.value;
+        if (!wasFavorite && res.data.list?.isNotEmpty != true) {
+          return const Error('没有可用的收藏夹');
         }
-        return null;
+        final result = wasFavorite
+            ? await FavHttp.unfavAll(rid: rid, type: type)
+            : await FavHttp.favVideo(
+                resources: '$rid:$type',
+                addIds: favFolderId.toString(),
+              );
+        if (!isCurrent()) return null;
+        if (result is Error) return result;
+        updateFavCount(wasFavorite ? -1 : 1);
+        hasFav.value = !wasFavorite;
+        return Success(!wasFavorite);
       }
 
       final folders = favFolderData.value.list;

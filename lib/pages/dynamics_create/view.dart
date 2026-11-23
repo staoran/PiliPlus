@@ -21,10 +21,8 @@ import 'package:PiliPlus/models_new/dynamic/dyn_topic_top/topic_item.dart';
 import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
 import 'package:PiliPlus/pages/dynamics_create_reserve/view.dart';
 import 'package:PiliPlus/pages/dynamics_create_vote/view.dart';
-import 'package:PiliPlus/pages/dynamics_mention/controller.dart';
 import 'package:PiliPlus/pages/dynamics_select_topic/controller.dart';
 import 'package:PiliPlus/pages/dynamics_select_topic/view.dart';
-import 'package:PiliPlus/pages/emote/controller.dart';
 import 'package:PiliPlus/pages/emote/view.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
@@ -120,10 +118,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
   @override
   void dispose() {
     _titleEditCtr.dispose();
-    Get
-      ..delete<EmotePanelController>()
-      ..delete<SelectTopicController>()
-      ..delete<DynMentionController>();
+    Get.delete<SelectTopicController>();
     super.dispose();
   }
 

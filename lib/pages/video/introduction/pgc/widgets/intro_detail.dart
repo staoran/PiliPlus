@@ -11,7 +11,7 @@ import 'package:PiliPlus/pages/pgc_review/view.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:get/get.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PgcIntroPanel extends CommonSlidePage {
@@ -79,7 +79,7 @@ class _IntroDetailState extends State<PgcIntroPanel>
               IconButton(
                 tooltip: '关闭',
                 icon: const Icon(Icons.close, size: 20),
-                onPressed: Get.back,
+                onPressed: closeSlidePage,
               ),
               const SizedBox(width: 2),
             ],
@@ -197,7 +197,8 @@ class _IntroDetailState extends State<PgcIntroPanel>
                   (item) => SearchText(
                     fontSize: 13,
                     text: item.tagName!,
-                    onTap: (tagName) => Get.toNamed(
+                    onTap: (tagName) => PlayerWindowNavigation.openInMain(
+                      context,
                       '/searchResult',
                       parameters: {'keyword': tagName},
                     ),

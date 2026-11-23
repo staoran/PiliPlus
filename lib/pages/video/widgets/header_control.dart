@@ -1981,7 +1981,7 @@ class HeaderControlState extends State<HeaderControl>
                         color: Colors.white,
                       ),
                       selectIcon: const Icon(FontAwesomeIcons.b),
-                      onTap: introController.actionCoinVideo,
+                      onTap: () => introController.actionCoinVideo(context),
                       selectStatus: introController.hasCoin,
                       semanticsLabel: '投币',
                       isLoading:
@@ -2009,9 +2009,11 @@ class HeaderControlState extends State<HeaderControl>
                       ),
                       selectStatus: introController.hasFav.value,
                       semanticsLabel: '收藏',
-                      isLoading: introController.isActionLoading(
-                        IntroAction.triple,
-                      ),
+                      isLoading:
+                          introController.isActionLoading(
+                            IntroAction.favorite,
+                          ) ||
+                          introController.isActionLoading(IntroAction.triple),
                     ),
                   ),
                 ),

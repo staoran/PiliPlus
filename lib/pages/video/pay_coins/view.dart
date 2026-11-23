@@ -34,11 +34,12 @@ class PayCoinsPage extends StatefulWidget {
   State<PayCoinsPage> createState() => _PayCoinsPageState();
 
   static void toPayCoinsPage({
+    required BuildContext context,
     required OnPayCoin onPayCoin,
     required bool hasCoin,
     required bool hasCopyright,
   }) {
-    Get.key.currentState!.push(
+    Navigator.of(context).push(
       PublishRoute(
         pageBuilder: (buildContext, animation, secondaryAnimation) {
           return PayCoinsPage(
@@ -452,7 +453,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                   ),
                   Center(
                     child: GestureDetector(
-                      onTap: Get.back,
+                      onTap: () => Navigator.pop(context),
                       behavior: HitTestBehavior.opaque,
                       child: SizedBox(
                         width: 30,
@@ -530,7 +531,8 @@ class _PayCoinsPageState extends State<PayCoinsPage>
         }
         _boxAnimController.forward().whenComplete(_boxAnimController.reverse);
         _coinController.forward().whenComplete(() {
-          Get.back();
+          if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+          Navigator.pop(context);
           widget.onPayCoin(_pageIndex.value + 1, _coinWithLike.value);
         });
       });

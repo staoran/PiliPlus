@@ -12,8 +12,6 @@ import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
-import 'package:PiliPlus/pages/dynamics_mention/controller.dart';
-import 'package:PiliPlus/pages/emote/controller.dart';
 import 'package:PiliPlus/pages/emote/view.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
@@ -95,14 +93,6 @@ class _RepostPanelState extends CommonRichTextPubPageState<RepostPanel>
         '';
 
     _uname = widget.uname ?? modules?.moduleAuthor?.name;
-  }
-
-  @override
-  void dispose() {
-    Get
-      ..delete<EmotePanelController>()
-      ..delete<DynMentionController>();
-    super.dispose();
   }
 
   @override

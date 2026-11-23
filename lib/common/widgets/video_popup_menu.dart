@@ -79,6 +79,7 @@ class VideoPopupMenu extends StatelessWidget {
                       const Icon(CustomIcons.ai_circle, size: 16),
                       () async {
                         final res = await UgcIntroController.getAiConclusion(
+                          context,
                           videoItem.bvid!,
                           videoItem.cid!,
                           videoItem.owner.mid,
@@ -93,7 +94,6 @@ class VideoPopupMenu extends StatelessWidget {
                                   context,
                                   Theme.of(context),
                                   res,
-                                  tap: false,
                                 ),
                               ),
                             ),

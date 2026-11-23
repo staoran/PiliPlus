@@ -36,7 +36,7 @@ class DynMentionPanel extends StatefulWidget {
     MentionItem? top,
   }) {
     return showModalBottomSheet(
-      context: Get.context!,
+      context: context,
       useSafeArea: true,
       isScrollControlled: true,
       constraints: BoxConstraints(
@@ -65,16 +65,20 @@ class DynMentionPanel extends StatefulWidget {
 
 class _DynMentionPanelState
     extends DebounceStreamState<DynMentionPanel, String> {
-  final _controller = Get.put(DynMentionController());
+  final _controller = DynMentionController();
   @override
   Duration get duration => const Duration(milliseconds: 300);
 
   @override
   void initState() {
     super.initState();
-    if (_controller.loadingState.value is Error) {
-      _controller.onReload();
-    }
+    _controller.onStart();
+  }
+
+  @override
+  void dispose() {
+    _controller.onDelete();
+    super.dispose();
   }
 
   @override
@@ -210,8 +214,7 @@ class _DynMentionPanelState
                           _controller.showBtn.value = false;
                           return;
                         }
-                        Get.back(result: _controller.mentionList);
-                        _controller.showBtn.value = false;
+                        Navigator.pop(context, {..._controller.mentionList!});
                       },
                       child: const Icon(Icons.check),
                     ),
@@ -245,7 +248,7 @@ class _DynMentionPanelState
                           padding: const .only(top: 5),
                           child: DynMentionItem(
                             item: top,
-                            onTap: () => Get.back(result: top),
+                            onTap: () => Navigator.pop(context, top),
                           ),
                         ),
                       ),
@@ -272,7 +275,7 @@ class _DynMentionPanelState
                             final item = group.items![index];
                             return DynMentionItem(
                               item: item,
-                              onTap: () => Get.back(result: item),
+                              onTap: () => Navigator.pop(context, item),
                               onCheck: (value) =>
                                   _controller.onCheck(value, item),
                             );

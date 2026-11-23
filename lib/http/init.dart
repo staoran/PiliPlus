@@ -289,6 +289,7 @@ class Request {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool showErrorToast = true,
   }) async {
     // if (kDebugMode) debugPrint('post-data: $data');
     try {
@@ -301,7 +302,7 @@ class Request {
       );
     } on DioException catch (e, s) {
       try {
-        AccountManager.toast(e);
+        if (showErrorToast) AccountManager.toast(e);
         Utils.reportError(e, s);
       } catch (_) {}
       return Response(

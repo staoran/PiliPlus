@@ -280,11 +280,11 @@ class PlayerFocus extends StatelessWidget {
             if (HardwareKeyboard.instance.isMetaPressed) {
               return true;
             }
-            introController?.actionCoinVideo();
+            introController?.actionCoinVideo(context);
             return true;
 
           case LogicalKeyboardKey.keyE:
-            introController?.actionFavVideo(isQuick: true);
+            introController?.quickFavorite(context);
             return true;
 
           case LogicalKeyboardKey.keyT || LogicalKeyboardKey.keyV:

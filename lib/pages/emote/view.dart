@@ -9,6 +9,7 @@ import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models_new/emote/emote.dart';
 import 'package:PiliPlus/models_new/emote/package.dart';
 import 'package:PiliPlus/pages/emote/controller.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:get/get.dart';
@@ -25,9 +26,19 @@ class EmotePanel extends StatefulWidget {
 
 class _EmotePanelState extends State<EmotePanel>
     with AutomaticKeepAliveClientMixin {
-  final EmotePanelController _emotePanelController = Get.put(
-    EmotePanelController(),
-  );
+  final _emotePanelController = EmotePanelController();
+
+  @override
+  void initState() {
+    super.initState();
+    _emotePanelController.onStart();
+  }
+
+  @override
+  void dispose() {
+    _emotePanelController.onDelete();
+    super.dispose();
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -145,7 +156,8 @@ class _EmotePanelState extends State<EmotePanel>
                           iconSize: 20,
                           iconColor: theme.colorScheme.onSurfaceVariant
                               .withValues(alpha: 0.8),
-                          onPressed: () => Get.toNamed(
+                          onPressed: () => PlayerWindowNavigation.openInMain(
+                            context,
                             '/webview',
                             parameters: {
                               'url':

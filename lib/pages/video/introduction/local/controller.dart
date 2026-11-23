@@ -8,6 +8,8 @@ import 'package:PiliPlus/pages/download/download/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/scroll_offset_helper.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
@@ -27,8 +29,8 @@ class LocalIntroController extends CommonIntroController {
   int get copyright => throw UnimplementedError();
 
   @override
-  void actionCoinVideo() {
-    SmartDialog.showToast('离线播放不支持该操作');
+  void actionCoinVideo(BuildContext context) {
+    PlayerWindowNavigation.showToast(context, '离线播放不支持该操作');
   }
 
   @override
@@ -48,12 +50,7 @@ class LocalIntroController extends CommonIntroController {
 
   @override
   Future<LoadingState<bool>?> actionFavVideo({bool isQuick = false}) async {
-    const error = Error('离线播放不支持该操作');
-    if (isQuick) {
-      error.toast();
-      return null;
-    }
-    return error;
+    return const Error('离线播放不支持该操作');
   }
 
   @override

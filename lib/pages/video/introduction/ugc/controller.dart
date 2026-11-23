@@ -1130,36 +1130,42 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
 
   // ai总结
   static Future<AiConclusionResult?> getAiConclusion(
+    BuildContext context,
     String bvid,
     int cid,
     int? mid,
   ) async {
     if (!Accounts.heartbeat.isLogin) {
-      SmartDialog.showToast("账号未登录");
+      PlayerWindowNavigation.showToast(context, '账号未登录');
       return null;
     }
-    SmartDialog.showLoading(msg: '正在获取AI总结');
+    final account = Accounts.heartbeat;
     final res = await VideoHttp.aiConclusion(
       bvid: bvid,
       cid: cid,
       upMid: mid,
     );
-    SmartDialog.dismiss();
+    if (!context.mounted || !identical(account, Accounts.heartbeat)) {
+      return null;
+    }
     if (res case Success(:final response)) {
       return response.modelResult;
     } else if (res is Error && res.code == 1) {
-      SmartDialog.showToast("AI处理中，请稍后再试");
+      PlayerWindowNavigation.showToast(context, 'AI处理中，请稍后再试');
     } else {
-      SmartDialog.showToast("当前视频暂不支持AI视频总结");
+      PlayerWindowNavigation.showToast(context, '当前视频暂不支持AI视频总结');
     }
     return null;
   }
 
-  Future<void> aiConclusion() async {
-    aiConclusionResult = await getAiConclusion(
-      bvid,
-      cid.value,
+  Future<void> aiConclusion(BuildContext context) async {
+    final target = (bvid, cid.value);
+    final result = await getAiConclusion(
+      context,
+      target.$1,
+      target.$2,
       videoDetail.value.owner?.mid,
     );
+    if (!isClosed && target == (bvid, cid.value)) aiConclusionResult = result;
   }
 }

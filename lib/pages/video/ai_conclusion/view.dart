@@ -1,17 +1,17 @@
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/models_new/video/video_ai_conclusion/model_result.dart';
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
-import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class AiConclusionPanel extends CommonSlidePage {
   final AiConclusionResult item;
+  final ValueChanged<Duration> onSeek;
 
   const AiConclusionPanel({
     super.key,
     required this.item,
+    required this.onSeek,
   });
 
   @override
@@ -22,8 +22,9 @@ class AiConclusionPanel extends CommonSlidePage {
     ThemeData theme,
     AiConclusionResult res, {
     Key? key,
-    bool tap = true,
+    ValueChanged<Duration>? onSeek,
   }) {
+    final tap = onSeek != null;
     final outline = res.outline;
     final hasOutline = outline != null && outline.isNotEmpty;
     return SelectionArea(
@@ -99,17 +100,11 @@ class AiConclusionPanel extends CommonSlidePage {
                                         : null,
                                     recognizer: tap
                                         ? (NoDeadlineTapGestureRecognizer()
-                                            ..onTap = () {
-                                              try {
-                                                Get.find<VideoDetailController>(
-                                                  tag: Get.arguments['heroTag'],
-                                                ).plPlayerController.seekTo(
-                                                  Duration(
-                                                    seconds: item.timestamp!,
-                                                  ),
-                                                );
-                                              } catch (_) {}
-                                            })
+                                            ..onTap = () => onSeek(
+                                              Duration(
+                                                seconds: item.timestamp!,
+                                              ),
+                                            ))
                                         : null,
                                   ),
                                   const TextSpan(text: ' '),
@@ -140,7 +135,7 @@ class _AiDetailState extends State<AiConclusionPanel>
       child: Column(
         children: [
           GestureDetector(
-            onTap: Get.back,
+            onTap: closeSlidePage,
             child: SizedBox(
               height: 35,
               child: Center(
@@ -178,6 +173,7 @@ class _AiDetailState extends State<AiConclusionPanel>
       context,
       theme,
       widget.item,
+      onSeek: widget.onSeek,
       key: _key,
     );
   }

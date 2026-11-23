@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:PiliPlus/pages/video/pay_coins/view.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter/services.dart';
@@ -34,9 +35,9 @@ mixin TripleMixin on GetxController, TickerProvider {
 
   void onPayCoin(int coin, bool coinWithLike);
 
-  void actionCoinVideo() {
+  void actionCoinVideo(BuildContext context) {
     if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
+      PlayerWindowNavigation.showToast(context, '账号未登录');
       return;
     }
 
@@ -44,16 +45,17 @@ mixin TripleMixin on GetxController, TickerProvider {
     final copyright = this.copyright;
     final hasCopyright = isHasCopyright(copyright);
     if (reachCoinLimit(hasCopyright, coinNum)) {
-      SmartDialog.showToast('达到投币上限啦~');
+      PlayerWindowNavigation.showToast(context, '达到投币上限啦~');
       return;
     }
 
     if (GlobalData().coins != null && GlobalData().coins! < 1) {
-      SmartDialog.showToast('硬币不足');
+      PlayerWindowNavigation.showToast(context, '硬币不足');
       // return;
     }
 
     PayCoinsPage.toPayCoinsPage(
+      context: context,
       onPayCoin: onPayCoin,
       hasCoin: coinNum == 1,
       hasCopyright: hasCopyright,

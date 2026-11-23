@@ -97,8 +97,9 @@ class _MainReplyPageState extends State<MainReplyPage>
             onPressed: () {
               try {
                 feedBack();
-                controller.onReply(
+                controller.composeReply(
                   null,
+                  context: context,
                   oid: controller.oid,
                   replyType: controller.replyType,
                 );
@@ -134,7 +135,8 @@ class _MainReplyPageState extends State<MainReplyPage>
                     replyItem: response[index],
                     replyLevel: 1,
                     replyReply: throttleReplyReply,
-                    onReply: controller.onReply,
+                    onReply: (item) =>
+                        controller.composeReply(item, context: context),
                     onDelete: (item, subIndex) =>
                         controller.onRemove(index, item, subIndex),
                     upMid: controller.upMid,

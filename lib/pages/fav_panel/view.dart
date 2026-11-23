@@ -71,11 +71,7 @@ class _FavPanelState extends State<FavPanel> {
       Success(:final response) => '${response ? '' : '取消'}收藏成功',
       _ => result.toString(),
     };
-    if (inPlayerWindow) {
-      PlayerWindowNavigation.showToast(context, message);
-    } else {
-      SmartDialog.showToast(message);
-    }
+    PlayerWindowNavigation.showToast(context, message);
     if (result.isSuccess) _closePanel();
   }
 
@@ -185,17 +181,21 @@ class _FavPanelState extends State<FavPanel> {
             TextButton.icon(
               onPressed: isSaving
                   ? null
-                  : () => Get.toNamed('/createFav')?.then((data) {
-                      if (data is FavFolderInfo && mounted) {
-                        widget.ctr.favFolderData.value.list?.insert(
-                          1,
-                          data
-                            ..favState = 1
-                            ..mediaCount = 1,
-                        );
-                        setState(() {});
-                      }
-                    }),
+                  : () =>
+                        PlayerWindowNavigation.openInMain(
+                          context,
+                          '/createFav',
+                        )?.then((data) {
+                          if (data is FavFolderInfo && mounted) {
+                            widget.ctr.favFolderData.value.list?.insert(
+                              1,
+                              data
+                                ..favState = 1
+                                ..mediaCount = 1,
+                            );
+                            setState(() {});
+                          }
+                        }),
               icon: Icon(Icons.add, color: colorScheme.primary),
               label: const Text('新建收藏夹'),
               style: const ButtonStyle(

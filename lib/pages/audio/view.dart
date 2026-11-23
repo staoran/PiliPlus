@@ -697,7 +697,7 @@ class _AudioPageState extends State<AudioPage> {
               animation: _controller.tripleAnimation,
               icon: const Icon(FontAwesomeIcons.b),
               selectIcon: const Icon(FontAwesomeIcons.b),
-              onTap: _controller.actionCoinVideo,
+              onTap: () => _controller.actionCoinVideo(context),
               selectStatus: _controller.hasCoin,
               semanticsLabel: '投币',
               isLoading:
@@ -722,7 +722,9 @@ class _AudioPageState extends State<AudioPage> {
               ),
               selectStatus: _controller.hasFav.value,
               semanticsLabel: '收藏',
-              isLoading: _controller.isActionLoading(IntroAction.triple),
+              isLoading:
+                  _controller.isActionLoading(IntroAction.favorite) ||
+                  _controller.isActionLoading(IntroAction.triple),
               text: NumUtils.numFormat(
                 audioItem.stat.favourite,
               ),

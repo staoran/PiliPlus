@@ -17,6 +17,7 @@ class EmotePanelController extends CommonListController<List<Package>?, Package>
 
   @override
   bool customHandleResponse(bool isRefresh, Success<List<Package>?> response) {
+    if (isClosed) return true;
     if (response.response?.isNotEmpty == true) {
       tabController = TabController(
         length: response.response!.length,

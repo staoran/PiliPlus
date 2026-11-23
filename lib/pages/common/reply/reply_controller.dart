@@ -9,6 +9,7 @@ import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/video/reply_new/view.dart';
+import 'package:PiliPlus/services/multi_window/player_window_navigation.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/reply_utils.dart';
@@ -239,15 +240,17 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     return (inputDisable, hint);
   }
 
-  void onReply(
+  void composeReply(
     ReplyInfo? replyItem, {
+    required BuildContext context,
+    String? videoHeroTag,
     int? oid,
     int? replyType,
     MentionItem? mentionItem,
   }) {
     if (loadingState.value case Error(:final errMsg, :final code)) {
       if (errMsg != null && (code == 12061 || code == 12002)) {
-        SmartDialog.showToast(errMsg);
+        PlayerWindowNavigation.showToast(context, errMsg);
         return;
       }
     }
@@ -260,7 +263,9 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     }
 
     final key = oid ?? replyItem!.oid + replyItem.id;
-    Get.key.currentState!
+    final targetOid = this.oid;
+    final navigator = Navigator.of(context);
+    navigator
         .push(
           PublishRoute(
             pageBuilder: (buildContext, animation, secondaryAnimation) {
@@ -272,6 +277,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
                 replyType: replyItem?.type.toInt() ?? replyType!,
                 replyItem: replyItem,
                 mentionItem: mentionItem,
+                videoHeroTag: videoHeroTag,
                 items: savedReplies[key],
 
                 /// hd api deprecated
@@ -285,13 +291,16 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
                 },
               );
             },
-            settings: RouteSettings(arguments: Get.arguments),
+            settings: RouteSettings(
+              arguments: ModalRoute.of(context)?.settings.arguments,
+            ),
           ),
         )
         .then(
           (replyInfo) {
             if (replyInfo is ReplyInfo) {
               savedReplies.remove(key);
+              if (isClosed || this.oid != targetOid) return;
               if (loadingState.value case Success(:final response)) {
                 if (response == null) {
                   loadingState.value = Success([replyInfo]);

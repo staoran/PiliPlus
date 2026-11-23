@@ -245,7 +245,7 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
                           videoItem: videoItem,
                           bvid: _bvid,
                           onTap: () {
-                            Get.back();
+                            Navigator.pop(context);
                             widget.ugcIntroController.onChangeEpisode(
                               BaseEpisodeItem(
                                 bvid: videoItem.bvid,
