@@ -1,5 +1,6 @@
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/services/multi_window/player_window_identity.dart';
+import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> _videoArguments({
@@ -34,6 +35,68 @@ Map<String, dynamic> _videoArguments({
 
 void main() {
   group('PlayerWindowIdentity.shouldSkipVideoNavigation', () {
+    final video = _videoArguments(
+      videoType: VideoType.ugc,
+      aid: 1,
+      bvid: 'BV1',
+      cid: 101,
+    );
+    final priorCommentLink = {
+      ...video,
+      rootRpIdKey: 701,
+      secondRpIdKey: 702,
+    };
+    final commentNavigationCases = [
+      (
+        'opens a root comment on the current video',
+        video,
+        {...video, rootRpIdKey: 701},
+      ),
+      (
+        'opens a different secondary comment under the same root',
+        priorCommentLink,
+        {...priorCommentLink, secondRpIdKey: 703},
+      ),
+      (
+        'opens the same comment link again',
+        priorCommentLink,
+        Map.of(priorCommentLink),
+      ),
+    ];
+
+    for (final (description, current, next) in commentNavigationCases) {
+      test(description, () {
+        expect(
+          PlayerWindowIdentity.shouldSkipVideoNavigation(
+            routeArguments: current,
+            nextArguments: next,
+            currentVideoType: VideoType.ugc,
+            currentAid: 1,
+            currentBvid: 'BV1',
+            currentCid: 101,
+          ),
+          isFalse,
+        );
+      });
+    }
+
+    test('deduplicates requests without a valid root comment id', () {
+      for (final rootId in [null, 0, -1, '701']) {
+        expect(
+          PlayerWindowIdentity.shouldSkipVideoNavigation(
+            routeArguments: video,
+            nextArguments: {
+              ...video,
+              rootRpIdKey: ?rootId,
+              secondRpIdKey: 702,
+            },
+          ),
+          isTrue,
+          reason: 'root comment id: $rootId',
+        );
+      }
+    });
+
     test(
       'uses the live target after autoplay instead of the initial route',
       () {

@@ -1,3 +1,5 @@
+import 'package:PiliPlus/utils/reply_scheme_helper.dart';
+
 class PlayerWindowIdentity {
   const PlayerWindowIdentity._();
 
@@ -37,6 +39,10 @@ class PlayerWindowIdentity {
     int? currentCid,
     int? currentEpId,
   }) {
+    if (nextArguments[rootRpIdKey] case final int rootRpId when rootRpId > 0) {
+      return false;
+    }
+
     final hasCurrentVideoIdentity =
         currentVideoType != null &&
         currentAid != null &&
