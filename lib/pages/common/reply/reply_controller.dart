@@ -21,7 +21,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 mixin MainReplyLocateMixin on ReplyLocateMixin<MainListReply> {
-  final Map args = Get.arguments ?? const {};
+  late final Map args = Get.arguments ?? const {};
 
   Int64? targetRootRpId; // highlight
   void clearTargetRootRpId() {

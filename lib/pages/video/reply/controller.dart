@@ -36,6 +36,9 @@ class VideoReplyController extends ReplyController<MainListReply>
   final String heroTag;
   late final videoCtr = Get.find<VideoDetailController>(tag: heroTag);
 
+  @override
+  Map get args => videoCtr.args;
+
   MentionItem? get mentionItem {
     if (videoCtr.isUgc) {
       try {
